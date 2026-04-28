@@ -7,7 +7,9 @@
 
 export type DialogRequest =
   | OpenFormDialogRequest
-  | LookupDialogRequest;
+  | LookupDialogRequest
+  | ConfirmDialogRequest
+  | AlertDialogRequest;
 
 export interface OpenFormDialogRequest {
   kind: 'openForm';
@@ -22,6 +24,22 @@ export interface LookupDialogRequest {
   id: number;
   options: any;
   resolve: (records: any[]) => void;
+}
+
+export interface ConfirmDialogRequest {
+  kind: 'confirm';
+  id: number;
+  confirmStrings: { title?: string; subtitle?: string; text?: string; confirmButtonLabel?: string; cancelButtonLabel?: string };
+  options?: any;
+  resolve: (result: { confirmed: boolean }) => void;
+}
+
+export interface AlertDialogRequest {
+  kind: 'alert';
+  id: number;
+  alertStrings: { title?: string; text?: string; confirmButtonLabel?: string };
+  options?: any;
+  resolve: () => void;
 }
 
 type Listener = (queue: DialogRequest[]) => void;

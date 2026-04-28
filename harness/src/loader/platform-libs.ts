@@ -56,9 +56,12 @@ export async function loadPlatformLibraries(resources: ManifestResources): Promi
       ? 'FluentUIReactv940'
       : (minor <= 29 && patch <= 0) ? 'FluentUIReactv8290' : 'FluentUIReactv81211';
 
+    console.log(`[pcf-workbench] Fluent setup: version=${fluentLib.version}, globalName=${globalName}, alreadyExists=${!!w[globalName]}`);
     if (!w[globalName]) {
       console.log(`[pcf-workbench] Fluent UI v${fluentLib.version} — stub as window.${globalName}`);
       w[globalName] = createFluentStub(w);
+    } else {
+      console.warn(`[pcf-workbench] Fluent UI global window.${globalName} already exists — skipping stub. Dialog shim will NOT be active.`);
     }
   }
 }
@@ -325,27 +328,6 @@ function createFluentStub(w: any) {
         style: { backgroundColor: '#fff', borderRadius: 4, padding: '24px', minWidth: 340, maxWidth: 600, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' },
       }, props.children));
     },
-    Dialog: (props: any) => {
-      const R = getReact();
-      if (!R || props.hidden) return null;
-      return R.createElement('div', {
-        'data-fluent': 'Dialog',
-        style: {
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: 'rgba(0,0,0,0.4)',
-        },
-      }, R.createElement('div', {
-        style: {
-          backgroundColor: '#fff', borderRadius: 4, padding: '24px', minWidth: 340, maxWidth: 500,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-        },
-      },
-        props.dialogContentProps?.title && R.createElement('div', { style: { fontSize: 20, fontWeight: 600, marginBottom: 12 } }, props.dialogContentProps.title),
-        props.dialogContentProps?.subText && R.createElement('div', { style: { fontSize: 14, color: '#605e5c', marginBottom: 16 } }, props.dialogContentProps.subText),
-        props.children,
-      ));
-    },
     DialogFooter: (props: any) => {
       const R = getReact();
       if (!R) return null;
@@ -402,7 +384,10 @@ function createFluentStub(w: any) {
   // (Detection happens in the caller; this stub is only mounted under the
   // FluentUIReactv940 global, so we always add v9 exports here.)
   const fluentProviderStub = v9MakeFluentProvider(getReact);
-  Object.assign(allExports, {
+
+  // Only add v9 component overrides if they won't conflict with v8 components
+  // already in allExports. The v8 Dialog uses `hidden` prop; v9 uses `open`.
+  const v9Components: Record<string, any> = {
     tokens: v9Tokens,
     webLightTheme: v9WebLightTheme,
     webDarkTheme: v9WebDarkTheme,
@@ -415,10 +400,18 @@ function createFluentStub(w: any) {
     FluentProvider: fluentProviderStub,
     useFluent: v9UseFluent,
     useThemeClassName: v9UseThemeClassName,
+  };
+
+  // Only add v9 dialog sub-components if they don't already exist from v8
+  const v9DialogComponents: Record<string, any> = {
     // Common dialog sub-components used in v9 — pass-through wrappers
     Dialog: (props: any) => {
       const R = getReact();
-      if (!R || props.open === false) return null;
+      if (!R) return null;
+      // Support BOTH v8 (hidden prop) and v9 (open prop)
+      if (props.hidden === true || props.open === false) return null;
+      const title = props.dialogContentProps?.title ?? '(untitled)';
+      console.log(`[pcf-workbench] Dialog "${title}" rendering (hidden=${props.hidden}, open=${props.open})`);
       return R.createElement('div', {
         'data-fluent': 'Dialog',
         style: {
@@ -427,11 +420,26 @@ function createFluentStub(w: any) {
           backgroundColor: 'rgba(0,0,0,0.4)',
         },
         onClick: (e: any) => {
-          if (e.target === e.currentTarget && props.onOpenChange) {
-            props.onOpenChange(e, { open: false, type: 'backdropClick' });
+          if (e.target === e.currentTarget) {
+            // v8: onDismiss callback
+            if (props.onDismiss) props.onDismiss(e);
+            // v9: onOpenChange callback
+            if (props.onOpenChange) props.onOpenChange(e, { open: false, type: 'backdropClick' });
           }
         },
-      }, props.children);
+      },
+        // v8 style: render inner panel with dialogContentProps
+        props.dialogContentProps ? R.createElement('div', {
+          style: {
+            backgroundColor: '#fff', borderRadius: 4, padding: '24px', minWidth: 340, maxWidth: 500,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          },
+        },
+          props.dialogContentProps?.title && R.createElement('div', { style: { fontSize: 20, fontWeight: 600, marginBottom: 12 } }, props.dialogContentProps.title),
+          props.dialogContentProps?.subText && R.createElement('div', { style: { fontSize: 14, color: '#605e5c', marginBottom: 16 } }, props.dialogContentProps.subText),
+          props.children,
+        ) : props.children,
+      );
     },
     DialogSurface: (props: any) => {
       const R = getReact();
@@ -527,7 +535,11 @@ function createFluentStub(w: any) {
       if (!R) return null;
       return R.createElement('div', { 'data-fluent': 'MessageBarBody', style: { padding: '4px 0' } }, props.children);
     },
-  });
+  };
+
+  // Merge: v9 tokens/styles first, then v9 dialog components.
+  // v9 Dialog component handles both v8 (hidden prop) and v9 (open prop).
+  Object.assign(allExports, v9Components, v9DialogComponents);
 
   return new Proxy(allExports, {
     get(target, prop) {

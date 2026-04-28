@@ -3,7 +3,7 @@ import {
   makeStyles, tokens, Spinner, Badge, Button, Input, MessageBar, MessageBarBody, Switch, Tooltip,
 } from '@fluentui/react-components';
 import {
-  Search24Regular, ArrowClockwise24Regular, Open24Regular, EyeOff24Regular,
+  Search24Regular, ArrowClockwise24Regular, Open24Regular, EyeOff24Regular, Folder24Regular,
 } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
@@ -172,7 +172,25 @@ export function Gallery() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [showPrivate, setShowPrivate] = useState(false);
+  const [showPrivate, setShowPrivate] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('private') === 'true' || params.get('private') === '1';
+  });
+  const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [rootInput, setRootInput] = useState('');
+  const [showRootPicker, setShowRootPicker] = useState(false);
+  const [changingRoot, setChangingRoot] = useState(false);
+
+  const togglePrivate = (checked: boolean) => {
+    setShowPrivate(checked);
+    const url = new URL(window.location.href);
+    if (checked) {
+      url.searchParams.set('private', 'true');
+    } else {
+      url.searchParams.delete('private');
+    }
+    window.history.replaceState({}, '', url.toString());
+  };
 
   const loadControls = () => {
     setLoading(true);
@@ -188,7 +206,50 @@ export function Gallery() {
       });
   };
 
-  useEffect(loadControls, []);
+  const loadWorkspaceRoot = () => {
+    fetch('/api/workspace-root')
+      .then(r => r.json())
+      .then(data => {
+        setWorkspaceRoot(data.root);
+        setRootInput(data.root);
+      })
+      .catch(() => {});
+  };
+
+  const changeWorkspaceRoot = () => {
+    if (!rootInput.trim() || rootInput === workspaceRoot) {
+      setShowRootPicker(false);
+      return;
+    }
+    setChangingRoot(true);
+    setError(null);
+    fetch('/api/workspace-root', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: rootInput.trim() }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          setError(data.error);
+        } else {
+          setWorkspaceRoot(data.root);
+          setRootInput(data.root);
+          setShowRootPicker(false);
+          loadControls();
+        }
+        setChangingRoot(false);
+      })
+      .catch(err => {
+        setError(`Failed to change workspace: ${err.message}`);
+        setChangingRoot(false);
+      });
+  };
+
+  useEffect(() => {
+    loadWorkspaceRoot();
+    loadControls();
+  }, []);
 
   const visibleControls = showPrivate ? controls : controls.filter(c => !c.isPrivate);
   const privateCount = controls.filter(c => c.isPrivate).length;
@@ -269,10 +330,54 @@ export function Gallery() {
       <div className={styles.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <img src="/pcf-workbench-icon.svg" alt="PCF Workbench" style={{ width: 96, height: 96 }} />
-          <div>
+          <div style={{ flex: 1 }}>
             <div className={styles.headerTitle}>PCF Workbench</div>
             <div className={styles.headerSubtitle}>
               {visibleControls.length} controls found in workspace{privateCount > 0 && !showPrivate ? ` (${privateCount} private hidden)` : ''}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+              {showRootPicker ? (
+                <>
+                  <Input
+                    size="small"
+                    value={rootInput}
+                    onChange={(_, d) => setRootInput(d.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') changeWorkspaceRoot(); if (e.key === 'Escape') { setRootInput(workspaceRoot); setShowRootPicker(false); } }}
+                    placeholder="Enter folder path..."
+                    disabled={changingRoot}
+                    style={{ flex: 1, minWidth: 300, maxWidth: 600, fontFamily: "'Consolas', monospace", fontSize: '12px' }}
+                  />
+                  <Button
+                    size="small"
+                    appearance="primary"
+                    onClick={changeWorkspaceRoot}
+                    disabled={changingRoot || !rootInput.trim()}
+                    style={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}
+                  >
+                    {changingRoot ? 'Scanning...' : 'Set'}
+                  </Button>
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    onClick={() => { setRootInput(workspaceRoot); setShowRootPicker(false); }}
+                    style={{ color: 'rgba(255,255,255,0.8)' }}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Tooltip content="Change workspace root folder" relationship="label">
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    icon={<Folder24Regular />}
+                    onClick={() => setShowRootPicker(true)}
+                    style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', fontFamily: "'Consolas', monospace" }}
+                  >
+                    {workspaceRoot || '...'}
+                  </Button>
+                </Tooltip>
+              )}
             </div>
           </div>
         </div>
@@ -292,19 +397,21 @@ export function Gallery() {
           <span>{virtualCount} virtual</span>
           <span>{visibleControls.length - builtCount} unbuilt</span>
         </div>
-        {privateCount > 0 && (
-          <Tooltip content={`${showPrivate ? 'Hide' : 'Show'} ${privateCount} private control${privateCount > 1 ? 's' : ''}`} relationship="label">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: tokens.colorNeutralForeground3 }}>
-              <EyeOff24Regular style={{ fontSize: 16 }} />
-              <Switch
-                checked={showPrivate}
-                onChange={(_, d) => setShowPrivate(d.checked)}
-                label={`${privateCount} private`}
-                style={{ fontSize: '12px' }}
-              />
-            </div>
-          </Tooltip>
-        )}
+        <Tooltip content={privateCount > 0
+          ? `${showPrivate ? 'Hide' : 'Show'} ${privateCount} private control${privateCount > 1 ? 's' : ''}`
+          : showPrivate ? 'Private controls visible (none found)' : 'Show private controls'}
+          relationship="label"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: tokens.colorNeutralForeground3 }}>
+            <EyeOff24Regular style={{ fontSize: 16 }} />
+            <Switch
+              checked={showPrivate}
+              onChange={(_, d) => togglePrivate(d.checked)}
+              label={privateCount > 0 ? `${privateCount} private` : 'private'}
+              style={{ fontSize: '12px' }}
+            />
+          </div>
+        </Tooltip>
         <Button
           appearance="subtle"
           icon={<ArrowClockwise24Regular />}

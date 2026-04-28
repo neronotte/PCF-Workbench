@@ -4,7 +4,7 @@ import {
   Button, Input, Label, Field, Textarea, Dropdown, Option,
   Table, TableHeader, TableRow, TableHeaderCell, TableBody, TableCell, Checkbox,
 } from '@fluentui/react-components';
-import { subscribeDialogs, resolveDialog, type DialogRequest, type OpenFormDialogRequest, type LookupDialogRequest } from '../shim/dialog-bus';
+import { subscribeDialogs, resolveDialog, type DialogRequest, type OpenFormDialogRequest, type LookupDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest } from '../shim/dialog-bus';
 import { getEntityData, getEntityStoreKeys } from '../store/data-store';
 
 /**
@@ -22,6 +22,8 @@ export function DialogHost() {
 
   if (current.kind === 'openForm') return <OpenFormDialog request={current} />;
   if (current.kind === 'lookup') return <LookupDialog request={current} />;
+  if (current.kind === 'confirm') return <ConfirmDialog request={current} />;
+  if (current.kind === 'alert') return <AlertDialog request={current} />;
   return null;
 }
 
@@ -74,7 +76,53 @@ function OpenFormDialog({ request }: { request: OpenFormDialogRequest }) {
   );
 }
 
-function LookupDialog({ request }: { request: LookupDialogRequest }) {
+function ConfirmDialog({ request }: { request: ConfirmDialogRequest }) {
+  const { confirmStrings } = request;
+  return (
+    <Dialog open modalType="alert">
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>{confirmStrings.title || 'Confirm'}</DialogTitle>
+          <DialogContent>
+            {confirmStrings.subtitle && (
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{confirmStrings.subtitle}</div>
+            )}
+            <div>{confirmStrings.text || 'Are you sure?'}</div>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => resolveDialog(request.id, { confirmed: false })}>
+              {confirmStrings.cancelButtonLabel || 'Cancel'}
+            </Button>
+            <Button appearance="primary" onClick={() => resolveDialog(request.id, { confirmed: true })}>
+              {confirmStrings.confirmButtonLabel || 'OK'}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  );
+}
+
+function AlertDialog({ request }: { request: AlertDialogRequest }) {
+  const { alertStrings } = request;
+  return (
+    <Dialog open modalType="alert">
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>{alertStrings.title || 'Alert'}</DialogTitle>
+          <DialogContent>
+            <div>{alertStrings.text || ''}</div>
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="primary" onClick={() => resolveDialog(request.id, undefined)}>
+              {alertStrings.confirmButtonLabel || 'OK'}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  );
+}function LookupDialog({ request }: { request: LookupDialogRequest }) {
   const allowedTypes: string[] = Array.isArray(request.options?.entityTypes) && request.options.entityTypes.length > 0
     ? request.options.entityTypes
     : getEntityStoreKeys();

@@ -1,5 +1,5 @@
 import type { HarnessStore } from '../store/harness-store';
-import { pushDialog, type OpenFormDialogRequest } from './dialog-bus';
+import { pushDialog, type OpenFormDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest } from './dialog-bus';
 
 export function createNavigationShim(getState: () => HarnessStore) {
   const log = (method: string, args?: any) =>
@@ -8,13 +8,25 @@ export function createNavigationShim(getState: () => HarnessStore) {
   return {
     openAlertDialog(alertStrings: any, options?: any): Promise<void> {
       log('openAlertDialog', { alertStrings, options });
-      window.alert(alertStrings.text || alertStrings.confirmButtonLabel || 'Alert');
-      return Promise.resolve();
+      return new Promise(resolve => {
+        pushDialog<AlertDialogRequest>({
+          kind: 'alert',
+          alertStrings: alertStrings ?? {},
+          options,
+          resolve,
+        });
+      });
     },
     openConfirmDialog(confirmStrings: any, options?: any): Promise<{ confirmed: boolean }> {
       log('openConfirmDialog', { confirmStrings, options });
-      const confirmed = window.confirm(confirmStrings.text || 'Confirm?');
-      return Promise.resolve({ confirmed });
+      return new Promise(resolve => {
+        pushDialog<ConfirmDialogRequest>({
+          kind: 'confirm',
+          confirmStrings: confirmStrings ?? {},
+          options,
+          resolve,
+        });
+      });
     },
     openErrorDialog(options: any): Promise<void> {
       log('openErrorDialog', options);

@@ -187,6 +187,10 @@ export interface HarnessStore {
   logEntries: LogEntry[];
   addLogEntry: (entry: Omit<LogEntry, 'id' | 'timestamp'>) => void;
   clearLog: () => void;
+
+  // Data loading options
+  rebaseDatesToToday: boolean;
+  setRebaseDatesToToday: (enabled: boolean) => void;
 }
 
 let nextLogId = 1;
@@ -396,4 +400,8 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     ],
   })),
   clearLog: () => set({ logEntries: [] }),
+
+  // Data loading options
+  rebaseDatesToToday: true,
+  setRebaseDatesToToday: (enabled) => set({ rebaseDatesToToday: enabled }),
 }));

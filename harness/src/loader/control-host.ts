@@ -6,6 +6,7 @@ import { loadBundle } from './bundle-loader';
 import { getReactDOMGlobal } from './platform-libs';
 import { ResourceTracker } from './resource-tracker';
 import { preloadBundleResources } from '../shim/resources';
+import { installXrmGlobalShims } from '../shim/xrm-global';
 
 export interface ControlHostState {
   isLoaded: boolean;
@@ -75,6 +76,10 @@ export class ControlHost {
       this.context = createContext(this.manifest, this.getState, getEntityData, {
         requestRender: () => this.callUpdateView(),
       });
+
+      // Install global Xrm shims (Xrm.WebApi, Xrm.Navigation, Xrm.Utility)
+      // so 3rd-party controls that use globals instead of context APIs work correctly
+      installXrmGlobalShims(this.getState, getEntityData);
 
       // notifyOutputChanged callback — defer logging to avoid triggering
       // React re-renders during the control's synchronous render cycle.

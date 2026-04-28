@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
 import {
-  makeStyles, tokens, Button, Badge, Textarea, MessageBar, MessageBarBody,
+  makeStyles, tokens, Button, Badge, Textarea, MessageBar, MessageBarBody, Checkbox,
 } from '@fluentui/react-components';
 import { ArrowClockwise24Regular, Save24Regular } from '@fluentui/react-icons';
 import { useHarnessStore } from '../../store/harness-store';
 import { loadEntityData, getEntityData } from '../../store/data-store';
+import { rebaseDatesToToday } from '../../store/date-rebase';
 
 const useStyles = makeStyles({
   root: {
@@ -88,6 +89,8 @@ function getDataSummary(): DataSummary {
 export function DataPanel() {
   const styles = useStyles();
   const addLogEntry = useHarnessStore(s => s.addLogEntry);
+  const rebaseEnabled = useHarnessStore(s => s.rebaseDatesToToday);
+  const setRebaseEnabled = useHarnessStore(s => s.setRebaseDatesToToday);
   const [tables, setTables] = useState<{ name: string; records: any[] }[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [editJson, setEditJson] = useState('');
@@ -95,10 +98,12 @@ export function DataPanel() {
   const [loaded, setLoaded] = useState(false);
 
   const loadData = useCallback(() => {
+    const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
     fetch('/pcf-data/data.json')
       .then(r => r.json())
-      .then((data: Record<string, any[]>) => {
-        if (data && typeof data === 'object') {
+      .then((raw: Record<string, any[]>) => {
+        if (raw && typeof raw === 'object') {
+          const data = shouldRebase ? rebaseDatesToToday(raw) : raw;
           loadEntityData(data);
           const tableList = Object.entries(data).map(([name, records]) => ({
             name,
@@ -106,7 +111,7 @@ export function DataPanel() {
           }));
           setTables(tableList);
           setLoaded(true);
-          addLogEntry({ category: 'data', method: 'reload', args: { tables: tableList.length, records: tableList.reduce((s, t) => s + t.records.length, 0) } });
+          addLogEntry({ category: 'data', method: 'reload', args: { tables: tableList.length, records: tableList.reduce((s, t) => s + t.records.length, 0), rebased: shouldRebase } });
         }
       })
       .catch(() => {
@@ -163,6 +168,13 @@ export function DataPanel() {
           title="Reload data.json"
         />
       </div>
+
+      <Checkbox
+        checked={rebaseEnabled}
+        onChange={(_, d) => setRebaseEnabled(!!d.checked)}
+        label="Rebase dates to today"
+        style={{ marginBottom: 4 }}
+      />
 
       {tables.length === 0 && loaded && (
         <div className={styles.info}>

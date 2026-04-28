@@ -1,4 +1,6 @@
 import type { HarnessStore } from '../store/harness-store';
+import { addEntityRecord, updateEntityRecord, deleteEntityRecord } from '../store/data-store';
+import { getExecuteMock } from '../store/execute-mock-store';
 
 const NETWORK_DELAYS: Record<string, number> = {
   online: 0,
@@ -221,7 +223,9 @@ export function createWebApiShim(
         const start = performance.now();
         log(`${prefix}createRecord`, { entityType, data });
         await applyNetworkConditions(mode);
-        const id = crypto.randomUUID();
+        const record = addEntityRecord(entityType, { ...data });
+        const idField = Object.keys(record).find(k => k.toLowerCase().endsWith('id') || k === 'id') ?? 'id';
+        const id = String(record[idField]);
         const result = { id, entityType };
         getState().addWebApiCall({
           method: `${prefix}createRecord`, entityType, durationMs: performance.now() - start,
@@ -234,6 +238,7 @@ export function createWebApiShim(
         const start = performance.now();
         log(`${prefix}deleteRecord`, { entityType, id });
         await applyNetworkConditions(mode);
+        deleteEntityRecord(entityType, id);
         getState().addWebApiCall({
           method: `${prefix}deleteRecord`, entityType, durationMs: performance.now() - start,
           responseSize: 0, recordCount: 0,
@@ -245,6 +250,7 @@ export function createWebApiShim(
         const start = performance.now();
         log(`${prefix}updateRecord`, { entityType, id, data });
         await applyNetworkConditions(mode);
+        updateEntityRecord(entityType, id, data);
         getState().addWebApiCall({
           method: `${prefix}updateRecord`, entityType, durationMs: performance.now() - start,
           responseSize: estimateSize(data), recordCount: 1,
@@ -355,6 +361,80 @@ export function createWebApiShim(
           responseSize: size, recordCount: 1, options,
         });
         return result;
+      },
+
+      async execute(request: any): Promise<any> {
+        const start = performance.now();
+        const meta = typeof request?.getMetadata === 'function' ? request.getMetadata() : {};
+        const actionName = meta.operationName
+          ?? request?.operationType ?? request?.functionName ?? 'unknown';
+        log(`${prefix}execute`, { action: actionName, request });
+        await applyNetworkConditions(mode);
+
+        // Check for a user-defined mock response in execute-mocks.json
+        const mock = getExecuteMock(actionName);
+        let responseBody: Record<string, any>;
+
+        if (mock !== undefined) {
+          responseBody = typeof mock === 'object' && mock !== null ? { ...mock } : { value: mock };
+          log(`${prefix}execute.mock`, { action: actionName, source: 'execute-mocks.json' }, responseBody);
+        } else {
+          // Default response matching common Dataverse action patterns
+          responseBody = {
+            Response: JSON.stringify({ Description: 'Success' }),
+            value: null,
+          };
+          // Copy request parameters into the response as output properties
+          if (meta.parameterTypes) {
+            for (const key of Object.keys(meta.parameterTypes)) {
+              if (request[key] !== undefined && !(key in responseBody)) {
+                responseBody[key] = request[key];
+              }
+            }
+          }
+          log(`${prefix}execute.default`, { action: actionName, hint: 'Add this action to execute-mocks.json for a custom response' });
+        }
+
+        getState().addWebApiCall({
+          method: `${prefix}execute`, entityType: actionName, durationMs: performance.now() - start,
+          responseSize: estimateSize(responseBody), recordCount: 0,
+        });
+
+        const bodyText = JSON.stringify(responseBody);
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          type: 'basic',
+          redirected: false,
+          url: '',
+          headers: {
+            get: (name: string) => {
+              if (name.toLowerCase() === 'content-type') return 'application/json';
+              return null;
+            },
+            has: (name: string) => name.toLowerCase() === 'content-type',
+            forEach: (cb: (value: string, key: string) => void) => {
+              cb('application/json', 'content-type');
+            },
+          },
+          body: null,
+          bodyUsed: false,
+          json: () => Promise.resolve(responseBody),
+          text: () => Promise.resolve(bodyText),
+          clone() { return this; },
+          arrayBuffer: () => Promise.resolve(new TextEncoder().encode(bodyText).buffer),
+          blob: () => Promise.resolve(new Blob([bodyText], { type: 'application/json' })),
+          formData: () => Promise.resolve(new FormData()),
+        };
+      },
+
+      async executeMultiple(requests: any[]): Promise<any[]> {
+        const results = [];
+        for (const req of requests) {
+          results.push(await this.execute(req));
+        }
+        return results;
       },
     };
   }

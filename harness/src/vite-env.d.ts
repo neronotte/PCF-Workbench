@@ -9,4 +9,5 @@ declare module 'virtual:pcf-manifest' {
   export const resxStrings: Record<string, string>;
   export const isGalleryMode: boolean;
   export const controlDir: string;
+  export const launchedAsGallery: boolean;
 }

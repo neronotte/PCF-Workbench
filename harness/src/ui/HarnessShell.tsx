@@ -104,11 +104,12 @@ interface Props {
   bundlePath: string;
   cssFiles: string[];
   controlDir: string;
+  launchedAsGallery: boolean;
 }
 
 type SidePanelTab = 'properties' | 'data' | 'scenarios' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance';
 
-export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir }: Props) {
+export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launchedAsGallery }: Props) {
   const styles = useStyles();
   const [activeTab, setActiveTab] = useState<SidePanelTab>('properties');
   const isDarkMode = useHarnessStore(s => s.isDarkMode);
@@ -137,21 +138,23 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir }: Pro
     <div className={styles.root}>
       {/* Top Bar */}
       <div className={styles.topBar}>
-        <Button
-          appearance="subtle"
-          size="small"
-          onClick={() => {
-            fetch('/api/switch-control', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ controlDir: '' }),
-            }).catch(() => {});
-          }}
-          style={{ color: 'white', fontWeight: 600, fontSize: 14, minWidth: 0, padding: '2px 8px' }}
-          title="Back to Gallery"
-        >
-          &larr; Gallery
-        </Button>
+        {launchedAsGallery && (
+          <Button
+            appearance="subtle"
+            size="small"
+            onClick={() => {
+              fetch('/api/switch-control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ controlDir: '' }),
+              }).catch(() => {});
+            }}
+            style={{ color: 'white', fontWeight: 600, fontSize: 14, minWidth: 0, padding: '2px 8px' }}
+            title="Back to Gallery"
+          >
+            &larr; Gallery
+          </Button>
+        )}
         <span style={{ opacity: 0.7, fontSize: 12 }}>
           {manifest.namespace}.{manifest.constructor}
         </span>

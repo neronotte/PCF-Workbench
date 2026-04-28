@@ -6,12 +6,14 @@ import { DialogHost } from './ui/DialogHost';
 import { PopupHost } from './ui/PopupHost';
 import { useHarnessStore } from './store/harness-store';
 import { loadEntityData, subscribeData } from './store/data-store';
+import { loadExecuteMocks } from './store/execute-mock-store';
 import { loadMetadata } from './store/metadata-store';
+import { rebaseDatesToToday } from './store/date-rebase';
 import { setResxStrings } from './shim/resources';
 import type { ManifestConfig } from './types/manifest';
 
 // Import from virtual module (provided by pcf-plugin).
-import { manifest as manifestData, bundlePath, cssFiles, resxStrings, isGalleryMode, controlDir } from 'virtual:pcf-manifest';
+import { manifest as manifestData, bundlePath, cssFiles, resxStrings, isGalleryMode, controlDir, launchedAsGallery } from 'virtual:pcf-manifest';
 
 export function App() {
   const isDarkMode = useHarnessStore(s => s.isDarkMode);
@@ -42,16 +44,19 @@ export function App() {
       console.log(`[pcf-workbench] RESX: ${Object.keys(resxStrings).length} strings loaded`);
     }
 
-    // Load data.json and metadata.json from the PCF project directory
+    // Load data.json, metadata.json, and execute-mocks.json from the PCF project directory
     Promise.all([
       fetch('/pcf-data/data.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/pcf-data/metadata.json').then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([data, metadata]) => {
+      fetch('/pcf-data/execute-mocks.json').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([data, metadata, executeMocks]) => {
       if (data && Object.keys(data).length > 0) {
-        loadEntityData(data);
-        const tableCount = Object.keys(data).length;
-        const recordCount = Object.values(data as Record<string, any[]>).reduce((sum, arr) => sum + arr.length, 0);
-        console.log(`[pcf-workbench] Loaded data.json: ${tableCount} tables, ${recordCount} records`);
+        const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
+        const finalData = shouldRebase ? rebaseDatesToToday(data) : data;
+        loadEntityData(finalData);
+        const tableCount = Object.keys(finalData).length;
+        const recordCount = Object.values(finalData as Record<string, any[]>).reduce((sum, arr) => sum + arr.length, 0);
+        console.log(`[pcf-workbench] Loaded data.json: ${tableCount} tables, ${recordCount} records${shouldRebase ? ' (dates rebased to today)' : ''}`);
       } else {
         console.log('[pcf-workbench] No data.json found. WebAPI calls will return empty results.');
       }
@@ -63,6 +68,9 @@ export function App() {
           loadMetadata(metadata);
         }
         console.log(`[pcf-workbench] Loaded entity metadata`);
+      }
+      if (executeMocks && Object.keys(executeMocks).length > 0) {
+        loadExecuteMocks(executeMocks);
       }
       setReady(true);
     });
@@ -81,7 +89,7 @@ export function App() {
 
   return (
     <FluentProvider theme={isDarkMode ? webDarkTheme : webLightTheme}>
-      <HarnessShell manifest={manifestData} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} />
+      <HarnessShell manifest={manifestData} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} launchedAsGallery={launchedAsGallery} />
       <DialogHost />
       <PopupHost />
     </FluentProvider>
