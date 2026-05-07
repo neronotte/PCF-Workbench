@@ -191,7 +191,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
 
         <span className={styles.topBarSpacer} />
         <div className={styles.topBarControl} data-test-id="shim-profile-control">
-          <Label size="small" style={{ color: 'white' }}>Profile</Label>
+          <Label size="small" style={{ color: 'white' }} title="Which Dataverse API surface the harness emulates. Newer profiles expose APIs (e.g. Xrm.App.sidePanes) that older orgs don't have.">API</Label>
           <Dropdown
             size="small"
             value={SHIM_PROFILE_LABELS[shimProfile]}
