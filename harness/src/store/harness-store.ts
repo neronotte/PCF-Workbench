@@ -180,6 +180,12 @@ export interface HarnessStore {
   host: 'Web' | 'Mobile' | 'Outlook' | 'Teams';
   setHost: (host: 'Web' | 'Mobile' | 'Outlook' | 'Teams') => void;
 
+  // Reload callback registered by ControlViewport so other parts of the
+  // harness UI (e.g. the top-bar Refresh button) can trigger a full
+  // destroy → init → updateView cycle on the loaded control.
+  reloadControl: (() => void) | null;
+  setReloadControl: (fn: (() => void) | null) => void;
+
   // Dataset state (per dataset name) and a monotonically increasing data version
   // that ControlViewport observes to trigger updateView when data mutates.
   datasetState: Record<string, DatasetState>;
@@ -374,6 +380,9 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   // Host
   host: 'Web',
   setHost: (host) => set({ host }),
+
+  reloadControl: null,
+  setReloadControl: (fn) => set({ reloadControl: fn }),
 
   // Dataset state (per dataset name)
   datasetState: {},

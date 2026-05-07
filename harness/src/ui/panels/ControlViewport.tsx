@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { makeStyles, tokens, Spinner, MessageBar, MessageBarBody, Button } from '@fluentui/react-components';
-import { ArrowClockwise24Regular } from '@fluentui/react-icons';
+import { makeStyles, tokens, Spinner, MessageBar, MessageBarBody } from '@fluentui/react-components';
 import { useHarnessStore } from '../../store/harness-store';
 import { ControlHost, type ControlHostState } from '../../loader/control-host';
 import type { ManifestConfig } from '../../types/manifest';
@@ -12,20 +11,6 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     height: '100%',
     overflow: 'hidden',
-  },
-  toolbar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 12px',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-    flexShrink: 0,
-  },
-  title: {
-    fontSize: tokens.fontSizeBase300,
-    fontWeight: tokens.fontWeightSemibold,
-    flex: 1,
   },
   viewportWrapper: {
     flex: 1,
@@ -248,23 +233,16 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
     hostRef.current?.reload();
   }, []);
 
+  // Register the reload callback in the store so the harness top bar's
+  // Refresh button (and the form command bar's Refresh) can trigger it.
+  const setReloadControl = useHarnessStore(s => s.setReloadControl);
+  useEffect(() => {
+    setReloadControl(handleReload);
+    return () => setReloadControl(null);
+  }, [handleReload, setReloadControl]);
+
   return (
     <div className={styles.root}>
-      <div className={styles.toolbar}>
-        <span className={styles.title}>
-          {manifest.namespace}.{manifest.constructor} v{manifest.version}
-          <span style={{ fontWeight: 'normal', marginLeft: 8, opacity: 0.6, fontSize: 12 }}>
-            {manifest.controlType}
-          </span>
-        </span>
-        <Button
-          appearance="subtle"
-          icon={<ArrowClockwise24Regular />}
-          onClick={handleReload}
-          title="Reload control"
-        />
-      </div>
-
       <div className={styles.viewportWrapper}>
         <div
           className={styles.viewportFrame}

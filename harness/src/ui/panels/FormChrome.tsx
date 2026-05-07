@@ -271,6 +271,7 @@ export function FormChrome({ entityTypeName, children }: Props) {
   const styles = useStyles();
   const enabled = useHarnessStore(s => s.formChromeEnabled);
   const isDarkMode = useHarnessStore(s => s.isDarkMode);
+  const reloadControl = useHarnessStore(s => s.reloadControl);
 
   // Subscribe to form-store version for entity header + tabs + dirty state.
   useSyncExternalStore(
@@ -307,7 +308,10 @@ export function FormChrome({ entityTypeName, children }: Props) {
     xrmPage?.data?.entity?.save?.();
     xrmPage?.ui?.close?.();
   };
-  const handleRefresh = () => xrmPage?.ui?.refreshRibbon?.(true);
+  const handleRefresh = () => {
+    xrmPage?.ui?.refreshRibbon?.(true);
+    reloadControl?.();
+  };
   const handleDelete = () => xrmPage?.ui?.setFormNotification?.('Delete is a no-op in the harness.', 'INFORMATION', 'harness-delete-info');
 
   const handleTabClick = (tabName: string) => {

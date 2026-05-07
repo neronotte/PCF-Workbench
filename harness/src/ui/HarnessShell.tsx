@@ -6,7 +6,7 @@ import {
   PlugConnected24Regular, Phone24Regular, TopSpeed24Regular,
   Settings24Regular, WeatherMoon24Regular, WeatherSunny24Regular,
   Database24Regular, Beaker24Regular, Play24Regular, Person24Regular,
-  Form24Regular, Shield24Regular,
+  Form24Regular, Shield24Regular, ArrowClockwise20Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore, DEVICE_PRESETS, SHIM_PROFILE_LABELS, type ShimProfile } from '../store/harness-store';
 import { ControlViewport } from './panels/ControlViewport';
@@ -131,6 +131,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
   const shimProfile = useHarnessStore(s => s.shimProfile);
   const setShimProfile = useHarnessStore(s => s.setShimProfile);
+  const reloadControl = useHarnessStore(s => s.reloadControl);
 
   const devicePreset = useHarnessStore(s => s.devicePreset);
   const renderCount = useHarnessStore(s => s.renderCount);
@@ -191,6 +192,20 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         </span>
 
         <span className={styles.topBarSpacer} />
+        <div className={styles.topBarControl}>
+          <Button
+            size="small"
+            appearance="subtle"
+            icon={<ArrowClockwise20Regular />}
+            onClick={() => reloadControl?.()}
+            disabled={!reloadControl}
+            title="Reload the control (full destroy + init + updateView cycle)"
+            style={{ color: 'white' }}
+            data-test-id="harness-top-reload"
+          >
+            Reload
+          </Button>
+        </div>
         <div className={styles.topBarControl} data-test-id="shim-profile-control">
           <Label size="small" style={{ color: 'white' }} title="Which Dataverse API surface the harness emulates. Newer profiles expose APIs (e.g. Xrm.App.sidePanes) that older orgs don't have.">API</Label>
           <Dropdown
