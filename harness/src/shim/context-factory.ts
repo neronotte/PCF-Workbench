@@ -11,6 +11,8 @@ import { createResourcesShim } from './resources';
 import { createWebApiShim } from './web-api';
 import { createFluentDesignShim } from './fluent-design';
 import { createCopilotShim } from './copilot';
+import { createAccessibilityShim } from './accessibility';
+import { createThemingShim } from './theming';
 import { addEntityRecord, deleteEntityRecord, getEntityStoreKeys } from '../store/data-store';
 import { getColumnDisplayName, getEntityMetadata } from '../store/metadata-store';
 import { defaultDatasetState } from '../store/harness-store';
@@ -451,6 +453,7 @@ export function createContext(
   hooks: CreateContextHooks = {},
 ) {
   const state = getState();
+  const events = createEventsProxy(getState);
 
   return {
     parameters: buildParameters(manifest, state.propertyValues, getEntityData, getState),
@@ -488,6 +491,14 @@ export function createContext(
         getState().addLogEntry({ category: 'factory', method: 'requestRender' });
         hooks.requestRender?.();
       },
+      fireEvent: (name: string, payload?: any) => {
+        getState().addLogEntry({ category: 'factory', method: 'fireEvent', args: { name, payload } });
+        // Dispatch through the events Proxy so any registered listener fires.
+        // The Proxy auto-creates a logging handler for any unknown event name.
+        if (typeof (events as any)[name] === 'function') {
+          (events as any)[name](payload);
+        }
+      },
     },
     formatting: createFormattingShim(),
     mode: createModeShim(getState),
@@ -497,9 +508,11 @@ export function createContext(
     utils: createUtilsShim(getState),
     webAPI: createWebApiShim(getState, getEntityData),
     updatedProperties: ['all'],
-    events: createEventsProxy(getState),
+    events,
     fluentDesignLanguage: createFluentDesignShim(getState),
     copilot: createCopilotShim(getState),
+    accessibility: createAccessibilityShim(getState),
+    theming: createThemingShim(getState),
 
     // Non-standard context extensions used by some controls (e.g. InspectionControl)
     page: {
@@ -508,6 +521,9 @@ export function createContext(
       get entityRecordName() { return getState().pageEntityRecordName; },
       appId: '',
       isPageReadOnly: false,
+      getClientUrl(): string {
+        return typeof window !== 'undefined' ? window.location.origin : '';
+      },
     },
   };
 }

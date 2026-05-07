@@ -9,10 +9,18 @@ export function createModeShim(getState: () => HarnessStore) {
     label: '',
     get contextInfo() {
       const s = getState();
+      // Synthesise stable form/role identifiers from the page entity so
+      // controls that key off contextInfo.formId / roleName see deterministic
+      // values across renders.
+      const formId = s.pageEntityTypeName
+        ? `00000000-0000-0000-0000-${s.pageEntityTypeName.padEnd(12, '0').slice(0, 12)}`
+        : '00000000-0000-0000-0000-000000000000';
       return {
         entityId: s.pageEntityId,
         entityTypeName: s.pageEntityTypeName,
         entityRecordName: s.pageEntityRecordName,
+        formId,
+        roleName: 'Main',
       };
     },
     setControlState(_state: Record<string, any>): boolean {

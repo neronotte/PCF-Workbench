@@ -170,6 +170,117 @@ const TESTS: TestRow[] = [
             return "called";
         },
     },
+    {
+        id: "context-factory-fireEvent",
+        category: "Context",
+        name: "context.factory.fireEvent",
+        run: (ctx) => {
+            const fn = (ctx as any).factory?.fireEvent;
+            expect(typeof fn === "function", "context.factory.fireEvent missing");
+            fn("ConformanceProbe", { value: 1 });
+            return "ok";
+        },
+    },
+    {
+        id: "context-mode-contextInfo-formId",
+        category: "Context",
+        name: "context.mode.contextInfo.formId",
+        run: (ctx) => {
+            const ci = (ctx as any).mode?.contextInfo;
+            expect(!!ci, "contextInfo missing");
+            expect(typeof ci.formId === "string" && ci.formId.length > 0, `formId missing: ${fmt(ci.formId)}`);
+            expect(typeof ci.roleName === "string" && ci.roleName.length > 0, `roleName missing: ${fmt(ci.roleName)}`);
+            return fmt({ formId: ci.formId, roleName: ci.roleName });
+        },
+    },
+    {
+        id: "context-page-getClientUrl",
+        category: "Context",
+        name: "context.page.getClientUrl()",
+        run: (ctx) => {
+            const fn = (ctx as any).page?.getClientUrl;
+            expect(typeof fn === "function", "page.getClientUrl missing");
+            const url = fn();
+            expect(typeof url === "string" && url.length > 0, `expected non-empty url, got ${fmt(url)}`);
+            return fmt(url);
+        },
+    },
+    {
+        id: "context-accessibility-getState",
+        category: "Context",
+        name: "context.accessibility.getAccessibilityState()",
+        run: (ctx) => {
+            const fn = (ctx as any).accessibility?.getAccessibilityState;
+            expect(typeof fn === "function", "accessibility.getAccessibilityState missing");
+            const state = fn();
+            expect(state && typeof state === "object", "did not return object");
+            expect(typeof state.isHighContrastEnabled === "boolean", "isHighContrastEnabled missing");
+            expect(typeof state.isReducedMotionEnabled === "boolean", "isReducedMotionEnabled missing");
+            return fmt(state);
+        },
+    },
+    {
+        id: "context-theming-getThemeKind",
+        category: "Context",
+        name: "context.theming.getThemeKind()",
+        run: (ctx) => {
+            const fn = (ctx as any).theming?.getThemeKind;
+            expect(typeof fn === "function", "theming.getThemeKind missing");
+            const kind = fn();
+            expect(["light", "dark", "highContrast"].includes(kind), `unexpected kind: ${kind}`);
+            return fmt(kind);
+        },
+    },
+    {
+        id: "context-theming-getCustomColors",
+        category: "Context",
+        name: "context.theming.getCustomColors()",
+        run: (ctx) => {
+            const fn = (ctx as any).theming?.getCustomColors;
+            expect(typeof fn === "function", "theming.getCustomColors missing");
+            const colors = fn();
+            expect(!!colors && typeof colors.brandPrimary === "string", `bad colors: ${fmt(colors)}`);
+            return fmt(colors);
+        },
+    },
+    {
+        id: "context-events-proxy",
+        category: "Context",
+        name: "context.events Proxy auto-handler",
+        run: (ctx) => {
+            const ev = (ctx as any).events;
+            expect(!!ev, "events missing");
+            // Any property access should return a function (auto-created by the Proxy).
+            const fn = ev.OnConformanceProbe;
+            expect(typeof fn === "function", "Proxy did not auto-create handler");
+            fn({ probe: true });
+            return "ok";
+        },
+    },
+    {
+        id: "context-copilot-shim",
+        category: "Context",
+        name: "context.copilot.getRecommendations",
+        run: async (ctx) => {
+            const fn = (ctx as any).copilot?.getRecommendations;
+            expect(typeof fn === "function", "copilot.getRecommendations missing");
+            const r = await fn({});
+            expect(Array.isArray(r), `expected array, got ${fmt(r)}`);
+            return fmt({ length: r.length });
+        },
+    },
+    {
+        id: "context-fluentDesign-tokens",
+        category: "Context",
+        name: "context.fluentDesignLanguage.tokenTheme",
+        run: (ctx) => {
+            const fd = (ctx as any).fluentDesignLanguage;
+            expect(!!fd, "fluentDesignLanguage missing");
+            expect(typeof fd.tokenTheme === "object" && fd.tokenTheme !== null, "tokenTheme missing");
+            expect(typeof fd.isDarkTheme === "boolean", "isDarkTheme missing");
+            return fmt({ isDarkTheme: fd.isDarkTheme });
+        },
+    },
 
     // ─── Xrm.* ──────────────────────────────────────────────────
     {

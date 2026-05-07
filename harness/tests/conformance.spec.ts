@@ -50,7 +50,7 @@ test("ConformanceTester: P1+P2 rows pass", async ({ page }) => {
     const naText = await page.locator("[data-test-id=ct-summary-na]").innerText();
     const idleText = await idleBadge.innerText();
 
-    await page.screenshot({ path: path.join(VISUAL_DIR, "conformance-p2.png"), fullPage: true });
+    await page.screenshot({ path: path.join(VISUAL_DIR, "conformance-p3.png"), fullPage: true });
 
     const rows = await page.locator('[data-test-id^="ct-row-"][data-test-id$="-status"]').all();
     const report: Array<{ id: string; status: string; detail: string }> = [];
@@ -64,14 +64,14 @@ test("ConformanceTester: P1+P2 rows pass", async ({ page }) => {
         report.push({ id, status, detail });
     }
     fs.writeFileSync(
-        path.join(VISUAL_DIR, "conformance-p2.json"),
+        path.join(VISUAL_DIR, "conformance-p3.json"),
         JSON.stringify({ summary: { passText, failText, naText, idleText }, rows: report, consoleErrors }, null, 2),
     );
 
     expect(idleText.trim(), `idle should be 0; rows: ${JSON.stringify(report.filter(r => r.status === 'idle'), null, 2)}`).toMatch(/^0 idle$/);
 
     // P1 + P2 acceptance: every fc-, ec-, and xrm- row must pass.
-    const gatedPrefixes = ["fc-", "ec-", "xrm-"];
+    const gatedPrefixes = ["fc-", "ec-", "xrm-", "context-"];
     const failures = report.filter(
         (r) => gatedPrefixes.some((p) => r.id.startsWith(p)) && r.status !== "pass",
     );
