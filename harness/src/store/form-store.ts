@@ -342,6 +342,21 @@ export function setTabDisplayState(name: string, displayState: DisplayState): bo
   return true;
 }
 
+export function setTabFocus(name: string): boolean {
+  const target = state.tabs.get(name);
+  if (!target) return false;
+  let changed = false;
+  for (const t of state.tabs.values()) {
+    const shouldFocus = t.name === name;
+    if (t.focused !== shouldFocus) {
+      t.focused = shouldFocus;
+      changed = true;
+    }
+  }
+  if (changed) notify();
+  return true;
+}
+
 export function setSectionVisible(name: string, visible: boolean): boolean {
   const s = state.sections.get(name);
   if (!s) return false;

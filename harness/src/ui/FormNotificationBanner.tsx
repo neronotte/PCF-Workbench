@@ -6,6 +6,7 @@ import {
     dismissFormNotification,
     type FormNotification,
 } from '../shim/xrm-form';
+import { useHarnessStore } from '../store/harness-store';
 
 const useStyles = makeStyles({
     root: {
@@ -43,9 +44,13 @@ const LEVEL_LABEL = {
 export function FormNotificationBanner(): JSX.Element | null {
     const styles = useStyles();
     const [items, setItems] = useState<readonly FormNotification[]>([]);
+    const formChromeEnabled = useHarnessStore(s => s.formChromeEnabled);
 
     useEffect(() => subscribeFormNotifications(setItems), []);
 
+    // When the UCI form chrome is rendering its own footer notifications, hide
+    // this in-viewport banner to avoid showing each message twice.
+    if (formChromeEnabled) return null;
     if (items.length === 0) return null;
 
     return (

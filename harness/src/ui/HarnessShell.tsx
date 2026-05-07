@@ -20,6 +20,7 @@ import { ScenariosPanel } from './panels/ScenariosPanel';
 import { LifecyclePanel } from './panels/LifecyclePanel';
 import { UserSettingsPanel } from './panels/UserSettingsPanel';
 import { FormPanel } from './panels/FormPanel';
+import { FormChrome } from './panels/FormChrome';
 import type { ManifestConfig } from '../types/manifest';
 
 const useStyles = makeStyles({
@@ -119,6 +120,9 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
   const isControlDisabled = useHarnessStore(s => s.isControlDisabled);
   const setControlDisabled = useHarnessStore(s => s.setControlDisabled);
   const networkMode = useHarnessStore(s => s.networkMode);
+  const formChromeEnabled = useHarnessStore(s => s.formChromeEnabled);
+  const toggleFormChrome = useHarnessStore(s => s.toggleFormChrome);
+  const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
 
   const devicePreset = useHarnessStore(s => s.devicePreset);
   const renderCount = useHarnessStore(s => s.renderCount);
@@ -180,6 +184,14 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
 
         <span className={styles.topBarSpacer} />
         <div className={styles.topBarControl}>
+          <Label size="small" style={{ color: 'white' }}>Form chrome</Label>
+          <Switch
+            checked={formChromeEnabled}
+            onChange={() => toggleFormChrome()}
+            style={{ '--colorCompoundBrandBackground': 'white' } as any}
+          />
+        </div>
+        <div className={styles.topBarControl}>
           <Label size="small" style={{ color: 'white' }}>Disabled</Label>
           <Switch
             checked={isControlDisabled}
@@ -201,7 +213,9 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         {/* Main panel: viewport + console */}
         <div className={styles.mainPanel}>
           <div className={styles.viewportArea}>
-            <ControlViewport manifest={manifest} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} />
+            <FormChrome entityTypeName={pageEntityTypeName}>
+              <ControlViewport manifest={manifest} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} />
+            </FormChrome>
           </div>
           <div className={styles.consoleArea}>
             <ConsolePanel />

@@ -125,6 +125,10 @@ export interface HarnessStore {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
 
+  // Form chrome (UCI header / command bar / tab strip / footer)
+  formChromeEnabled: boolean;
+  toggleFormChrome: () => void;
+
   // Fullscreen state (toggled via context.mode.setFullScreen)
   isFullscreen: boolean;
   setFullscreen: (value: boolean) => void;
@@ -282,6 +286,19 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   // Theme
   isDarkMode: false,
   toggleDarkMode: () => set(s => ({ isDarkMode: !s.isDarkMode })),
+
+  // Form chrome — persisted to localStorage so the toggle survives reloads.
+  formChromeEnabled: (() => {
+    try {
+      const v = typeof localStorage !== 'undefined' ? localStorage.getItem('pcf.formChromeEnabled') : null;
+      return v === null ? true : v === 'true';
+    } catch { return true; }
+  })(),
+  toggleFormChrome: () => set(s => {
+    const next = !s.formChromeEnabled;
+    try { localStorage.setItem('pcf.formChromeEnabled', String(next)); } catch { /* ignore */ }
+    return { formChromeEnabled: next };
+  }),
 
   // Fullscreen
   isFullscreen: false,
