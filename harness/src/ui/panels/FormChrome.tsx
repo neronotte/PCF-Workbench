@@ -221,9 +221,9 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
-    padding: '4px 12px',
+    padding: '6px 12px',
     backgroundColor: tokens.colorNeutralBackground2,
-    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     flexShrink: 0,
   },
   notification: {
@@ -351,10 +351,8 @@ export function FormChrome({ entityTypeName, children }: Props) {
         </div>
       )}
 
-      <div className={styles.viewportArea}>{children}</div>
-
       {notifications.length > 0 && (
-        <div className={styles.footer} data-test-id="form-chrome-footer">
+        <div className={styles.footer} data-test-id="form-chrome-notifications">
           {notifications.map(n => {
             const levelClass =
               n.level === 'WARNING' ? styles.notificationWarning :
@@ -380,6 +378,8 @@ export function FormChrome({ entityTypeName, children }: Props) {
           })}
         </div>
       )}
+
+      <div className={styles.viewportArea}>{children}</div>
     </div>
     </FluentProvider>
   );

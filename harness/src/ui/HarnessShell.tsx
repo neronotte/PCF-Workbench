@@ -21,6 +21,7 @@ import { LifecyclePanel } from './panels/LifecyclePanel';
 import { UserSettingsPanel } from './panels/UserSettingsPanel';
 import { FormPanel } from './panels/FormPanel';
 import { FormChrome } from './panels/FormChrome';
+import { AppNotificationBanner } from './AppNotificationBanner';
 import { CoveragePanel } from './panels/CoveragePanel';
 import type { ManifestConfig } from '../types/manifest';
 
@@ -245,6 +246,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         {/* Main panel: viewport + console */}
         <div className={styles.mainPanel}>
           <div className={styles.viewportArea}>
+            <AppNotificationBanner />
             <FormChrome entityTypeName={pageEntityTypeName}>
               <ControlViewport manifest={manifest} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} />
             </FormChrome>

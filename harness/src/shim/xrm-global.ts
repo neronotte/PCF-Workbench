@@ -19,6 +19,7 @@ import { createNavigationShim } from './navigation';
 import { createDeviceShim } from './device';
 import { pushDialog, type AlertDialogRequest, type ConfirmDialogRequest } from './dialog-bus';
 import { isFeatureAvailable } from './profile';
+import { addAppNotification, clearAppNotification } from './xrm-app-notifications';
 
 let installed = false;
 
@@ -248,19 +249,17 @@ export function installXrmGlobalShims(
 
   // Xrm.App — global notifications + side panes
   if (!w.Xrm.App) {
-    const globalNotifications = new Map<string, { id: string; level: number; type: number; message: string; action?: any }>();
-    let nextNotificationId = 1;
     const sidePanes = new Map<string, any>();
+    let nextSidePaneId = 1;
     w.Xrm.App = {
       addGlobalNotification(notification: { type: number; level: number; message: string; showCloseButton?: boolean; action?: any }): Promise<string> {
-        const id = `notif-${nextNotificationId++}`;
-        globalNotifications.set(id, { id, ...notification });
-        getState().addLogEntry({ category: 'app', method: 'addGlobalNotification', args: { id, ...notification }, coverage: 'stub' });
+        const id = addAppNotification(notification);
+        getState().addLogEntry({ category: 'app', method: 'addGlobalNotification', args: { id, ...notification }, coverage: 'implemented' });
         return Promise.resolve(id);
       },
       clearGlobalNotification(id: string): Promise<void> {
-        globalNotifications.delete(id);
-        getState().addLogEntry({ category: 'app', method: 'clearGlobalNotification', args: { id }, coverage: 'stub' });
+        clearAppNotification(id);
+        getState().addLogEntry({ category: 'app', method: 'clearGlobalNotification', args: { id }, coverage: 'implemented' });
         return Promise.resolve();
       },
       sidePanes: {
@@ -280,7 +279,7 @@ export function installXrmGlobalShims(
             getState().addLogEntry({ category: 'app', method: 'sidePanes.createPane', args: input, result: { error: err.message }, coverage: 'unimplemented' });
             return Promise.reject(err);
           }
-          const paneId = input.paneId ?? `pane-${nextNotificationId++}`;
+          const paneId = input.paneId ?? `pane-${nextSidePaneId++}`;
           const pane = {
             paneId,
             title: input.title ?? '',
