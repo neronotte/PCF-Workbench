@@ -389,10 +389,21 @@ export function fireOnChange(name: string, executionContext?: any): void {
 
 /**
  * Minimal executionContext used when fireOnChange is triggered by a non-shim
- * mutation (e.g. the harness UI directly calling setAttributeValue). The
- * form-context shim builds a richer one for handler-driven flows.
+ * mutation (e.g. the harness UI directly calling setAttributeValue). When the
+ * form-context shim is active it injects a richer builder via
+ * `setExecutionContextBuilder` so handlers always receive a real
+ * `getFormContext()` regardless of who triggered the change.
  */
+type ExecutionContextBuilder = (eventSource: string, payload: any, depth?: number) => any;
+let _executionContextBuilder: ExecutionContextBuilder | null = null;
+export function setExecutionContextBuilder(builder: ExecutionContextBuilder | null): void {
+  _executionContextBuilder = builder;
+}
+
 function minimalExecutionContext(attrName: string): any {
+  if (_executionContextBuilder) {
+    return _executionContextBuilder(`attribute.${attrName}.fireOnChange`, { getName: () => attrName }, 1);
+  }
   return {
     getFormContext: () => null,
     getEventSource: () => ({ getName: () => attrName }),

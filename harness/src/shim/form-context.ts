@@ -451,6 +451,10 @@ export function buildFormContext(hooks: FormContextHooks): any {
   fc.removeOnPostSave = (handler: fs.FormHandler) => { log('formContext.removeOnPostSave'); fs.removeOnPostSave(handler); };
 
   _activeFormContext = fc;
+  // Inject the rich builder into form-store so any minimalExecutionContext
+  // fallback (e.g. harness-UI-driven fireOnChange) still receives a real
+  // formContext.
+  fs.setExecutionContextBuilder(buildExecutionContext);
   return fc;
 }
 

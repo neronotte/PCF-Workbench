@@ -1,6 +1,28 @@
 import { create } from 'zustand';
 import type { ManifestConfig } from '../types/manifest';
 
+export type CoverageStatus = 'implemented' | 'stub' | 'unimplemented';
+
+/**
+ * Versioned shim profile. Each profile gates which Xrm / formContext APIs are
+ * available so that a PCF intended for Dataverse 9.0 can be tested against
+ * the API surface of that release rather than the latest.
+ *
+ *   - '9.0'    — pre-Wave-2-2021 baseline. No Xrm.App.sidePanes,
+ *                no formContext.data.refresh polling, lookupObjects returns
+ *                the legacy single-record shape.
+ *   - '9.2'    — Wave-2-2021 forward (current LTS-equivalent). Side panes,
+ *                richer Xrm.Utility, executionContext on every handler.
+ *   - 'latest' — current dev-channel; tracks the live CDS Web API.
+ */
+export type ShimProfile = '9.0' | '9.2' | 'latest';
+
+export const SHIM_PROFILE_LABELS: Record<ShimProfile, string> = {
+  '9.0': 'Dataverse 9.0',
+  '9.2': 'Dataverse 9.2',
+  'latest': 'Latest',
+};
+
 export interface LogEntry {
   id: number;
   timestamp: number;
@@ -8,6 +30,14 @@ export interface LogEntry {
   method: string;
   args?: any;
   result?: any;
+  /**
+   * Implementation fidelity:
+   *  - 'implemented' (default): full behavioural parity with the live UCI host
+   *  - 'stub': the call is wired but returns canned data / has no side effects
+   *  - 'unimplemented': the call is a no-op placeholder; controls relying on
+   *    real behaviour will misbehave
+   */
+  coverage?: CoverageStatus;
 }
 
 export interface WebApiCallRecord {
@@ -128,6 +158,12 @@ export interface HarnessStore {
   // Form chrome (UCI header / command bar / tab strip / footer)
   formChromeEnabled: boolean;
   toggleFormChrome: () => void;
+
+  // Versioned shim profile (Dataverse 9.0 / 9.2 / latest)
+  // Controls feature gating in shims so a control built for 9.x can be
+  // tested with the same restrictions it would face on a real org.
+  shimProfile: ShimProfile;
+  setShimProfile: (profile: ShimProfile) => void;
 
   // Fullscreen state (toggled via context.mode.setFullScreen)
   isFullscreen: boolean;
@@ -298,6 +334,19 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     const next = !s.formChromeEnabled;
     try { localStorage.setItem('pcf.formChromeEnabled', String(next)); } catch { /* ignore */ }
     return { formChromeEnabled: next };
+  }),
+
+  // Shim profile — persisted so reloads keep the chosen Dataverse version.
+  shimProfile: (() => {
+    try {
+      const v = typeof localStorage !== 'undefined' ? localStorage.getItem('pcf.shimProfile') : null;
+      if (v === '9.0' || v === '9.2' || v === 'latest') return v;
+    } catch { /* ignore */ }
+    return 'latest' as ShimProfile;
+  })(),
+  setShimProfile: (profile) => set(() => {
+    try { localStorage.setItem('pcf.shimProfile', profile); } catch { /* ignore */ }
+    return { shimProfile: profile };
   }),
 
   // Fullscreen

@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import {
-  makeStyles, tokens, Tab, TabList, Switch, Label, Button, Divider,
+  makeStyles, tokens, Tab, TabList, Switch, Label, Button, Divider, Dropdown, Option,
 } from '@fluentui/react-components';
 import {
   PlugConnected24Regular, Phone24Regular, TopSpeed24Regular,
   Settings24Regular, WeatherMoon24Regular, WeatherSunny24Regular,
   Database24Regular, Beaker24Regular, Play24Regular, Person24Regular,
-  Form24Regular,
+  Form24Regular, Shield24Regular,
 } from '@fluentui/react-icons';
-import { useHarnessStore, DEVICE_PRESETS } from '../store/harness-store';
+import { useHarnessStore, DEVICE_PRESETS, SHIM_PROFILE_LABELS, type ShimProfile } from '../store/harness-store';
 import { ControlViewport } from './panels/ControlViewport';
 import { PropertyEditor } from './panels/PropertyEditor';
 import { ConsolePanel } from './panels/ConsolePanel';
@@ -21,6 +21,7 @@ import { LifecyclePanel } from './panels/LifecyclePanel';
 import { UserSettingsPanel } from './panels/UserSettingsPanel';
 import { FormPanel } from './panels/FormPanel';
 import { FormChrome } from './panels/FormChrome';
+import { CoveragePanel } from './panels/CoveragePanel';
 import type { ManifestConfig } from '../types/manifest';
 
 const useStyles = makeStyles({
@@ -110,7 +111,7 @@ interface Props {
   launchedAsGallery: boolean;
 }
 
-type SidePanelTab = 'properties' | 'form' | 'data' | 'scenarios' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance';
+type SidePanelTab = 'properties' | 'form' | 'data' | 'scenarios' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance' | 'coverage';
 
 export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launchedAsGallery }: Props) {
   const styles = useStyles();
@@ -123,6 +124,8 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
   const formChromeEnabled = useHarnessStore(s => s.formChromeEnabled);
   const toggleFormChrome = useHarnessStore(s => s.toggleFormChrome);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
+  const shimProfile = useHarnessStore(s => s.shimProfile);
+  const setShimProfile = useHarnessStore(s => s.setShimProfile);
 
   const devicePreset = useHarnessStore(s => s.devicePreset);
   const renderCount = useHarnessStore(s => s.renderCount);
@@ -183,6 +186,20 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         </span>
 
         <span className={styles.topBarSpacer} />
+        <div className={styles.topBarControl} data-test-id="shim-profile-control">
+          <Label size="small" style={{ color: 'white' }}>Profile</Label>
+          <Dropdown
+            size="small"
+            value={SHIM_PROFILE_LABELS[shimProfile]}
+            selectedOptions={[shimProfile]}
+            onOptionSelect={(_, d) => setShimProfile((d.optionValue as ShimProfile) ?? 'latest')}
+            style={{ minWidth: 120 }}
+          >
+            <Option value="9.0">{SHIM_PROFILE_LABELS['9.0']}</Option>
+            <Option value="9.2">{SHIM_PROFILE_LABELS['9.2']}</Option>
+            <Option value="latest">{SHIM_PROFILE_LABELS['latest']}</Option>
+          </Dropdown>
+        </div>
         <div className={styles.topBarControl}>
           <Label size="small" style={{ color: 'white' }}>Form chrome</Label>
           <Switch
@@ -239,6 +256,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
               <Tab value="user" icon={<Person24Regular />} title="User Settings" />
               <Tab value="lifecycle" icon={<Play24Regular />} title="Lifecycle Monitor" />
               <Tab value="performance" icon={<TopSpeed24Regular />} title="Performance" />
+              <Tab value="coverage" icon={<Shield24Regular />} title="Shim Coverage" />
             </TabList>
           </div>
           <div className={styles.sidePanelContent}>
@@ -251,6 +269,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
             {activeTab === 'user' && <UserSettingsPanel />}
             {activeTab === 'lifecycle' && <LifecyclePanel />}
             {activeTab === 'performance' && <PerformancePanel />}
+            {activeTab === 'coverage' && <CoveragePanel />}
           </div>
         </div>
       </div>

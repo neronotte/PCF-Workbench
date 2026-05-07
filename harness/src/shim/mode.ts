@@ -24,7 +24,7 @@ export function createModeShim(getState: () => HarnessStore) {
       };
     },
     setControlState(_state: Record<string, any>): boolean {
-      getState().addLogEntry({ category: 'mode', method: 'setControlState', args: _state });
+      getState().addLogEntry({ category: 'mode', method: 'setControlState', args: _state, coverage: 'stub' });
       return true;
     },
     setFullScreen(value: boolean): void {
@@ -33,7 +33,7 @@ export function createModeShim(getState: () => HarnessStore) {
       s.setFullscreen(value);
     },
     trackContainerResize(value: boolean): void {
-      getState().addLogEntry({ category: 'mode', method: 'trackContainerResize', args: value });
+      getState().addLogEntry({ category: 'mode', method: 'trackContainerResize', args: value, coverage: 'stub' });
     },
   };
 }

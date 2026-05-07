@@ -18,6 +18,7 @@ import { createWebApiShim } from './web-api';
 import { createNavigationShim } from './navigation';
 import { createDeviceShim } from './device';
 import { pushDialog, type AlertDialogRequest, type ConfirmDialogRequest } from './dialog-bus';
+import { isFeatureAvailable } from './profile';
 
 let installed = false;
 
@@ -142,12 +143,15 @@ export function installXrmGlobalShims(
         };
       },
       getEntityMetadata(entityName: string): Promise<any> {
+        getState().addLogEntry({ category: 'utility', method: 'getEntityMetadata', args: { entityName }, coverage: 'stub' });
         return Promise.resolve({ LogicalName: entityName, EntitySetName: entityName + 's' });
       },
       getResourceString(webResourceName: string, key: string): string {
+        getState().addLogEntry({ category: 'utility', method: 'getResourceString', args: { webResourceName, key }, coverage: 'stub' });
         return key;
       },
       lookupObjects(options: any): Promise<any[]> {
+        getState().addLogEntry({ category: 'utility', method: 'lookupObjects', args: options, coverage: 'stub' });
         return Promise.resolve([]);
       },
       alertDialog(alertStrings: { confirmButtonLabel?: string; text?: string; title?: string }, options?: any): Promise<void> {
@@ -174,17 +178,17 @@ export function installXrmGlobalShims(
         });
       },
       showProgressIndicator(message?: string): void {
-        getState().addLogEntry({ category: 'utility', method: 'showProgressIndicator', args: { message } });
+        getState().addLogEntry({ category: 'utility', method: 'showProgressIndicator', args: { message }, coverage: 'stub' });
       },
       closeProgressIndicator(): void {
-        getState().addLogEntry({ category: 'utility', method: 'closeProgressIndicator' });
+        getState().addLogEntry({ category: 'utility', method: 'closeProgressIndicator', coverage: 'stub' });
       },
       invokeProcessAction(name: string, parameters: any): Promise<any> {
-        getState().addLogEntry({ category: 'utility', method: 'invokeProcessAction', args: { name, parameters } });
+        getState().addLogEntry({ category: 'utility', method: 'invokeProcessAction', args: { name, parameters }, coverage: 'stub' });
         return Promise.resolve({});
       },
       refreshParentGrid(_lookupOptions?: any): void {
-        getState().addLogEntry({ category: 'utility', method: 'refreshParentGrid' });
+        getState().addLogEntry({ category: 'utility', method: 'refreshParentGrid', coverage: 'stub' });
       },
     };
     w.Xrm.Utility = wrapWithWarnings(rawUtility, 'Utility', getState);
@@ -234,24 +238,31 @@ export function installXrmGlobalShims(
       addGlobalNotification(notification: { type: number; level: number; message: string; showCloseButton?: boolean; action?: any }): Promise<string> {
         const id = `notif-${nextNotificationId++}`;
         globalNotifications.set(id, { id, ...notification });
-        getState().addLogEntry({ category: 'app', method: 'addGlobalNotification', args: { id, ...notification } });
+        getState().addLogEntry({ category: 'app', method: 'addGlobalNotification', args: { id, ...notification }, coverage: 'stub' });
         return Promise.resolve(id);
       },
       clearGlobalNotification(id: string): Promise<void> {
         globalNotifications.delete(id);
-        getState().addLogEntry({ category: 'app', method: 'clearGlobalNotification', args: { id } });
+        getState().addLogEntry({ category: 'app', method: 'clearGlobalNotification', args: { id }, coverage: 'stub' });
         return Promise.resolve();
       },
       sidePanes: {
         state: 0,
         selected: null as any,
         getAllPanes(): any[] {
+          if (!isFeatureAvailable(getState, 'xrm.app.sidePanes')) return [];
           return Array.from(sidePanes.values());
         },
         getPane(paneId: string): any {
+          if (!isFeatureAvailable(getState, 'xrm.app.sidePanes')) return undefined;
           return sidePanes.get(paneId);
         },
         createPane(input: { title?: string; paneId?: string; canClose?: boolean; imageSrc?: string; hideHeader?: boolean; isSelected?: boolean; width?: number }): Promise<any> {
+          if (!isFeatureAvailable(getState, 'xrm.app.sidePanes')) {
+            const err = new Error(`Xrm.App.sidePanes is not available on Dataverse ${getState().shimProfile}. Switch shim profile to 9.2 or latest.`);
+            getState().addLogEntry({ category: 'app', method: 'sidePanes.createPane', args: input, result: { error: err.message }, coverage: 'unimplemented' });
+            return Promise.reject(err);
+          }
           const paneId = input.paneId ?? `pane-${nextNotificationId++}`;
           const pane = {
             paneId,
@@ -265,7 +276,7 @@ export function installXrmGlobalShims(
             navigate: (_pageInput: any) => Promise.resolve(),
           };
           sidePanes.set(paneId, pane);
-          getState().addLogEntry({ category: 'app', method: 'sidePanes.createPane', args: input });
+          getState().addLogEntry({ category: 'app', method: 'sidePanes.createPane', args: input, coverage: 'stub' });
           return Promise.resolve(pane);
         },
       },
@@ -277,7 +288,7 @@ export function installXrmGlobalShims(
   if (!w.Xrm.Panel) {
     w.Xrm.Panel = {
       loadPanel(url: string, title?: string): void {
-        getState().addLogEntry({ category: 'panel', method: 'loadPanel', args: { url, title } });
+        getState().addLogEntry({ category: 'panel', method: 'loadPanel', args: { url, title }, coverage: 'stub' });
         console.log('[pcf-workbench] Xrm.Panel.loadPanel', { url, title });
       },
     };

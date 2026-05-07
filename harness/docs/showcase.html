@@ -2014,6 +2014,28 @@ p{color:var(--neutral-30)}
           <li class="done">Form notification banner + viewport size badge</li>
         </ul>
       </div>
+
+      <div class="milestone-card shipped">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M1</span>UCI Fidelity &amp; API Coverage</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-xl">XL</span>
+            <span class="milestone-pill pill-shipped">Shipped</span>
+          </div>
+        </div>
+        <p class="ms-desc">Reproduces the full Unified Client Interface so any control that runs in production behaves identically locally. Multi-control hosting, form events, and form-level state all fall out of getting this right &mdash; no separate "form simulator" needed. Conformance diff vs <code>@types/xrm</code> currently reports <strong>87%</strong> coverage.</p>
+        <ul class="milestone-list">
+          <li class="done">Close remaining <code>ComponentFramework.Context</code> gaps (~95% &rarr; 100%)</li>
+          <li class="done">Complete <code>Xrm.WebApi</code> / <code>Xrm.Navigation</code> / <code>Xrm.Utility</code> coverage</li>
+          <li class="done"><strong>Full form-level API:</strong> <code>Xrm.Page</code> + modern <code>formContext</code> with <code>getAttribute</code>, <code>getControl</code>, <code>data</code>, <code>ui.tabs</code>, <code>ui.sections</code>, <code>addOnSave</code> / <code>addOnChange</code> / <code>addOnLoad</code></li>
+          <li class="done"><code>executionContext</code> passed to every registered handler</li>
+          <li class="done">UCI-faithful form chrome around the viewport (header, command bar, tab strip, footer)</li>
+          <li class="done"><code>Xrm.Device</code>, <code>Xrm.Encoding</code>, <code>Xrm.App</code>, <code>Xrm.Panel</code> shims</li>
+          <li class="done">Conformance test suite diffed against <code>@types/xrm</code> &amp; <code>@types/powerapps-component-framework</code></li>
+          <li class="done">Coverage panel that flags any call hitting an unimplemented shim</li>
+          <li class="done">Versioned shim profiles (Dataverse 9.0 vs 9.2 vs latest)</li>
+        </ul>
+      </div>
     </div>
   </div>
 </section>
@@ -2023,31 +2045,9 @@ p{color:var(--neutral-30)}
   <div class="container">
     <div class="section-header reveal">
       <h2>What's next</h2>
-      <p>The next three milestones are the focus for the upcoming release. Live Dataverse Bridge is the headline.</p>
+      <p>Live Dataverse Bridge is the headline of the upcoming release.</p>
     </div>
     <div class="milestone-grid reveal">
-
-      <div class="milestone-card next">
-        <div class="milestone-h">
-          <h3><span class="milestone-num">M1</span>UCI Fidelity &amp; API Coverage</h3>
-          <div class="milestone-pills">
-            <span class="milestone-size size-xl">XL</span>
-            <span class="milestone-pill pill-next">In progress</span>
-          </div>
-        </div>
-        <p class="ms-desc">Reproduce the full Unified Client Interface so any control that runs in production behaves identically locally. Multi-control hosting, form events, and form-level state all fall out of getting this right &mdash; no separate "form simulator" needed. Phases P1&ndash;P4 shipped; tail items remain.</p>
-        <ul class="milestone-list">
-          <li class="done">Close remaining <code>ComponentFramework.Context</code> gaps (~95% &rarr; 100%)</li>
-          <li class="done">Complete <code>Xrm.WebApi</code> / <code>Xrm.Navigation</code> / <code>Xrm.Utility</code> coverage</li>
-          <li class="done"><strong>Full form-level API:</strong> <code>Xrm.Page</code> + modern <code>formContext</code> with <code>getAttribute</code>, <code>getControl</code>, <code>data</code>, <code>ui.tabs</code>, <code>ui.sections</code>, <code>addOnSave</code> / <code>addOnChange</code> / <code>addOnLoad</code></li>
-          <li><code>executionContext</code> passed to every registered handler</li>
-          <li class="done">UCI-faithful form chrome around the viewport (header, command bar, tab strip, footer)</li>
-          <li class="done"><code>Xrm.Device</code>, <code>Xrm.Encoding</code>, <code>Xrm.App</code>, <code>Xrm.Panel</code> shims</li>
-          <li>Conformance test suite diffed against <code>@types/xrm</code> &amp; <code>@types/powerapps-component-framework</code></li>
-          <li>Coverage panel that flags any call hitting an unimplemented shim</li>
-          <li>Versioned shim profiles (Dataverse 9.x vs 9.2 vs latest)</li>
-        </ul>
-      </div>
 
       <div class="milestone-card headline">
         <div class="milestone-h">
