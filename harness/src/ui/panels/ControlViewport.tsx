@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { makeStyles, tokens, Spinner, MessageBar, MessageBarBody, Button } from '@fluentui/react-components';
-import { ArrowClockwise24Regular, Camera24Regular } from '@fluentui/react-icons';
+import { ArrowClockwise24Regular } from '@fluentui/react-icons';
 import { useHarnessStore } from '../../store/harness-store';
 import { ControlHost, type ControlHostState } from '../../loader/control-host';
 import type { ManifestConfig } from '../../types/manifest';
@@ -111,128 +111,7 @@ interface Props {
   controlDir: string;
 }
 
-const THUMB_WIDTH = 680;
-const THUMB_HEIGHT = 320;
-
-/**
- * Capture a pixel-perfect thumbnail by cloning the element into
- * an offscreen iframe, collecting all stylesheets, and using
- * html2canvas-free native rendering.
- *
- * Falls back to a simpler inline-style clone if needed.
- */
-/**
- * Convert an image element's src to a data URI so it won't taint the canvas.
- * Skips same-origin images (they're safe) and silently removes ones that fail.
- */
-async function inlineImage(img: HTMLImageElement): Promise<void> {
-  const src = img.getAttribute('src');
-  if (!src || src.startsWith('data:')) return;
-  try {
-    const resp = await fetch(src);
-    const blob = await resp.blob();
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    img.setAttribute('src', dataUrl);
-  } catch {
-    // Can't fetch — remove image to avoid tainting
-    img.removeAttribute('src');
-  }
-}
-
-/** Strip external url() references from CSS text to prevent canvas tainting. */
-function sanitizeCss(css: string): string {
-  // Remove @font-face blocks that reference external URLs
-  css = css.replace(/@font-face\s*\{[^}]*url\s*\(\s*["']?https?:\/\/[^}]*\}/gi, '');
-  // Replace remaining external url(...) references with none
-  css = css.replace(/url\s*\(\s*["']?https?:\/\/[^)]*\)/gi, 'url()');
-  return css;
-}
-
-async function captureThumbnail(element: HTMLElement, controlDir: string): Promise<void> {
-  try {
-    // Collect all stylesheets as text, stripping external URLs to prevent tainting
-    const styleTexts: string[] = [];
-    for (const sheet of document.styleSheets) {
-      try {
-        const rules = Array.from(sheet.cssRules);
-        styleTexts.push(sanitizeCss(rules.map(r => r.cssText).join('\n')));
-      } catch {
-        // Cross-origin sheets can't be read — skip
-      }
-    }
-
-    // Clone the element and inline any cross-origin images
-    const clone = element.cloneNode(true) as HTMLElement;
-    const imgs = Array.from(clone.querySelectorAll('img'));
-    await Promise.all(imgs.map(inlineImage));
-
-    // Build SVG foreignObject with embedded styles
-    const width = element.scrollWidth || element.offsetWidth;
-    const height = element.scrollHeight || element.offsetHeight;
-
-    const svgHtml = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-        <foreignObject width="100%" height="100%">
-          <div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden;background:white;">
-            <style>${styleTexts.join('\n')}</style>
-            ${clone.outerHTML}
-          </div>
-        </foreignObject>
-      </svg>`;
-
-    const svgBlob = new Blob([svgHtml], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
-
-    const img = new Image();
-
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error('SVG render failed'));
-      img.src = url;
-    });
-
-    // Draw to canvas and scale to thumbnail size
-    const thumbCanvas = document.createElement('canvas');
-    thumbCanvas.width = THUMB_WIDTH;
-    thumbCanvas.height = THUMB_HEIGHT;
-    const ctx = thumbCanvas.getContext('2d')!;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, THUMB_WIDTH, THUMB_HEIGHT);
-
-    // Scale to fit width, crop from top
-    const scale = THUMB_WIDTH / width;
-    const scaledHeight = height * scale;
-    const yOffset = scaledHeight < THUMB_HEIGHT ? (THUMB_HEIGHT - scaledHeight) / 2 : 0;
-    ctx.drawImage(img, 0, 0, width, height, 0, yOffset, THUMB_WIDTH, scaledHeight);
-
-    URL.revokeObjectURL(url);
-
-    const dataUrl = thumbCanvas.toDataURL('image/jpeg', 0.9);
-    console.log(`[pcf-workbench] Capturing thumbnail for: ${controlDir} (${(dataUrl.length / 1024).toFixed(0)} KB)`);
-
-    const resp = await fetch('/api/save-thumbnail', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ controlDir, thumbnail: dataUrl }),
-    });
-    const result = await resp.json();
-    if (result.ok) {
-      console.log(`[pcf-workbench] Thumbnail saved: ${result.path}`);
-    } else {
-      console.warn(`[pcf-workbench] Thumbnail save failed:`, result.error);
-    }
-  } catch (err) {
-    console.warn('[pcf-workbench] Thumbnail capture failed:', err);
-    console.warn('[pcf-workbench] Tip: You can also take a manual screenshot and save it as thumbnail.jpg in the control directory');
-  }
-}
-
-export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: Props) {
+export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
   const styles = useStyles();
   const containerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<ControlHost | null>(null);
@@ -340,12 +219,6 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
   }, []);
 
 
-  const handleCaptureThumbnail = useCallback(() => {
-    if (containerRef.current && controlDir) {
-      captureThumbnail(containerRef.current, controlDir);
-    }
-  }, [controlDir]);
-
   // Trigger updateView when properties, network, device, or mode change.
   // Debounce to prevent cascading re-renders (especially for virtual controls
   // where ReactDOM.render can trigger synchronous state updates).
@@ -375,12 +248,6 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
             {manifest.controlType}
           </span>
         </span>
-        <Button
-          appearance="subtle"
-          icon={<Camera24Regular />}
-          onClick={handleCaptureThumbnail}
-          title="Capture thumbnail for gallery"
-        />
         <Button
           appearance="subtle"
           icon={<ArrowClockwise24Regular />}

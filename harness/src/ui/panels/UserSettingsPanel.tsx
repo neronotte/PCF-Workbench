@@ -7,6 +7,9 @@ import { SUPPORTED_LCIDS } from '../../shim/user-settings';
 const useStyles = makeStyles({
   root: {
     padding: '12px',
+    overflowX: 'hidden',
+    boxSizing: 'border-box',
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',

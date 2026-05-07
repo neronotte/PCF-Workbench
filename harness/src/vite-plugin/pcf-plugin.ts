@@ -635,39 +635,6 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
           res.end();
         }
       });
-
-      // Save thumbnail from harness (POST from auto-capture)
-      server.middlewares.use('/api/save-thumbnail', (req, res) => {
-        if (req.method !== 'POST') {
-          res.statusCode = 405;
-          res.end();
-          return;
-        }
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', () => {
-          try {
-            const { controlDir, thumbnail } = JSON.parse(body);
-            if (!controlDir || !thumbnail) throw new Error('Missing controlDir or thumbnail');
-
-            // Extract base64 data from data URL and save as thumbnail.jpg
-            const match = thumbnail.match(/^data:image\/(\w+);base64,(.+)$/);
-            if (!match) throw new Error('Invalid thumbnail data URL');
-            const imgBuffer = Buffer.from(match[2], 'base64');
-            const ext = match[1] === 'gif' ? 'gif' : match[1] === 'png' ? 'png' : 'jpg';
-            const thumbPath = path.join(controlDir, `thumbnail.${ext}`);
-            fs.writeFileSync(thumbPath, imgBuffer);
-            console.log(`[pcf-workbench] Thumbnail saved: ${thumbPath} (${(imgBuffer.length / 1024).toFixed(0)} KB)`);
-
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ok: true, path: thumbPath }));
-          } catch (err: any) {
-            res.statusCode = 400;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ error: err.message }));
-          }
-        });
-      });
     },
   };
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   makeStyles, tokens, Button, Badge, Textarea, MessageBar, MessageBarBody, Checkbox,
 } from '@fluentui/react-components';
@@ -10,6 +10,10 @@ import { rebaseDatesToToday } from '../../store/date-rebase';
 const useStyles = makeStyles({
   root: {
     padding: '12px',
+    overflowX: 'hidden',
+    overflowY: 'hidden',
+    boxSizing: 'border-box',
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
@@ -121,9 +125,9 @@ export function DataPanel() {
   }, [addLogEntry]);
 
   // Load on first render
-  if (!loaded) {
-    loadData();
-  }
+  useEffect(() => {
+    if (!loaded) loadData();
+  }, [loaded, loadData]);
 
   const handleSelectTable = useCallback((name: string) => {
     setSelectedTable(name);

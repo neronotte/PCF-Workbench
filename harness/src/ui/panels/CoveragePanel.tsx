@@ -19,7 +19,10 @@ const useStyles = makeStyles({
   root: {
     padding: '12px',
     overflowY: 'auto',
+    overflowX: 'hidden',
     height: '100%',
+    boxSizing: 'border-box',
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',

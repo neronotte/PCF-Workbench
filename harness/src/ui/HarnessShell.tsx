@@ -92,6 +92,8 @@ const useStyles = makeStyles({
   sidePanelContent: {
     flex: 1,
     overflowY: 'auto',
+    overflowX: 'hidden',
+    minWidth: 0,
   },
   modeControls: {
     padding: '12px',
