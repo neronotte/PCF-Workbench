@@ -192,6 +192,7 @@ const useStyles = makeStyles({
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     flexShrink: 0,
     overflowX: 'auto',
+    overflowY: 'hidden',
   },
   tabButton: {
     appearance: 'none',
