@@ -2032,17 +2032,17 @@ p{color:var(--neutral-30)}
           <h3><span class="milestone-num">M1</span>UCI Fidelity &amp; API Coverage</h3>
           <div class="milestone-pills">
             <span class="milestone-size size-xl">XL</span>
-            <span class="milestone-pill pill-next">In planning</span>
+            <span class="milestone-pill pill-next">In progress</span>
           </div>
         </div>
-        <p class="ms-desc">Reproduce the full Unified Client Interface so any control that runs in production behaves identically locally. Multi-control hosting, form events, and form-level state all fall out of getting this right &mdash; no separate "form simulator" needed.</p>
+        <p class="ms-desc">Reproduce the full Unified Client Interface so any control that runs in production behaves identically locally. Multi-control hosting, form events, and form-level state all fall out of getting this right &mdash; no separate "form simulator" needed. Phases P1&ndash;P4 shipped; tail items remain.</p>
         <ul class="milestone-list">
-          <li>Close remaining <code>ComponentFramework.Context</code> gaps (~95% &rarr; 100%)</li>
-          <li>Complete <code>Xrm.WebApi</code> / <code>Xrm.Navigation</code> / <code>Xrm.Utility</code> coverage</li>
-          <li><strong>Full form-level API:</strong> <code>Xrm.Page</code> + modern <code>formContext</code> with <code>getAttribute</code>, <code>getControl</code>, <code>data</code>, <code>ui.tabs</code>, <code>ui.sections</code>, <code>addOnSave</code> / <code>addOnChange</code> / <code>addOnLoad</code></li>
+          <li class="done">Close remaining <code>ComponentFramework.Context</code> gaps (~95% &rarr; 100%)</li>
+          <li class="done">Complete <code>Xrm.WebApi</code> / <code>Xrm.Navigation</code> / <code>Xrm.Utility</code> coverage</li>
+          <li class="done"><strong>Full form-level API:</strong> <code>Xrm.Page</code> + modern <code>formContext</code> with <code>getAttribute</code>, <code>getControl</code>, <code>data</code>, <code>ui.tabs</code>, <code>ui.sections</code>, <code>addOnSave</code> / <code>addOnChange</code> / <code>addOnLoad</code></li>
           <li><code>executionContext</code> passed to every registered handler</li>
-          <li>UCI-faithful form chrome around the viewport (header, command bar, tab strip, footer)</li>
-          <li><code>Xrm.Device</code>, <code>Xrm.Encoding</code>, <code>Xrm.App</code>, <code>Xrm.Panel</code> shims</li>
+          <li class="done">UCI-faithful form chrome around the viewport (header, command bar, tab strip, footer)</li>
+          <li class="done"><code>Xrm.Device</code>, <code>Xrm.Encoding</code>, <code>Xrm.App</code>, <code>Xrm.Panel</code> shims</li>
           <li>Conformance test suite diffed against <code>@types/xrm</code> &amp; <code>@types/powerapps-component-framework</code></li>
           <li>Coverage panel that flags any call hitting an unimplemented shim</li>
           <li>Versioned shim profiles (Dataverse 9.x vs 9.2 vs latest)</li>
