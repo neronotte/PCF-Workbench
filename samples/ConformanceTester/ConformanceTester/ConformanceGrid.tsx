@@ -75,6 +75,23 @@ const useStyles = makeStyles({
         fontSize: tokens.fontSizeBase200,
         color: tokens.colorNeutralForeground2,
     },
+    notifierBar: {
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        columnGap: "8px",
+        rowGap: "6px",
+        ...shorthands.padding("8px", "12px"),
+        backgroundColor: tokens.colorNeutralBackground2,
+        ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
+        borderRadius: tokens.borderRadiusMedium,
+    },
+    notifierLabel: {
+        fontWeight: tokens.fontWeightSemibold,
+        fontSize: tokens.fontSizeBase200,
+        color: tokens.colorNeutralForeground2,
+        marginRight: "4px",
+    },
 });
 
 function getXrm(): any {
@@ -654,6 +671,78 @@ function statusBadge(status: Status): React.ReactElement {
     return <span data-status="idle"><Badge appearance="outline">—</Badge></span>;
 }
 
+const NotificationTester: React.FC = () => {
+    const styles = useStyles();
+    const appIdsRef = React.useRef<string[]>([]);
+
+    const fireFormNotification = (level: "ERROR" | "WARNING" | "INFORMATION") => {
+        const Xrm = getXrm();
+        const ui = Xrm?.Page?.ui;
+        if (!ui?.setFormNotification) {
+            console.warn("[ct] Xrm.Page.ui.setFormNotification not available");
+            return;
+        }
+        const w = window as any;
+        w.__ctNotifSeq = (w.__ctNotifSeq ?? 0) + 1;
+        const id = `ct-form-${w.__ctNotifSeq}`;
+        ui.setFormNotification(`${level}: form notification ${id}`, level, id);
+    };
+
+    const clearFormNotifications = () => {
+        const Xrm = getXrm();
+        const ui = Xrm?.Page?.ui;
+        if (!ui?.clearFormNotification) return;
+        const seq = (window as any).__ctNotifSeq ?? 0;
+        for (let i = 1; i <= seq; i++) {
+            ui.clearFormNotification(`ct-form-${i}`);
+        }
+        (window as any).__ctNotifSeq = 0;
+    };
+
+    const fireAppNotification = async (level: 1 | 2 | 3 | 4) => {
+        const Xrm = getXrm();
+        const addFn = Xrm?.App?.addGlobalNotification;
+        if (typeof addFn !== "function") {
+            console.warn("[ct] Xrm.App.addGlobalNotification not available");
+            return;
+        }
+        const labels = { 1: "Success", 2: "Error", 3: "Warning", 4: "Information" } as const;
+        const id = await Xrm.App.addGlobalNotification({
+            type: 2,
+            level,
+            message: `${labels[level]}: app notification fired from Conformance Tester`,
+            showCloseButton: true,
+        });
+        if (typeof id === "string") appIdsRef.current.push(id);
+    };
+
+    const clearAppNotifications = async () => {
+        const Xrm = getXrm();
+        const clearFn = Xrm?.App?.clearGlobalNotification;
+        if (typeof clearFn !== "function") return;
+        for (const id of appIdsRef.current) {
+            await Xrm.App.clearGlobalNotification(id);
+        }
+        appIdsRef.current = [];
+    };
+
+    return (
+        <div className={styles.notifierBar} data-test-id="ct-notifier">
+            <span className={styles.notifierLabel}>Form notification:</span>
+            <Button size="small" data-test-id="ct-notifier-form-error" onClick={() => fireFormNotification("ERROR")}>Error</Button>
+            <Button size="small" data-test-id="ct-notifier-form-warning" onClick={() => fireFormNotification("WARNING")}>Warning</Button>
+            <Button size="small" data-test-id="ct-notifier-form-info" onClick={() => fireFormNotification("INFORMATION")}>Info</Button>
+            <Button size="small" appearance="subtle" data-test-id="ct-notifier-form-clear" onClick={clearFormNotifications}>Clear</Button>
+            <span className={styles.notifierLabel} style={{ marginLeft: "12px" }}>App notification:</span>
+            <Button size="small" data-test-id="ct-notifier-app-success" onClick={() => fireAppNotification(1)}>Success</Button>
+            <Button size="small" data-test-id="ct-notifier-app-error" onClick={() => fireAppNotification(2)}>Error</Button>
+            <Button size="small" data-test-id="ct-notifier-app-warning" onClick={() => fireAppNotification(3)}>Warning</Button>
+            <Button size="small" data-test-id="ct-notifier-app-info" onClick={() => fireAppNotification(4)}>Info</Button>
+            <Button size="small" appearance="subtle" data-test-id="ct-notifier-app-clear" onClick={clearAppNotifications}>Clear</Button>
+        </div>
+    );
+};
+
 export const ConformanceGrid: React.FC<IConformanceGridProps> = ({ context }) => {
     const styles = useStyles();
     const [rows, setRows] = React.useState<Record<string, RowState>>(() => {
@@ -710,6 +799,7 @@ export const ConformanceGrid: React.FC<IConformanceGridProps> = ({ context }) =>
                     </div>
                 </div>
                 <Subtitle2>Each row exercises one shim member. Click "Run" or "Run all" to populate.</Subtitle2>
+                <NotificationTester />
                 <Divider />
                 <div className={styles.table} role="table" data-test-id="ct-table">
                     <div className={styles.headCell}>Category</div>
