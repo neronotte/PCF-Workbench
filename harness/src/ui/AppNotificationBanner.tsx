@@ -12,7 +12,7 @@
  */
 import { useState, useEffect } from 'react';
 import { makeStyles, tokens, Button } from '@fluentui/react-components';
-import { Dismiss16Regular } from '@fluentui/react-icons';
+import { Dismiss16Regular, Alert16Filled } from '@fluentui/react-icons';
 import {
     subscribeAppNotifications, clearAppNotification,
     type AppNotification,
@@ -57,6 +57,20 @@ const useStyles = makeStyles({
         borderLeftColor: tokens.colorPaletteBlueBorderActive,
     },
     message: { flex: 1 },
+    appBadge: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '2px 6px',
+        borderRadius: tokens.borderRadiusSmall,
+        backgroundColor: tokens.colorNeutralBackground1,
+        fontSize: tokens.fontSizeBase200,
+        fontWeight: tokens.fontWeightSemibold,
+        textTransform: 'uppercase',
+        letterSpacing: '0.4px',
+        opacity: 0.85,
+        flexShrink: 0,
+    },
     actionLink: {
         textDecoration: 'underline',
         cursor: 'pointer',
@@ -85,6 +99,10 @@ export function AppNotificationBanner() {
                         role="status"
                         data-test-id={`app-notification-${n.id}`}
                     >
+                        <span className={styles.appBadge} title="Application-level notification (Xrm.App.addGlobalNotification)">
+                            <Alert16Filled />
+                            App
+                        </span>
                         <span className={styles.message}>{n.message}</span>
                         {n.action?.actionLabel && (
                             <a
