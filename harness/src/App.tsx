@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { FluentProvider, webLightTheme, webDarkTheme, Spinner, MessageBar, MessageBarBody } from '@fluentui/react-components';
+import { FluentProvider, webLightTheme, Spinner, MessageBar, MessageBarBody } from '@fluentui/react-components';
+import { powerPlatformLightTheme, powerPlatformDarkTheme } from './theme/power-platform-theme';
 import { HarnessShell } from './ui/HarnessShell';
 import { Gallery } from './ui/gallery/Gallery';
 import { DialogHost } from './ui/DialogHost';
@@ -24,7 +25,7 @@ export function App() {
   // Gallery mode — no specific control, show the catalog
   if (isGalleryMode || !manifestData) {
     return (
-      <FluentProvider theme={webLightTheme}>
+      <FluentProvider theme={powerPlatformLightTheme}>
         <Gallery />
       </FluentProvider>
     );
@@ -79,7 +80,7 @@ export function App() {
 
   if (!ready) {
     return (
-      <FluentProvider theme={webLightTheme}>
+      <FluentProvider theme={powerPlatformLightTheme}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
           <Spinner label="Loading PCF control manifest..." />
         </div>
@@ -88,7 +89,7 @@ export function App() {
   }
 
   return (
-    <FluentProvider theme={isDarkMode ? webDarkTheme : webLightTheme}>
+    <FluentProvider theme={isDarkMode ? powerPlatformDarkTheme : powerPlatformLightTheme}>
       <HarnessShell manifest={manifestData} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} launchedAsGallery={launchedAsGallery} />
       <DialogHost />
       <PopupHost />
