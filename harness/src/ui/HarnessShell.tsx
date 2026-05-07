@@ -168,7 +168,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
             &larr; Gallery
           </Button>
         )}
-        <span style={{ opacity: 0.7, fontSize: 12 }}>
+        <span style={{ fontWeight: 600, fontSize: 13, letterSpacing: 0.2 }}>
           {manifest.namespace}.{manifest.constructor}
         </span>
 
