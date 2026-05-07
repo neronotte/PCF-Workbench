@@ -186,9 +186,12 @@ export function FormChrome({ entityTypeName, children }: Props) {
   const activeTab = tabs.find(t => t.focused) ?? tabs[0];
   const dirty = isFormDirty();
   const primary = getPrimaryAttributeName();
-  const recordName = primary
-    ? (getAttributeState(primary)?.value ?? '(new record)')
-    : '(no primary attribute)';
+  const primaryValue = primary ? getAttributeState(primary)?.value : null;
+  const recordName = primaryValue != null && primaryValue !== ''
+    ? String(primaryValue)
+    : entityTypeName
+      ? `(new ${entityTypeName})`
+      : '(new record)';
 
   const initials = (entityTypeName || 'rec').slice(0, 2).toUpperCase();
 

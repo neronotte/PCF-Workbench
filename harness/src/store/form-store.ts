@@ -188,10 +188,6 @@ export function seedFormState(
         submitMode: 'dirty',
       });
     }
-    // Heuristic primary attribute: 'name' or first string field
-    state.primaryAttributeName = state.attributes.has('name')
-      ? 'name'
-      : Array.from(state.attributes.values()).find(a => a.attributeType === 'string')?.name;
   }
 
   // Add manifest-bound properties as attributes if not already present
@@ -208,6 +204,22 @@ export function seedFormState(
       submitMode: 'dirty',
     });
   }
+
+  // Heuristic primary attribute (run after data.json + manifest binding so we
+  // can fall through to bound props when the active record can't be located —
+  // which is the common case for field-bound PCFs whose entity isn't in
+  // data.json). Preference order:
+  //   1) an attribute literally named 'name' (Dataverse convention),
+  //   2) the entity's <typename>name (e.g. accountname, contactname),
+  //   3) the first string attribute,
+  //   4) the first attribute of any kind.
+  const allAttrs = Array.from(state.attributes.values());
+  const conventional = pageEntityTypeName ? `${pageEntityTypeName}name` : null;
+  state.primaryAttributeName =
+    (state.attributes.has('name') ? 'name' : undefined)
+    ?? (conventional && state.attributes.has(conventional) ? conventional : undefined)
+    ?? allAttrs.find(a => a.attributeType === 'string')?.name
+    ?? allAttrs[0]?.name;
 
   // For every attribute, register a default control of the same name
   for (const attr of state.attributes.values()) {
