@@ -1,8 +1,7 @@
 import * as React from 'react';
 import {
   FluentProvider, webLightTheme,
-  DataGrid, DataGridHeader, DataGridHeaderCell, DataGridBody, DataGridRow, DataGridCell,
-  TableColumnDefinition, createTableColumn, Button, Text, Toolbar, ToolbarButton,
+  Button, Text,
 } from '@fluentui/react-components';
 
 type Dataset = ComponentFramework.PropertyTypes.DataSet;
@@ -21,25 +20,6 @@ export interface DatasetGridViewProps {
 }
 
 export const DatasetGridView: React.FC<DatasetGridViewProps> = ({ dataset, onOpen, onRefresh, onLoadMore }) => {
-  const columns: TableColumnDefinition<RowItem>[] = React.useMemo(() => [
-    createTableColumn<RowItem>({
-      columnId: 'primaryName',
-      compare: (a, b) => a.primaryName.localeCompare(b.primaryName),
-      renderHeaderCell: () => dataset.columns.find(c => c.alias === 'primaryName')?.displayName ?? 'Name',
-      renderCell: (item) => (
-        <Button appearance="transparent" onClick={() => onOpen(item.id)}>
-          {item.primaryName || '—'}
-        </Button>
-      ),
-    }),
-    createTableColumn<RowItem>({
-      columnId: 'status',
-      compare: (a, b) => a.status.localeCompare(b.status),
-      renderHeaderCell: () => dataset.columns.find(c => c.alias === 'status')?.displayName ?? 'Status',
-      renderCell: (item) => <Text>{item.status || '—'}</Text>,
-    }),
-  ], [dataset, onOpen]);
-
   const items: RowItem[] = (dataset.sortedRecordIds ?? []).map((id: string) => {
     const r = dataset.records[id];
     return {
@@ -51,39 +31,56 @@ export const DatasetGridView: React.FC<DatasetGridViewProps> = ({ dataset, onOpe
 
   const recordCount = items.length;
   const hasNextPage = dataset.paging?.hasNextPage ?? false;
+  const primaryHeader = dataset.columns.find(c => c.alias === 'primaryName')?.displayName ?? 'Name';
+  const statusHeader = dataset.columns.find(c => c.alias === 'status')?.displayName ?? 'Status';
+
+  const cellStyle: React.CSSProperties = {
+    padding: '8px 12px',
+    borderBottom: '1px solid #e5e5e5',
+    textAlign: 'left',
+    verticalAlign: 'middle',
+  };
+  const headerCellStyle: React.CSSProperties = {
+    ...cellStyle,
+    fontWeight: 600,
+    backgroundColor: '#f3f2f1',
+    borderBottom: '2px solid #d1d1d1',
+  };
 
   return (
     <FluentProvider theme={webLightTheme}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
-        <Toolbar size="small">
-          <ToolbarButton onClick={onRefresh}>↻ Refresh</ToolbarButton>
-          <ToolbarButton onClick={onLoadMore} disabled={!hasNextPage}>
-            ↓ Load more
-          </ToolbarButton>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Button size="small" onClick={onRefresh}>↻ Refresh</Button>
+          <Button size="small" onClick={onLoadMore} disabled={!hasNextPage}>↓ Load more</Button>
           <Text style={{ marginLeft: 'auto', fontSize: 12 }}>
             {recordCount} record{recordCount === 1 ? '' : 's'}{hasNextPage ? ' (more available)' : ''}
           </Text>
-        </Toolbar>
+        </div>
 
         {recordCount === 0 ? (
           <Text italic>No records. Seed the dataset via data.json.</Text>
         ) : (
-          <DataGrid items={items} columns={columns} sortable getRowId={(item) => item.id} resizableColumns>
-            <DataGridHeader>
-              <DataGridRow>
-                {({ renderHeaderCell }) => (
-                  <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                )}
-              </DataGridRow>
-            </DataGridHeader>
-            <DataGridBody<RowItem>>
-              {({ item, rowId }) => (
-                <DataGridRow<RowItem> key={rowId}>
-                  {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
-                </DataGridRow>
-              )}
-            </DataGridBody>
-          </DataGrid>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr>
+                <th style={headerCellStyle}>{primaryHeader}</th>
+                <th style={headerCellStyle}>{statusHeader}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id}>
+                  <td style={cellStyle}>
+                    <Button appearance="transparent" onClick={() => onOpen(item.id)}>
+                      {item.primaryName || '—'}
+                    </Button>
+                  </td>
+                  <td style={cellStyle}>{item.status || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </FluentProvider>
