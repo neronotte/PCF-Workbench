@@ -6,6 +6,7 @@ export function createModeShim(getState: () => HarnessStore) {
     get allocatedWidth() { return getState().viewportWidth; },
     get isControlDisabled() { return getState().isControlDisabled; },
     get isVisible() { return true; },
+    get isAuthoringMode() { return getState().isAuthoringMode; },
     label: '',
     get contextInfo() {
       const s = getState();

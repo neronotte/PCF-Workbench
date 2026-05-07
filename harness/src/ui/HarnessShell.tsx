@@ -123,6 +123,8 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
   const networkMode = useHarnessStore(s => s.networkMode);
   const formChromeEnabled = useHarnessStore(s => s.formChromeEnabled);
   const toggleFormChrome = useHarnessStore(s => s.toggleFormChrome);
+  const isAuthoringMode = useHarnessStore(s => s.isAuthoringMode);
+  const setAuthoringMode = useHarnessStore(s => s.setAuthoringMode);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
   const shimProfile = useHarnessStore(s => s.shimProfile);
   const setShimProfile = useHarnessStore(s => s.setShimProfile);
@@ -205,6 +207,17 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
           <Switch
             checked={formChromeEnabled}
             onChange={() => toggleFormChrome()}
+            style={{ '--colorCompoundBrandBackground': 'white' } as any}
+          />
+        </div>
+        <div className={styles.topBarControl}>
+          <Label size="small" style={{ color: 'white' }} title="context.mode.isAuthoringMode — designer preview for InfoCard-style controls">
+            Authoring
+          </Label>
+          <Switch
+            checked={isAuthoringMode}
+            onChange={(_, d) => setAuthoringMode(d.checked)}
+            data-test-id="authoring-mode-toggle"
             style={{ '--colorCompoundBrandBackground': 'white' } as any}
           />
         </div>

@@ -27,7 +27,9 @@ const useStyles = makeStyles({
   root: {
     padding: '12px',
     overflowY: 'auto',
+    overflowX: 'hidden',
     height: '100%',
+    boxSizing: 'border-box',
     fontSize: '12px',
     display: 'flex',
     flexDirection: 'column',
@@ -37,6 +39,7 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '6px',
+    minWidth: 0,
   },
   sectionTitle: {
     fontWeight: 600,
@@ -47,12 +50,13 @@ const useStyles = makeStyles({
   },
   row: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1.4fr auto auto',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr) auto auto',
     alignItems: 'center',
     gap: '6px',
     padding: '4px 6px',
     borderRadius: '4px',
     backgroundColor: tokens.colorNeutralBackground2,
+    minWidth: 0,
   },
   rowDirty: {
     borderLeft: `3px solid ${tokens.colorPaletteYellowBorderActive}`,
@@ -63,6 +67,11 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    minWidth: 0,
+  },
+  attrCell: {
+    minWidth: 0,
+    overflow: 'hidden',
   },
   attrType: {
     fontSize: '10px',
@@ -70,21 +79,23 @@ const useStyles = makeStyles({
   },
   controlRow: {
     display: 'grid',
-    gridTemplateColumns: '1fr auto auto auto',
+    gridTemplateColumns: 'minmax(0, 1fr) auto auto auto',
     alignItems: 'center',
     gap: '8px',
     padding: '4px 6px',
     borderRadius: '4px',
     backgroundColor: tokens.colorNeutralBackground2,
+    minWidth: 0,
   },
   tabRow: {
     display: 'grid',
-    gridTemplateColumns: '1fr auto auto',
+    gridTemplateColumns: 'minmax(0, 1fr) auto auto',
     alignItems: 'center',
     gap: '8px',
     padding: '4px 6px',
     borderRadius: '4px',
     backgroundColor: tokens.colorNeutralBackground2,
+    minWidth: 0,
   },
   emptyMsg: {
     color: tokens.colorNeutralForeground3,
@@ -202,7 +213,7 @@ export function FormPanel(): JSX.Element {
             className={`${styles.row} ${a.isDirty ? styles.rowDirty : ''}`}
             data-test-id={`fp-attr-${a.name}`}
           >
-            <div>
+            <div className={styles.attrCell}>
               <div className={styles.attrName} title={a.name}>{a.name}</div>
               <div className={styles.attrType}>{a.attributeType}</div>
             </div>
@@ -224,6 +235,7 @@ export function FormPanel(): JSX.Element {
                 setAttributeValue(a.name, parsed);
               }}
               data-test-id={`fp-attr-${a.name}-input`}
+              style={{ minWidth: 0 }}
             />
             <Dropdown
               size="small"
@@ -232,7 +244,7 @@ export function FormPanel(): JSX.Element {
               onOptionSelect={(_, d) => {
                 if (d.optionValue) setAttributeRequiredLevel(a.name, d.optionValue as RequiredLevel);
               }}
-              style={{ minWidth: '110px' }}
+              style={{ minWidth: '92px', width: '92px' }}
               data-test-id={`fp-attr-${a.name}-required`}
             >
               {REQUIRED_LEVELS.map(l => <Option key={l} value={l}>{l}</Option>)}

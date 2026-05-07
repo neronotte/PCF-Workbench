@@ -143,6 +143,13 @@ export interface HarnessStore {
   isControlDisabled: boolean;
   setControlDisabled: (disabled: boolean) => void;
 
+  // Authoring mode (designer preview). When true, context.mode.isAuthoringMode
+  // returns true so InfoCard-style controls render their designer preview UI.
+  // Not part of the official PCF surface but several first-party controls key
+  // off it via `context.mode.isAuthoringMode`.
+  isAuthoringMode: boolean;
+  setAuthoringMode: (value: boolean) => void;
+
   // Page context (for controls that read context.page.entityId / entityTypeName)
   pageEntityId: string;
   pageEntityTypeName: string;
@@ -310,6 +317,17 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   // Mode
   isControlDisabled: false,
   setControlDisabled: (disabled) => set({ isControlDisabled: disabled }),
+
+  isAuthoringMode: (() => {
+    try {
+      const v = typeof localStorage !== 'undefined' ? localStorage.getItem('pcf.isAuthoringMode') : null;
+      return v === 'true';
+    } catch { return false; }
+  })(),
+  setAuthoringMode: (value) => {
+    try { localStorage.setItem('pcf.isAuthoringMode', String(value)); } catch { /* ignore */ }
+    set({ isAuthoringMode: value });
+  },
 
   // Page context
   pageEntityId: '',
