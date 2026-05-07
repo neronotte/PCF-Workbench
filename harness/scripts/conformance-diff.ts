@@ -39,6 +39,7 @@ const IMPLEMENTED = new Set<string>([
   'Navigation.openAlertDialog', 'Navigation.openConfirmDialog',
   'Navigation.openErrorDialog', 'Navigation.openForm', 'Navigation.openUrl',
   'Navigation.openFile', 'Navigation.navigateTo',
+  'Navigation.openWebResource', 'Navigation.items',
 
   // Xrm.Utility
   'Utility.getGlobalContext', 'Utility.getEntityMetadata',
@@ -46,6 +47,8 @@ const IMPLEMENTED = new Set<string>([
   'Utility.alertDialog', 'Utility.confirmDialog',
   'Utility.showProgressIndicator', 'Utility.closeProgressIndicator',
   'Utility.invokeProcessAction', 'Utility.refreshParentGrid',
+  'Utility.getAllowedStatusTransitions', 'Utility.getPageContext',
+  'Utility.openQuickCreate',
 
   // Xrm.Encoding
   'Encoding.htmlEncode', 'Encoding.htmlDecode', 'Encoding.htmlAttributeEncode',
@@ -78,6 +81,11 @@ const IMPLEMENTED = new Set<string>([
 const INTENTIONALLY_OMITTED = new Set<string>([
   'Utility.getAdvancedConfigSetting',
   'Utility.getLearningPathAttributeName',
+  // Deprecated in v9 — replaced by Xrm.Navigation.openForm / openWebResource / Xrm.Utility.getEntityMetadata.
+  // We intentionally don't ship shims for deprecated surface to avoid encouraging new usage.
+  'Utility.isActivityType',
+  'Utility.openEntityForm',
+  'Utility.openWebResource',
   'WebApi.isAvailableOffline',
 ]);
 

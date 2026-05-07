@@ -1,19 +1,19 @@
 # PCF Workbench — UCI Conformance Diff
 
-Generated 2026-05-07T08:27:05.538Z from `node_modules\@types\xrm\index.d.ts` and `node_modules\@types\powerapps-component-framework\componentframework.d.ts`.
+Generated 2026-05-07T08:48:12.230Z from `node_modules\@types\xrm\index.d.ts` and `node_modules\@types\powerapps-component-framework\componentframework.d.ts`.
 
 | Namespace | Source | Total | Implemented | Stub/Missing | Coverage |
 |-----------|--------|------:|------------:|-------------:|---------:|
 | `WebApi` | @types/xrm | 2 | 2 | 0 | 100% |
-| `Navigation` | @types/xrm | 9 | 7 | 2 | 78% |
-| `Utility` | @types/xrm | 16 | 10 | 6 | 63% |
+| `Navigation` | @types/xrm | 9 | 9 | 0 | 100% |
+| `Utility` | @types/xrm | 13 | 13 | 0 | 100% |
 | `Encoding` | @types/xrm | 5 | 5 | 0 | 100% |
 | `Device` | @types/xrm | 6 | 6 | 0 | 100% |
 | `App` | @types/xrm | 3 | 3 | 0 | 100% |
 | `Panel` | @types/xrm | 1 | 1 | 0 | 100% |
 | `FormContext` | @types/xrm | 4 | 4 | 0 | 100% |
 | `Context` | @types/powerapps-component-framework | 15 | 15 | 0 | 100% |
-| **Total** | | **61** | **53** | **8** | **87%** |
+| **Total** | | **58** | **58** | **0** | **100%** |
 
 
 ## WebApi (@types/xrm)
@@ -25,18 +25,14 @@ Generated 2026-05-07T08:27:05.538Z from `node_modules\@types\xrm\index.d.ts` and
 
 ## Navigation (@types/xrm)
 
-**Implemented (7):** `navigateTo`, `openAlertDialog`, `openConfirmDialog`, `openErrorDialog`, `openFile`, `openForm`, `openUrl`
-
-**Missing (2):** `items`, `openWebResource`
+**Implemented (9):** `items`, `navigateTo`, `openAlertDialog`, `openConfirmDialog`, `openErrorDialog`, `openFile`, `openForm`, `openUrl`, `openWebResource`
 
 
 ## Utility (@types/xrm)
 
-**Implemented (10):** `closeProgressIndicator`, `getEntityMetadata`, `getGlobalContext`, `getResourceString`, `invokeProcessAction`, `lookupObjects`, `refreshParentGrid`, `showProgressIndicator`, `alertDialog`, `confirmDialog`
+**Implemented (13):** `closeProgressIndicator`, `getAllowedStatusTransitions`, `getEntityMetadata`, `getGlobalContext`, `getPageContext`, `getResourceString`, `invokeProcessAction`, `lookupObjects`, `refreshParentGrid`, `showProgressIndicator`, `alertDialog`, `confirmDialog`, `openQuickCreate`
 
-**Missing (6):** `getAllowedStatusTransitions`, `getPageContext`, `isActivityType`, `openQuickCreate`, `openEntityForm`, `openWebResource`
-
-<sub>Intentionally omitted: `getLearningPathAttributeName`</sub>
+<sub>Intentionally omitted: `getLearningPathAttributeName`, `isActivityType`, `openEntityForm`, `openWebResource`</sub>
 
 
 ## Encoding (@types/xrm)

@@ -50,5 +50,10 @@ export function createNavigationShim(getState: () => HarnessStore) {
     openWebResource(name: string, options?: any, data?: string): void {
       log('openWebResource', { name, options, data });
     },
+    items: {
+      get: (_p?: any) => [] as any[],
+      getAll: () => [] as any[],
+      getLength: () => 0,
+    } as any,
   };
 }

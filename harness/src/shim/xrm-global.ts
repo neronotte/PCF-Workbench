@@ -190,6 +190,23 @@ export function installXrmGlobalShims(
       refreshParentGrid(_lookupOptions?: any): void {
         getState().addLogEntry({ category: 'utility', method: 'refreshParentGrid', coverage: 'stub' });
       },
+      getAllowedStatusTransitions(entityName: string, stateCode: number): Promise<number[]> {
+        getState().addLogEntry({ category: 'utility', method: 'getAllowedStatusTransitions', args: { entityName, stateCode }, coverage: 'stub' });
+        return Promise.resolve([]);
+      },
+      getPageContext(): { input: { pageType: string; entityName?: string; entityId?: string; formType?: number } } {
+        getState().addLogEntry({ category: 'utility', method: 'getPageContext', coverage: 'stub' });
+        return { input: { pageType: 'entityrecord', entityName: 'pcf_harness', entityId: '00000000-0000-0000-0000-000000000000', formType: 2 } };
+      },
+      openQuickCreate(entityLogicalName: string, createFromEntity?: any, customParameters?: Record<string, any>): Promise<{ savedEntityReference: any[] }> {
+        getState().addLogEntry({
+          category: 'utility',
+          method: 'openQuickCreate',
+          args: { entityLogicalName, createFromEntity, customParameters },
+          coverage: 'stub',
+        });
+        return Promise.resolve({ savedEntityReference: [] });
+      },
     };
     w.Xrm.Utility = wrapWithWarnings(rawUtility, 'Utility', getState);
     console.log('[pcf-workbench] Xrm.Utility global shim installed');
