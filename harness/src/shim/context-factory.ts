@@ -503,7 +503,7 @@ export function createContext(
     formatting: createFormattingShim(),
     mode: createModeShim(getState),
     navigation: createNavigationShim(getState),
-    resources: createResourcesShim(),
+    resources: createResourcesShim(getState),
     userSettings: createUserSettingsShim(getState),
     utils: createUtilsShim(getState),
     webAPI: createWebApiShim(getState, getEntityData),

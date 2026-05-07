@@ -39,10 +39,12 @@ export function App() {
       useHarnessStore.getState().bumpDataVersion();
     });
 
-    // Load RESX localized strings
+    // Load RESX localized strings (bucketed by LCID)
     if (resxStrings && Object.keys(resxStrings).length > 0) {
       setResxStrings(resxStrings);
-      console.log(`[pcf-workbench] RESX: ${Object.keys(resxStrings).length} strings loaded`);
+      const buckets = Object.keys(resxStrings).map(Number);
+      const total = buckets.reduce((n, l) => n + Object.keys(resxStrings[l] ?? {}).length, 0);
+      console.log(`[pcf-workbench] RESX: ${total} strings across locales [${buckets.sort((a, b) => a - b).join(', ')}]`);
     }
 
     // Load data.json, metadata.json, and execute-mocks.json from the PCF project directory

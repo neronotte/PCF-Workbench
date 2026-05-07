@@ -537,9 +537,161 @@ function createFluentStub(w: any) {
     },
   };
 
-  // Merge: v9 tokens/styles first, then v9 dialog components.
+  // Fluent v9 DataGrid family — render-prop based, needs context to share state
+  // between DataGrid → DataGridHeader/Body → DataGridRow → DataGridHeaderCell/Cell.
+  // createTableColumn is an identity helper — Fluent's real implementation just
+  // returns its config (it exists for type inference, no runtime work).
+  const dataGridContext = (() => {
+    const R = getReact();
+    return R ? R.createContext({ columns: [] as any[], items: [] as any[], section: 'body' as 'header' | 'body', currentItem: null as any, currentRowId: null as any }) : null;
+  })();
+
+  const v9DataGridComponents: Record<string, any> = {
+    createTableColumn: (config: any) => config,
+    TableColumnDefinition: undefined,
+    DataGrid: (props: any) => {
+      const R = getReact();
+      if (!R || !dataGridContext) return null;
+      const { columns = [], items = [], children, style: extraStyle, className } = props;
+      return R.createElement(dataGridContext.Provider, {
+        value: { columns, items, section: 'body', currentItem: null, currentRowId: null },
+      }, R.createElement('div', {
+        'data-fluent': 'DataGrid', role: 'grid', className,
+        style: {
+          display: 'flex', flexDirection: 'column', width: '100%',
+          fontFamily: v9Tokens.fontFamilyBase, fontSize: 14,
+          ...extraStyle,
+        },
+      }, children));
+    },
+    DataGridHeader: (props: any) => {
+      const R = getReact();
+      if (!R || !dataGridContext) return null;
+      const ctx = R.useContext(dataGridContext);
+      return R.createElement(dataGridContext.Provider, {
+        value: { ...ctx, section: 'header' },
+      }, R.createElement('div', {
+        'data-fluent': 'DataGridHeader', role: 'rowgroup',
+        style: {
+          display: 'flex', flexDirection: 'column',
+          backgroundColor: v9Tokens.colorNeutralBackground2,
+          borderBottom: `2px solid ${v9Tokens.colorNeutralStroke1}`,
+          fontWeight: 600,
+        },
+      }, props.children));
+    },
+    DataGridBody: (props: any) => {
+      const R = getReact();
+      if (!R || !dataGridContext) return null;
+      const ctx = R.useContext(dataGridContext);
+      const { children } = props;
+      const rendered = ctx.items.map((item: any, idx: number) => {
+        const rowId = item?.id ?? idx;
+        const childOutput = typeof children === 'function'
+          ? children({ item, rowId })
+          : children;
+        return R.createElement(dataGridContext.Provider, {
+          key: rowId,
+          value: { ...ctx, section: 'body', currentItem: item, currentRowId: rowId },
+        }, childOutput);
+      });
+      return R.createElement('div', {
+        'data-fluent': 'DataGridBody', role: 'rowgroup',
+        style: { display: 'flex', flexDirection: 'column' },
+      }, rendered);
+    },
+    DataGridRow: (props: any) => {
+      const R = getReact();
+      if (!R || !dataGridContext) return null;
+      const ctx = R.useContext(dataGridContext);
+      const { children } = props;
+      const cells = ctx.columns.map((col: any) => {
+        const callbacks = ctx.section === 'header'
+          ? { renderHeaderCell: () => col.renderHeaderCell ? col.renderHeaderCell() : col.columnId }
+          : { renderCell: (item: any) => col.renderCell ? col.renderCell(item ?? ctx.currentItem) : '' };
+        const childOutput = typeof children === 'function' ? children(callbacks) : children;
+        return R.createElement(R.Fragment, { key: col.columnId ?? Math.random() }, childOutput);
+      });
+      return R.createElement('div', {
+        'data-fluent': 'DataGridRow', role: 'row',
+        style: {
+          display: 'flex', flexDirection: 'row',
+          borderBottom: `1px solid ${v9Tokens.colorNeutralStroke2}`,
+          minHeight: 36,
+        },
+      }, cells);
+    },
+    DataGridHeaderCell: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'DataGridHeaderCell', role: 'columnheader',
+        style: {
+          flex: 1, padding: '8px 12px',
+          display: 'flex', alignItems: 'center',
+          color: v9Tokens.colorNeutralForeground1,
+        },
+      }, props.children);
+    },
+    DataGridCell: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'DataGridCell', role: 'gridcell',
+        style: {
+          flex: 1, padding: '8px 12px',
+          display: 'flex', alignItems: 'center',
+          color: v9Tokens.colorNeutralForeground1,
+        },
+      }, props.children);
+    },
+    Toolbar: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'Toolbar', role: 'toolbar',
+        style: {
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '4px 8px',
+          backgroundColor: v9Tokens.colorNeutralBackground1,
+        },
+      }, props.children);
+    },
+    ToolbarButton: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      const { children, icon, onClick, disabled, appearance } = props;
+      return R.createElement('button', {
+        type: 'button', 'data-fluent': 'ToolbarButton', 'data-appearance': appearance,
+        onClick, disabled,
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '4px 10px', minHeight: 28,
+          background: 'transparent',
+          border: '1px solid transparent', borderRadius: 4,
+          color: v9Tokens.colorNeutralForeground1,
+          fontFamily: v9Tokens.fontFamilyBase, fontSize: 14,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+        },
+      }, icon, children);
+    },
+    ToolbarDivider: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'ToolbarDivider',
+        style: {
+          width: 1, alignSelf: 'stretch', margin: '4px 4px',
+          backgroundColor: v9Tokens.colorNeutralStroke2,
+        },
+      });
+    },
+  };
+
+  // Merge: v9 tokens/styles first, then v9 dialog components, then DataGrid family.
   // v9 Dialog component handles both v8 (hidden prop) and v9 (open prop).
-  Object.assign(allExports, v9Components, v9DialogComponents);
+  Object.assign(allExports, v9Components, v9DialogComponents, v9DataGridComponents);
 
   return new Proxy(allExports, {
     get(target, prop) {

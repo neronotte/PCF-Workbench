@@ -1,8 +1,18 @@
-let resxStrings: Record<string, string> = {};
+import type { HarnessStore } from '../store/harness-store';
 
-/** Load RESX strings parsed at build time. */
-export function setResxStrings(strings: Record<string, string>): void {
-  resxStrings = strings;
+/** RESX strings bucketed by LCID. Bucket 0 holds strings from RESX files
+ *  whose filename had no recognizable LCID stem (treated as "default"). */
+let resxByLcid: Record<number, Record<string, string>> = {};
+
+/** Load RESX strings parsed at build time, bucketed by LCID. */
+export function setResxStrings(strings: Record<number, Record<string, string>>): void {
+  resxByLcid = strings;
+}
+
+/** List of LCIDs that have at least one string loaded. Used by the harness UI
+ *  to indicate which locales are actually localized for the current control. */
+export function getLoadedResxLcids(): number[] {
+  return Object.keys(resxByLcid).map(Number).filter(l => Object.keys(resxByLcid[l] ?? {}).length > 0);
 }
 
 /** Cache of preloaded resource base64 data */
@@ -62,7 +72,7 @@ async function fetchAndCache(id: string): Promise<string | null> {
   return null;
 }
 
-export function createResourcesShim() {
+export function createResourcesShim(getState: () => HarnessStore) {
   return {
     getResource(id: string, success: (data: string) => void, failure: (err?: any) => void): void {
       // Return from cache SYNCHRONOUSLY — the callback fires immediately
@@ -90,7 +100,21 @@ export function createResourcesShim() {
       });
     },
     getString(id: string): string {
-      return resxStrings[id] ?? id;
+      // Lookup priority: current userLanguageId → 1033 (en-US) → bucket 0
+      // (default / no LCID detected) → first available bucket → bare key.
+      const lcid = getState().userLanguageId;
+      const tryBucket = (l: number) => resxByLcid[l]?.[id];
+      const hit = tryBucket(lcid)
+        ?? tryBucket(1033)
+        ?? tryBucket(0)
+        ?? (() => {
+          for (const l of Object.keys(resxByLcid).map(Number)) {
+            const v = resxByLcid[l]?.[id];
+            if (v !== undefined) return v;
+          }
+          return undefined;
+        })();
+      return hit ?? id;
     },
   };
 }

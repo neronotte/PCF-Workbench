@@ -16,7 +16,9 @@ interface PcfPluginState {
   outDir: string;
   cssFiles: string[];
   hasDataJson: boolean;
-  resxStrings: Record<string, string>;
+  /** RESX strings bucketed by LCID. 1033 is default; 0 holds strings from
+   *  RESX files whose filename has no recognizable LCID. */
+  resxStrings: Record<number, Record<string, string>>;
   isGalleryMode: boolean;
   workspaceRoot: string;
   /** True when the server was started in gallery mode (no PCF_CONTROL_PATH) */
@@ -81,9 +83,9 @@ function loadControl(state: PcfPluginState): void {
   // CSS files
   state.cssFiles = state.manifest.resources.css.map(c => c.path);
 
-  // RESX
+  // RESX — bucketed by LCID parsed from filename like `name.1033.resx`.
+  // Files without a 4-digit LCID stem fall into bucket 0 (treated as default).
   state.resxStrings = {};
-  // Scan for RESX files recursively in controlDir and outDir
   function scanResxRecursive(dir: string) {
     if (!fs.existsSync(dir)) return;
     try {
@@ -91,7 +93,11 @@ function loadControl(state: PcfPluginState): void {
         if (entry.isDirectory() && entry.name !== 'node_modules') {
           scanResxRecursive(path.join(dir, entry.name));
         } else if (entry.isFile() && entry.name.endsWith('.resx')) {
-          Object.assign(state.resxStrings, parseResx(fs.readFileSync(path.join(dir, entry.name), 'utf-8')));
+          const m = entry.name.match(/\.(\d{4})\.resx$/);
+          const lcid = m ? Number(m[1]) : 0;
+          const parsed = parseResx(fs.readFileSync(path.join(dir, entry.name), 'utf-8'));
+          if (!state.resxStrings[lcid]) state.resxStrings[lcid] = {};
+          Object.assign(state.resxStrings[lcid], parsed);
         }
       }
     } catch { /* skip unreadable dirs */ }
@@ -107,8 +113,11 @@ function loadControl(state: PcfPluginState): void {
   console.log(`[pcf-workbench] Project root: ${state.projectRoot}`);
   console.log(`[pcf-workbench] Properties: ${state.manifest.properties.map(p => p.name).join(', ')}`);
   console.log(`[pcf-workbench] data.json: ${state.hasDataJson ? 'found' : 'not found'}`);
-  const resxCount = Object.keys(state.resxStrings).length;
-  if (resxCount > 0) console.log(`[pcf-workbench] RESX: ${resxCount} strings`);
+  const lcidBuckets = Object.keys(state.resxStrings).map(Number);
+  const totalResx = lcidBuckets.reduce((n, l) => n + Object.keys(state.resxStrings[l]).length, 0);
+  if (totalResx > 0) {
+    console.log(`[pcf-workbench] RESX: ${totalResx} strings across ${lcidBuckets.length} locale${lcidBuckets.length === 1 ? '' : 's'} [${lcidBuckets.sort((a, b) => a - b).join(', ')}]`);
+  }
 }
 
 export function pcfPlugin(): Plugin {

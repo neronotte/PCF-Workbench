@@ -6,7 +6,7 @@ declare module 'virtual:pcf-manifest' {
   export const bundlePath: string;
   export const cssFiles: string[];
   export const hasDataJson: boolean;
-  export const resxStrings: Record<string, string>;
+  export const resxStrings: Record<number, Record<string, string>>;
   export const isGalleryMode: boolean;
   export const controlDir: string;
   export const launchedAsGallery: boolean;
