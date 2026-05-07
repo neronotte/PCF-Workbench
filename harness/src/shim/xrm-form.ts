@@ -80,3 +80,33 @@ export function installXrmFormShim(): void {
     if (typeof ui.clearFormNotification !== 'function') ui.clearFormNotification = clearFormNotification;
     console.log('[pcf-workbench] Xrm.Page.ui form-notification shim installed');
 }
+
+/**
+ * Replace `window.Xrm.Page` with the live formContext from `form-context.ts`,
+ * preserving the existing `ui.setFormNotification` / `ui.clearFormNotification`
+ * functions. Called by control-host once the formContext has been built.
+ */
+export function bindXrmPageToFormContext(formContext: any): void {
+    if (!formContext) return;
+    const w = window as unknown as { Xrm?: any };
+    if (!w.Xrm) w.Xrm = {};
+    // Preserve our notification helpers on top of the formContext's ui
+    const existingUi = w.Xrm.Page?.ui ?? {};
+    const fcUi = formContext.ui ?? {};
+    const mergedUi = {
+        ...fcUi,
+        // Notification helpers must be the originals from xrm-form (not the formContext.ui
+        // delegates) — otherwise Xrm.Page.ui.setFormNotification → formContext.ui.setFormNotification
+        // → getFormNotificationApi() → Xrm.Page.ui.setFormNotification → ... infinite recursion.
+        setFormNotification: existingUi.setFormNotification ?? setFormNotification,
+        clearFormNotification: existingUi.clearFormNotification ?? clearFormNotification,
+    };
+    // Xrm.Page is the legacy alias for the active formContext
+    w.Xrm.Page = new Proxy(formContext, {
+        get(target, key, receiver) {
+            if (key === 'ui') return mergedUi;
+            return Reflect.get(target, key, receiver);
+        },
+    });
+    console.log('[pcf-workbench] Xrm.Page bound to formContext');
+}

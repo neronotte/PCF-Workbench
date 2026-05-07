@@ -227,11 +227,13 @@ PCF-Workbench/
                                       #   gallery API, hot reload watcher
       ui/
         HarnessShell.tsx              # Main harness layout (top bar + viewport + panels)
+        DialogHost.tsx                # Renders shim-driven alert/confirm/lookup dialogs
         gallery/
           Gallery.tsx                 # Gallery mode: searchable control catalog
         panels/
           ControlViewport.tsx         # Device-emulated viewport with CSS container queries
           PropertyEditor.tsx          # Type-aware property input editors
+          FormPanel.tsx               # formContext attribute/control inspector (M1.P1)
           ConsolePanel.tsx            # Lifecycle and WebAPI call log
           NetworkPanel.tsx            # Network mode selector
           DevicePanel.tsx             # Device preset selector
@@ -243,6 +245,7 @@ PCF-Workbench/
       store/
         harness-store.ts             # Zustand store (state, device presets, metrics)
         data-store.ts                # In-memory entity data from data.json
+        form-store.ts                # Pub-sub store for formContext (M1.P1)
       loader/
         control-host.ts              # PCF control lifecycle manager (init/updateView/destroy)
         bundle-loader.ts             # Dynamic script loader for compiled bundles
@@ -260,6 +263,10 @@ PCF-Workbench/
         user-settings.ts             # context.userSettings shim
         utils.ts                     # context.utils shim
         fluent-design.ts             # context.fluentDesignLanguage shim
+        form-context.ts              # Modern formContext + executionContext (M1.P1)
+        xrm-form.ts                  # Legacy Xrm.Page proxy onto formContext (M1.P1)
+        xrm-global.ts                # Xrm.{WebApi,Navigation,Utility,Encoding,Device,App,Panel} (M1.P2)
+        dialog-bus.ts                # Pub-sub for shim-driven dialogs
         register.ts                  # Global registration helpers
       parser/
         manifest-parser.ts           # ControlManifest.Input.xml parser
@@ -268,9 +275,16 @@ PCF-Workbench/
         workspace-scanner.ts         # Workspace directory scanner for gallery mode
       types/
         manifest.ts                  # TypeScript types for parsed manifests
+    tests/                            # Playwright acceptance specs (M1 conformance gate)
+      conformance-p1.spec.ts
+    __visual__/                       # Playwright screenshots + JSON reports (gitignored)
+    playwright.config.ts
     vite.config.ts                   # Vite config with React + PCF plugin
     package.json
     tsconfig.json
+  samples/                            # Real PCFs built with pac pcf init (committed sources)
+    README.md                         # Toolchain prereqs (pac, dotnet)
+    ConformanceTester/                # 30-row API conformance test grid PCF
 ```
 
 ---

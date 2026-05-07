@@ -1,0 +1,7 @@
+{
+  "record": "ct-record-0001",
+  "textInput": "hello-conformance",
+  "numberInput": 42,
+  "boolInput": true,
+  "optionsetInput": 1
+}

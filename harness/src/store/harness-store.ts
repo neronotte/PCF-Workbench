@@ -374,7 +374,9 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   resetMetrics: () => set({
     renderCount: 0, lastRenderTimeMs: 0, renderTimings: [],
     webApiCallCount: 0, domNodeCount: 0, jsHeapUsedMB: 0,
-    webApiCalls: [], heapSnapshots: [], lifecycleEvents: [], resourceLeaks: [],
+    webApiCalls: [], heapSnapshots: [], resourceLeaks: [],
+    // Note: lifecycleEvents intentionally preserved across reloads
+    // so the panel shows the full init/destroy history. Use clearLifecycle() to reset.
   }),
 
   // Lifecycle

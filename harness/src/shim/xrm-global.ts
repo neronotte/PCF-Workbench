@@ -16,6 +16,8 @@
 import type { HarnessStore } from '../store/harness-store';
 import { createWebApiShim } from './web-api';
 import { createNavigationShim } from './navigation';
+import { createDeviceShim } from './device';
+import { pushDialog, type AlertDialogRequest, type ConfirmDialogRequest } from './dialog-bus';
 
 let installed = false;
 
@@ -148,8 +150,137 @@ export function installXrmGlobalShims(
       lookupObjects(options: any): Promise<any[]> {
         return Promise.resolve([]);
       },
+      alertDialog(alertStrings: { confirmButtonLabel?: string; text?: string; title?: string }, options?: any): Promise<void> {
+        return new Promise<void>(resolve => {
+          pushDialog<AlertDialogRequest>({
+            kind: 'alert',
+            alertStrings: alertStrings ?? {},
+            options,
+            resolve,
+          });
+        });
+      },
+      confirmDialog(
+        confirmStrings: { cancelButtonLabel?: string; confirmButtonLabel?: string; subtitle?: string; text?: string; title?: string },
+        options?: any,
+      ): Promise<{ confirmed: boolean }> {
+        return new Promise(resolve => {
+          pushDialog<ConfirmDialogRequest>({
+            kind: 'confirm',
+            confirmStrings: confirmStrings ?? {},
+            options,
+            resolve,
+          });
+        });
+      },
+      showProgressIndicator(message?: string): void {
+        getState().addLogEntry({ category: 'utility', method: 'showProgressIndicator', args: { message } });
+      },
+      closeProgressIndicator(): void {
+        getState().addLogEntry({ category: 'utility', method: 'closeProgressIndicator' });
+      },
+      invokeProcessAction(name: string, parameters: any): Promise<any> {
+        getState().addLogEntry({ category: 'utility', method: 'invokeProcessAction', args: { name, parameters } });
+        return Promise.resolve({});
+      },
+      refreshParentGrid(_lookupOptions?: any): void {
+        getState().addLogEntry({ category: 'utility', method: 'refreshParentGrid' });
+      },
     };
     w.Xrm.Utility = wrapWithWarnings(rawUtility, 'Utility', getState);
     console.log('[pcf-workbench] Xrm.Utility global shim installed');
+  }
+
+  // Xrm.Encoding — pure-function string helpers
+  if (!w.Xrm.Encoding) {
+    const escapeMap: Record<string, string> = {
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    };
+    const xmlMap: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+    w.Xrm.Encoding = {
+      htmlEncode(s: string): string {
+        return String(s ?? '').replace(/[&<>"']/g, c => escapeMap[c] ?? c);
+      },
+      htmlDecode(s: string): string {
+        const e = document.createElement('textarea');
+        e.innerHTML = String(s ?? '');
+        return e.value;
+      },
+      htmlAttributeEncode(s: string): string {
+        return String(s ?? '').replace(/[&<>"']/g, c => escapeMap[c] ?? c);
+      },
+      xmlAttributeEncode(s: string): string {
+        return String(s ?? '').replace(/[&<>"]/g, c => (c === '"' ? '&quot;' : (xmlMap[c] ?? c)));
+      },
+      xmlEncode(s: string): string {
+        return String(s ?? '').replace(/[&<>]/g, c => xmlMap[c] ?? c);
+      },
+    };
+    console.log('[pcf-workbench] Xrm.Encoding global shim installed');
+  }
+
+  // Xrm.Device — wraps the existing device shim used for context.device
+  if (!w.Xrm.Device) {
+    w.Xrm.Device = createDeviceShim(getState);
+    console.log('[pcf-workbench] Xrm.Device global shim installed');
+  }
+
+  // Xrm.App — global notifications + side panes
+  if (!w.Xrm.App) {
+    const globalNotifications = new Map<string, { id: string; level: number; type: number; message: string; action?: any }>();
+    let nextNotificationId = 1;
+    const sidePanes = new Map<string, any>();
+    w.Xrm.App = {
+      addGlobalNotification(notification: { type: number; level: number; message: string; showCloseButton?: boolean; action?: any }): Promise<string> {
+        const id = `notif-${nextNotificationId++}`;
+        globalNotifications.set(id, { id, ...notification });
+        getState().addLogEntry({ category: 'app', method: 'addGlobalNotification', args: { id, ...notification } });
+        return Promise.resolve(id);
+      },
+      clearGlobalNotification(id: string): Promise<void> {
+        globalNotifications.delete(id);
+        getState().addLogEntry({ category: 'app', method: 'clearGlobalNotification', args: { id } });
+        return Promise.resolve();
+      },
+      sidePanes: {
+        state: 0,
+        selected: null as any,
+        getAllPanes(): any[] {
+          return Array.from(sidePanes.values());
+        },
+        getPane(paneId: string): any {
+          return sidePanes.get(paneId);
+        },
+        createPane(input: { title?: string; paneId?: string; canClose?: boolean; imageSrc?: string; hideHeader?: boolean; isSelected?: boolean; width?: number }): Promise<any> {
+          const paneId = input.paneId ?? `pane-${nextNotificationId++}`;
+          const pane = {
+            paneId,
+            title: input.title ?? '',
+            isSelected: !!input.isSelected,
+            canClose: input.canClose !== false,
+            imageSrc: input.imageSrc,
+            hideHeader: !!input.hideHeader,
+            width: input.width ?? 320,
+            close: () => Promise.resolve(sidePanes.delete(paneId)),
+            navigate: (_pageInput: any) => Promise.resolve(),
+          };
+          sidePanes.set(paneId, pane);
+          getState().addLogEntry({ category: 'app', method: 'sidePanes.createPane', args: input });
+          return Promise.resolve(pane);
+        },
+      },
+    };
+    console.log('[pcf-workbench] Xrm.App global shim installed');
+  }
+
+  // Xrm.Panel — legacy single-pane API
+  if (!w.Xrm.Panel) {
+    w.Xrm.Panel = {
+      loadPanel(url: string, title?: string): void {
+        getState().addLogEntry({ category: 'panel', method: 'loadPanel', args: { url, title } });
+        console.log('[pcf-workbench] Xrm.Panel.loadPanel', { url, title });
+      },
+    };
+    console.log('[pcf-workbench] Xrm.Panel global shim installed');
   }
 }

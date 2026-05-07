@@ -1,0 +1,15 @@
+{
+  "$schema": "../../harness/docs/test-scenarios.schema.json",
+  "scenarios": [
+    {
+      "id": "p1-formcontext",
+      "name": "P1 — formContext shim coverage",
+      "description": "Walks every formContext / executionContext row in the conformance grid and asserts pass.",
+      "selectors": {
+        "runAll": "[data-test-id=ct-run-all]",
+        "passSummary": "[data-test-id=ct-summary-pass]",
+        "failSummary": "[data-test-id=ct-summary-fail]"
+      }
+    }
+  ]
+}

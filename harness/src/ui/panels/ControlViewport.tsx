@@ -417,7 +417,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
                 <Spinner label="Loading control..." />
               </div>
             )}
-            <div ref={containerRef} className={styles.controlContainer} style={{
+            <div ref={containerRef} className={styles.controlContainer} data-test-id="pcf-control-container" style={{
               width: containerWidth != null ? `${containerWidth}px` : '100%',
               height: containerHeight != null ? `${containerHeight}px` : '100%',
             }} />

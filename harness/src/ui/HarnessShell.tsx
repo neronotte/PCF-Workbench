@@ -6,6 +6,7 @@ import {
   PlugConnected24Regular, Phone24Regular, TopSpeed24Regular,
   Settings24Regular, WeatherMoon24Regular, WeatherSunny24Regular,
   Database24Regular, Beaker24Regular, Play24Regular, Person24Regular,
+  Form24Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore, DEVICE_PRESETS } from '../store/harness-store';
 import { ControlViewport } from './panels/ControlViewport';
@@ -18,6 +19,7 @@ import { DataPanel } from './panels/DataPanel';
 import { ScenariosPanel } from './panels/ScenariosPanel';
 import { LifecyclePanel } from './panels/LifecyclePanel';
 import { UserSettingsPanel } from './panels/UserSettingsPanel';
+import { FormPanel } from './panels/FormPanel';
 import type { ManifestConfig } from '../types/manifest';
 
 const useStyles = makeStyles({
@@ -107,7 +109,7 @@ interface Props {
   launchedAsGallery: boolean;
 }
 
-type SidePanelTab = 'properties' | 'data' | 'scenarios' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance';
+type SidePanelTab = 'properties' | 'form' | 'data' | 'scenarios' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance';
 
 export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launchedAsGallery }: Props) {
   const styles = useStyles();
@@ -215,6 +217,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
               size="small"
             >
               <Tab value="properties" icon={<Settings24Regular />} title="Properties" />
+              <Tab value="form" icon={<Form24Regular />} title="Form (formContext)" />
               <Tab value="data" icon={<Database24Regular />} title="Data (WebAPI Mock)" />
               <Tab value="scenarios" icon={<Beaker24Regular />} title="Test Scenarios" />
               <Tab value="network" icon={<PlugConnected24Regular />} title="Network Conditioning" />
@@ -226,6 +229,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
           </div>
           <div className={styles.sidePanelContent}>
             <div style={{ display: activeTab === 'properties' ? 'contents' : 'none' }}><PropertyEditor manifest={manifest} /></div>
+            {activeTab === 'form' && <FormPanel />}
             <div style={{ display: activeTab === 'data' ? 'contents' : 'none' }}><DataPanel /></div>
             <div style={{ display: activeTab === 'scenarios' ? 'contents' : 'none' }}><ScenariosPanel controlId={`${manifest.namespace}.${manifest.constructor}`} onScenarioLoaded={() => setActiveTab('properties')} /></div>
             {activeTab === 'network' && <NetworkPanel />}

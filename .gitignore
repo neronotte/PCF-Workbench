@@ -44,3 +44,15 @@ screenshots/
 *.customization
 DEPLOYMENT_ROADMAP.md
 program-dashboard.html
+
+# Sample PCFs (commit sources only)
+samples/**/out/
+samples/**/obj/
+samples/**/bin/
+samples/**/node_modules/
+samples/**/generated/
+
+# Playwright test artifacts (failure screenshots, traces)
+harness/test-results/
+harness/playwright-report/
+harness/__visual__/last-failure.png

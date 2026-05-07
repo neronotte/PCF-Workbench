@@ -371,11 +371,15 @@ export function LifecyclePanel() {
             <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {/* init without destroy */}
               <HealthCheck
-                pass={counts.init === 0 || counts.destroy >= counts.init - 1}
+                pass={counts.init <= 1
+                  ? true                                     // first load, no destroy expected yet
+                  : counts.destroy >= counts.init - 1}       // each reload should add a destroy
                 label="init/destroy balanced"
-                detail={counts.init > 0 && counts.destroy < counts.init - 1
-                  ? `${counts.init} init() but only ${counts.destroy} destroy() — missing cleanup`
-                  : `${counts.init} init, ${counts.destroy} destroy`}
+                detail={counts.init <= 1
+                  ? `${counts.init} init, ${counts.destroy} destroy (first load)`
+                  : counts.destroy >= counts.init - 1
+                    ? `${counts.init} init, ${counts.destroy} destroy`
+                    : `${counts.init} init() but only ${counts.destroy} destroy() — missing cleanup`}
               />
               {/* updateView called after init */}
               <HealthCheck

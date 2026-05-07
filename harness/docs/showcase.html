@@ -341,6 +341,95 @@ p{color:var(--neutral-30)}
   .compare-desc{display:none}
 }
 
+/* ── Coverage Visualisation ────────────────────────────── */
+.coverage-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}
+.coverage-card{background:var(--neutral-100);border:1px solid var(--neutral-90);border-radius:var(--radius-l);padding:24px}
+.coverage-card h3{font-size:1rem;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.coverage-card .pct{font-size:1.6rem;font-weight:700;letter-spacing:-.01em}
+.coverage-card.high .pct{color:var(--success)}
+.coverage-card.mid .pct{color:var(--accent-orange)}
+.coverage-card.low .pct{color:var(--error)}
+.coverage-meta{font-size:.78rem;color:var(--neutral-40);margin-bottom:14px}
+.cov-row{display:grid;grid-template-columns:160px 1fr 56px;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--neutral-95);font-size:.82rem}
+.cov-row:last-child{border-bottom:none}
+.cov-name{font-weight:600;color:var(--neutral-10);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cov-name code{background:var(--neutral-95);padding:1px 5px;border-radius:3px;font-size:.74rem}
+.cov-track{position:relative;height:8px;background:var(--neutral-95);border-radius:4px;overflow:hidden}
+.cov-fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.cov-fill.f100{background:linear-gradient(90deg,#5fb15f,#107c10)}
+.cov-fill.f80{background:linear-gradient(90deg,#5fb15f,#107c10)}
+.cov-fill.f50{background:linear-gradient(90deg,#ffcc44,#ff8c00)}
+.cov-fill.f20{background:linear-gradient(90deg,#ffaaaa,#d13438)}
+.cov-fill.f0{background:var(--neutral-80)}
+.cov-pct{font-size:.78rem;font-weight:700;color:var(--neutral-30);text-align:right}
+.cov-pct.h{color:var(--success)}
+.cov-pct.m{color:var(--accent-orange)}
+.cov-pct.l{color:var(--error)}
+.cov-pct.z{color:var(--neutral-60)}
+.coverage-summary{margin-top:24px;padding:18px 22px;background:linear-gradient(135deg,#e8f4fd 0%,#fff 100%);border:1px solid var(--brand-light);border-radius:var(--radius-m);display:flex;align-items:center;gap:14px}
+.coverage-summary .icon{flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:700}
+.coverage-summary p{font-size:.88rem;color:var(--neutral-30);margin:0;line-height:1.5}
+.coverage-summary strong{color:var(--neutral-10)}
+
+/* ── What's New Strip ──────────────────────────────────── */
+.whatsnew-strip{background:linear-gradient(135deg,#fff8e7 0%,#fff 60%);border-top:1px solid #ffe49e;border-bottom:1px solid var(--neutral-90);padding:14px 0}
+.whatsnew-inner{max-width:var(--max-w);margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.whatsnew-label{display:inline-flex;align-items:center;gap:8px;padding:4px 12px;background:var(--accent-orange);color:#fff;border-radius:100px;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;flex-shrink:0;box-shadow:0 2px 6px rgba(255,140,0,.3)}
+.whatsnew-label::before{content:'';width:6px;height:6px;border-radius:50%;background:#fff;animation:pulse 1.6s infinite}
+.whatsnew-items{display:flex;gap:8px;flex-wrap:wrap;font-size:.82rem;color:var(--neutral-30)}
+.whatsnew-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;background:var(--neutral-100);border:1px solid var(--neutral-90);border-radius:100px;font-weight:600;color:var(--neutral-10);font-size:.77rem}
+.whatsnew-chip .ico{width:6px;height:6px;border-radius:50%;background:var(--accent-orange)}
+
+/* ── Roadmap View ──────────────────────────────────────── */
+.roadmap-hero{padding:64px 0 24px;text-align:center}
+.roadmap-hero h2{font-size:clamp(1.8rem,4vw,2.6rem);margin-bottom:12px;letter-spacing:-.01em}
+.roadmap-hero p{font-size:1.06rem;max-width:760px;margin:0 auto;line-height:1.6}
+.roadmap-legend{display:flex;justify-content:center;gap:18px;margin-top:24px;flex-wrap:wrap}
+.legend-pill{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;color:var(--neutral-30)}
+.legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.legend-dot.shipped{background:var(--success)}
+.legend-dot.headline{background:var(--accent-orange)}
+.legend-dot.next{background:var(--brand)}
+.legend-dot.later{background:var(--neutral-60)}
+.milestone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:22px;margin-top:32px}
+.milestone-card{background:var(--neutral-100);border:1px solid var(--neutral-90);border-radius:var(--radius-l);padding:26px;position:relative;transition:all .2s}
+.milestone-card:hover{box-shadow:var(--shadow-8);transform:translateY(-2px);border-color:var(--accent2)}
+.milestone-card.shipped{border-top:4px solid var(--success)}
+.milestone-card.headline{border-top:4px solid var(--accent-orange);box-shadow:0 0 0 1px rgba(255,140,0,.15),var(--shadow-4)}
+.milestone-card.next{border-top:4px solid var(--brand)}
+.milestone-card.later{border-top:4px solid var(--neutral-60)}
+.milestone-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px}
+.milestone-h h3{font-size:1.05rem;display:flex;align-items:center;gap:10px;color:var(--neutral-10);margin:0}
+.milestone-num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;font-size:.8rem;font-weight:700;color:#fff;flex-shrink:0}
+.milestone-card.shipped .milestone-num{background:var(--success)}
+.milestone-card.headline .milestone-num{background:var(--accent-orange)}
+.milestone-card.next .milestone-num{background:var(--brand)}
+.milestone-card.later .milestone-num{background:var(--neutral-60)}
+.milestone-pills{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.milestone-size{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:22px;padding:0 7px;border-radius:6px;font-size:.7rem;font-weight:800;letter-spacing:.04em;font-family:'Cascadia Code','Fira Code','SF Mono',Consolas,monospace;flex-shrink:0}
+.size-s{background:#dff6dd;color:#0b6a0b}
+.size-m{background:var(--brand-light);color:var(--brand-dark)}
+.size-l{background:#fff4ce;color:#8a4500}
+.size-xl{background:#fde7e9;color:#a4262c}
+.legend-size{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--neutral-30)}
+.legend-size .milestone-size{min-width:26px;height:20px;font-size:.65rem}
+.milestone-pill{font-size:.66rem;padding:3px 10px;border-radius:100px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;flex-shrink:0;white-space:nowrap}
+.pill-shipped{background:#e8f5e8;color:#0b6a0b}
+.pill-headline{background:#fff4ce;color:#8a4500}
+.pill-next{background:var(--brand-light);color:var(--brand-dark)}
+.pill-later{background:var(--neutral-90);color:var(--neutral-30)}
+.milestone-card .ms-desc{font-size:.86rem;line-height:1.55;color:var(--neutral-30);margin-top:6px}
+.milestone-list{list-style:none;padding:0;margin-top:14px}
+.milestone-list li{padding:7px 0 7px 28px;position:relative;font-size:.82rem;color:var(--neutral-30);line-height:1.5;border-bottom:1px dashed var(--neutral-95)}
+.milestone-list li:last-child{border-bottom:none}
+.milestone-list li::before{content:'';position:absolute;left:0;top:10px;width:14px;height:14px;border-radius:4px;border:1.5px solid var(--neutral-60);background:var(--neutral-100);box-sizing:border-box}
+.milestone-list li.done{color:var(--neutral-40)}
+.milestone-list li.done::before{background:var(--success);border-color:var(--success)}
+.milestone-list li.done::after{content:'';position:absolute;left:3px;top:13px;width:7px;height:4px;border-left:1.8px solid #fff;border-bottom:1.8px solid #fff;transform:rotate(-45deg)}
+.roadmap-cta{margin-top:48px;padding:32px;background:linear-gradient(135deg,#0078d4 0%,#005a9e 100%);border-radius:var(--radius-xl);color:#fff;text-align:center;position:relative;overflow:hidden}
+.roadmap-cta h3{color:#fff;font-size:1.3rem;margin-bottom:8px}
+.roadmap-cta p{color:rgba(255,255,255,.85);max-width:580px;margin:0 auto 18px;font-size:.95rem}
+
 /* ── Scroll animation ──────────────────────────────────── */
 .reveal{opacity:0;transform:translateY(24px);transition:opacity .5s ease,transform .5s ease}
 .reveal.visible{opacity:1;transform:translateY(0)}
@@ -378,15 +467,29 @@ p{color:var(--neutral-30)}
       <a href="#why-open" class="btn btn-outline" data-view-link="why">Why Workbench?</a>
     </div>
     <div class="stats-bar">
-      <div class="stat-item"><div class="stat-value">20+</div><div class="stat-label">Feature Modules</div></div>
+      <div class="stat-item"><div class="stat-value">22+</div><div class="stat-label">Feature Modules</div></div>
       <div class="stat-item"><div class="stat-value">4</div><div class="stat-label">Device Presets</div></div>
       <div class="stat-item"><div class="stat-value">5</div><div class="stat-label">Network Modes</div></div>
-      <div class="stat-item"><div class="stat-value">9</div><div class="stat-label">Log Categories</div></div>
+      <div class="stat-item"><div class="stat-value">8</div><div class="stat-label">Roadmap Milestones</div></div>
       <div class="stat-item"><div class="stat-value">11</div><div class="stat-label">OData Operators</div></div>
       <div class="stat-item"><div class="stat-value">0</div><div class="stat-label">MS SDK Code</div></div>
     </div>
   </div>
 </section>
+
+<!-- ════════ WHAT'S NEW STRIP ════════ -->
+<div class="whatsnew-strip">
+  <div class="whatsnew-inner">
+    <span class="whatsnew-label">Just shipped</span>
+    <div class="whatsnew-items">
+      <span class="whatsnew-chip"><span class="ico"></span>Xrm globals &amp; <code>execute()</code> mocks</span>
+      <span class="whatsnew-chip"><span class="ico"></span>Dialog v8 / v9 fix</span>
+      <span class="whatsnew-chip"><span class="ico"></span>Date rebase / time travel</span>
+      <span class="whatsnew-chip"><span class="ico"></span>Form notification banner</span>
+      <span class="whatsnew-chip"><span class="ico"></span>Viewport size badge</span>
+    </div>
+  </div>
+</div>
 
 <!-- ════════ TOP-LEVEL VIEW TABS ════════ -->
 <div class="view-tabs" id="view-tabs">
@@ -399,6 +502,10 @@ p{color:var(--neutral-30)}
     <button class="view-tab" data-view="why">
       <svg class="tab-icon" viewBox="0 0 20 20" fill="none"><path d="M10 2L3 6v4c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/><path d="M7 10l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Why Workbench?
+    </button>
+    <button class="view-tab" data-view="roadmap">
+      <svg class="tab-icon" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="5" cy="5" r="1.6" fill="currentColor"/><circle cx="9" cy="10" r="1.6" fill="currentColor"/><circle cx="13" cy="15" r="1.6" fill="currentColor"/></svg>
+      Roadmap
     </button>
     <div class="view-tab-right">
       <a href="https://github.com/jaduplesms/PCF-Workbench" class="btn btn-outline" style="padding:6px 14px;font-size:.78rem" target="_blank" rel="noopener">GitHub</a>
@@ -430,6 +537,9 @@ p{color:var(--neutral-30)}
     <a href="#resources" class="subnav-link">Resources</a>
     <a href="#console" class="subnav-link">Console</a>
     <a href="#context" class="subnav-link">Context</a>
+    <a href="#xrm" class="subnav-link">Xrm &amp; Form</a>
+    <a href="#coverage" class="subnav-link">Coverage</a>
+    <a href="#daterebase" class="subnav-link">Date Rebase</a>
     <a href="#fluent" class="subnav-link">Fluent UI</a>
     <a href="#isolation" class="subnav-link">CSS Isolation</a>
     <a href="#governance" class="subnav-link">Governance</a>
@@ -1225,6 +1335,149 @@ p{color:var(--neutral-30)}
   </div>
 </section>
 
+<!-- ── 19. Xrm Globals & Form Context ─── -->
+<section class="section" id="xrm">
+  <div class="container">
+    <div class="section-header reveal">
+      <h2><span class="section-number">19</span>Xrm Globals &amp; Form Context <span class="badge badge-new">Just shipped</span></h2>
+      <p>Controls that reach beyond <code>context.*</code> and call <code>Xrm.WebApi</code>, <code>Xrm.Navigation</code>, or <code>formContext</code> APIs now run unmodified. The harness installs <code>window.Xrm</code> globals at startup with the same surface a real form provides.</p>
+    </div>
+    <div class="feature-grid reveal">
+      <div class="feature-card">
+        <div class="card-icon blue">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="white" stroke-width="1.5" fill="none"/><path d="M7 7l3 3-3 3M11 13h3" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h3><code>Xrm.WebApi</code></h3>
+        <p>Full <code>retrieveRecord</code>, <code>retrieveMultipleRecords</code>, <code>createRecord</code>, <code>updateRecord</code>, <code>deleteRecord</code>, plus <code>execute()</code> and <code>executeMultiple()</code> for custom actions and bound functions &mdash; routed through the same OData mock as <code>context.webAPI</code>.</p>
+      </div>
+      <div class="feature-card">
+        <div class="card-icon purple">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="12" rx="1.5" stroke="white" stroke-width="1.5" fill="none"/><path d="M3 8h14M6 12h8" stroke="white" stroke-width="1.5"/></svg>
+        </div>
+        <h3>Dialog v8 / v9 Compatibility</h3>
+        <p>Recent fix unifies dialog mocking across both Fluent UI v8 and v9 controls. <code>Xrm.Navigation.openAlertDialog</code>, <code>openConfirmDialog</code>, and <code>openErrorDialog</code> render correctly regardless of platform library version.</p>
+      </div>
+      <div class="feature-card">
+        <div class="card-icon green">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14v10H3z" stroke="white" stroke-width="1.5" fill="none"/><circle cx="6" cy="9" r="1.2" fill="white"/><path d="M9 9h6" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Form Notification Banner</h3>
+        <p><code>formContext.ui.setFormNotification()</code> and <code>clearFormNotification()</code> render an authentic notification banner inside the viewport &mdash; positioned exactly where it appears in a real model-driven form.</p>
+      </div>
+      <div class="feature-card">
+        <div class="card-icon amber">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 3h10v14H5z" stroke="white" stroke-width="1.5" fill="none"/><path d="M8 7h4M8 10h4M8 13h2" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </div>
+        <h3><code>formContext</code> Surface</h3>
+        <p>Attribute access via <code>getAttribute</code>, control access via <code>getControl</code>, save/refresh hooks, dirty tracking, and event registration (<code>addOnSave</code>, <code>addOnChange</code>) &mdash; enough to run typical onLoad / onSave logic locally.</p>
+      </div>
+      <div class="feature-card">
+        <div class="card-icon dark">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="white" stroke-width="1.5" fill="none"/><path d="M10 6v4l3 2" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <h3><code>Xrm.Utility</code></h3>
+        <p><code>getGlobalContext()</code>, <code>showProgressIndicator</code>, <code>closeProgressIndicator</code>, and entity-metadata helpers stubbed with sensible defaults so utility-heavy controls don't blow up at startup.</p>
+      </div>
+      <div class="feature-card">
+        <div class="card-icon orange">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10a7 7 0 0114 0M10 3v3M10 14v3M3 10h3M14 10h3" stroke="white" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+        </div>
+        <h3>Console-Logged</h3>
+        <p>Every <code>Xrm.*</code> call is logged to the console panel under the <strong>navigation</strong>, <strong>webAPI</strong>, or <strong>utils</strong> categories with full parameters &mdash; so you can see exactly which Xrm call your control is making and what came back.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 20. API Coverage Snapshot ─── -->
+<section class="section" id="coverage">
+  <div class="container">
+    <div class="section-header reveal">
+      <h2><span class="section-number">20</span>API Coverage Snapshot <span class="badge badge-new">Live count</span></h2>
+      <p>Where the shims sit today against the real PCF runtime. Counted method-by-method against <code>@types/powerapps-component-framework</code> and <code>@types/xrm</code>.</p>
+    </div>
+    <div class="reveal">
+      <div class="coverage-grid">
+        <div class="coverage-card high">
+          <h3>ComponentFramework.Context <span class="pct">~95%</span></h3>
+          <p class="coverage-meta">A control that lives entirely inside <code>context.*</code> runs unmodified.</p>
+          <div class="cov-row"><span class="cov-name"><code>context.client</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.device</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.factory</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.formatting</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.mode</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.navigation</code></span><div class="cov-track"><div class="cov-fill f80" style="width:85%"></div></div><span class="cov-pct h">85%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.parameters</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.resources</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.userSettings</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.utils</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.webAPI</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.events</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.fluentDesignLanguage</code></span><div class="cov-track"><div class="cov-fill f100" style="width:100%"></div></div><span class="cov-pct h">100%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>context.copilot</code></span><div class="cov-track"><div class="cov-fill f20" style="width:25%"></div></div><span class="cov-pct l">stub</span></div>
+        </div>
+
+        <div class="coverage-card mid">
+          <h3>Xrm.* globals <span class="pct">~25% / ~55%*</span></h3>
+          <p class="coverage-meta">* by surface area / by typical real-world usage frequency. Form-level APIs are the biggest gap.</p>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.WebApi</code></span><div class="cov-track"><div class="cov-fill f80" style="width:90%"></div></div><span class="cov-pct h">90%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.Navigation</code></span><div class="cov-track"><div class="cov-fill f80" style="width:85%"></div></div><span class="cov-pct h">85%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.Utility</code></span><div class="cov-track"><div class="cov-fill f50" style="width:25%"></div></div><span class="cov-pct m">25%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.Page.ui</code> notif</span><div class="cov-track"><div class="cov-fill f20" style="width:5%"></div></div><span class="cov-pct l">5%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.Page</code> form API</span><div class="cov-track"><div class="cov-fill f0" style="width:0%"></div></div><span class="cov-pct z">0%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>formContext</code></span><div class="cov-track"><div class="cov-fill f0" style="width:0%"></div></div><span class="cov-pct z">0%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>executionContext</code></span><div class="cov-track"><div class="cov-fill f0" style="width:0%"></div></div><span class="cov-pct z">0%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.Device</code></span><div class="cov-track"><div class="cov-fill f0" style="width:0%"></div></div><span class="cov-pct z">0%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.Encoding</code></span><div class="cov-track"><div class="cov-fill f0" style="width:0%"></div></div><span class="cov-pct z">0%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.App</code></span><div class="cov-track"><div class="cov-fill f0" style="width:0%"></div></div><span class="cov-pct z">0%</span></div>
+          <div class="cov-row"><span class="cov-name"><code>Xrm.Panel</code></span><div class="cov-track"><div class="cov-fill f0" style="width:0%"></div></div><span class="cov-pct z">0%</span></div>
+        </div>
+      </div>
+      <div class="coverage-summary">
+        <div class="icon">M1</div>
+        <p>Closing the form-level gap (<code>getAttribute</code>, <code>getControl</code>, <code>addOnSave</code>, <code>formContext</code>, <code>executionContext</code>) is the headline of <strong>Milestone 1 — UCI Fidelity &amp; API Coverage</strong>. Once those land, multi-control hosting falls out for free &mdash; no separate "form simulator" milestone needed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 21. Date Rebase / Time Travel ─── -->
+<section class="section" id="daterebase">
+  <div class="container">
+    <div class="section-header reveal">
+      <h2><span class="section-number">21</span>Date Rebase &amp; Time Travel <span class="badge badge-new">Just shipped</span></h2>
+      <p>Test scenarios capture an <em>anchor date</em>. When a scenario is loaded, every date in <code>data.json</code> is rebased relative to today &mdash; so a saved scenario stays meaningful months later instead of decaying into stale "yesterday's tomorrow."</p>
+    </div>
+    <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+      <div>
+        <div class="feature-card">
+          <h3>Anchor + Offset Model</h3>
+          <p>A scenario records the date it was saved as the anchor. Each entity record's date fields are stored as offsets from that anchor. On load, the harness rebases every offset onto today's date.</p>
+        </div>
+        <div class="feature-card" style="margin-top:14px">
+          <h3>Why It Matters</h3>
+          <p>A "today's bookings" scenario built in March still shows bookings for today in November. Bug repros stay reproducible. Demos don't go stale. Field Service scenarios always test the present.</p>
+        </div>
+      </div>
+      <div>
+        <div class="code-block" style="margin-top:0">
+          <span class="code-label">Saved scenario</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+          {<br>
+          &nbsp;&nbsp;<span class="string">"name"</span>: <span class="string">"Today's bookings"</span>,<br>
+          &nbsp;&nbsp;<span class="string">"savedAt"</span>: <span class="string">"2026-03-15T00:00:00Z"</span>,<br>
+          &nbsp;&nbsp;<span class="string">"dateRebase"</span>: {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"anchor"</span>: <span class="string">"2026-03-15"</span>,<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"mode"</span>: <span class="string">"relative"</span><br>
+          &nbsp;&nbsp;}<br>
+          }
+        </div>
+        <p style="margin-top:12px;font-size:.82rem;color:var(--neutral-40)">When you load this scenario today, every <code>starttime</code>, <code>scheduledstart</code>, and <code>endtime</code> in your data is automatically shifted by the same delta &mdash; preserving the original relative gaps between records.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── Project Structure ─── -->
 <section class="section" id="structure">
   <div class="container">
@@ -1705,6 +1958,256 @@ p{color:var(--neutral-30)}
 
 </div>
 <!-- ════════ END WHY VIEW ════════ -->
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- ════════════ VIEW 3: ROADMAP ═════════════════════════════ -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="view-panel" data-view-panel="roadmap">
+
+<!-- ── Roadmap hero ─── -->
+<section style="background:var(--neutral-100);border-bottom:1px solid var(--neutral-90)">
+  <div class="container">
+    <div class="roadmap-hero reveal">
+      <h2>Roadmap</h2>
+      <p>The Workbench shipped its core. The next nine milestones turn it from a development harness into a complete PCF testing &amp; delivery platform &mdash; with live Dataverse, automated test runs, and an extensibility model so teams can build their own add-ins.</p>
+      <div class="roadmap-legend">
+        <span class="legend-pill"><span class="legend-dot shipped"></span>Shipped</span>
+        <span class="legend-pill"><span class="legend-dot headline"></span>Next-up headline</span>
+        <span class="legend-pill"><span class="legend-dot next"></span>In planning</span>
+        <span class="legend-pill"><span class="legend-dot later"></span>Later milestone</span>
+      </div>
+      <div class="roadmap-legend" style="margin-top:14px;gap:14px">
+        <span class="legend-size"><span class="milestone-size size-s">S</span>few days</span>
+        <span class="legend-size"><span class="milestone-size size-m">M</span>1&ndash;2 weeks</span>
+        <span class="legend-size"><span class="milestone-size size-l">L</span>3&ndash;4 weeks</span>
+        <span class="legend-size"><span class="milestone-size size-xl">XL</span>1&ndash;2+ months</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Recently Shipped ─── -->
+<section class="section" style="padding-top:48px;padding-bottom:32px">
+  <div class="container">
+    <div class="section-header reveal">
+      <h2>Recently shipped</h2>
+      <p>The most recent additions &mdash; all in production today.</p>
+    </div>
+    <div class="milestone-grid reveal">
+      <div class="milestone-card shipped">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M0</span>Core Workbench</h3>
+          <span class="milestone-pill pill-shipped">Shipped</span>
+        </div>
+        <p class="ms-desc">Everything covered in the Features view: gallery, viewport, network, WebAPI, scenarios, performance, lifecycle, leak detection.</p>
+        <ul class="milestone-list">
+          <li class="done">Gallery + workspace scanning</li>
+          <li class="done">Standard &amp; Virtual control support</li>
+          <li class="done">Network conditioning (online / offline / 3G)</li>
+          <li class="done">Device emulation presets</li>
+          <li class="done">Performance + lifecycle monitoring</li>
+          <li class="done">Test scenarios save / load / export / import</li>
+          <li class="done">Hot reload, RESX, CLI entry point</li>
+          <li class="done">Auto-thumbnail capture</li>
+          <li class="done">Xrm globals, <code>execute()</code> mocks, Dialog v8/v9 fix</li>
+          <li class="done">Date rebase / time travel</li>
+          <li class="done">Form notification banner + viewport size badge</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── In Planning ─── -->
+<section class="section" style="padding-top:32px">
+  <div class="container">
+    <div class="section-header reveal">
+      <h2>What's next</h2>
+      <p>The next three milestones are the focus for the upcoming release. Live Dataverse Bridge is the headline.</p>
+    </div>
+    <div class="milestone-grid reveal">
+
+      <div class="milestone-card next">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M1</span>UCI Fidelity &amp; API Coverage</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-xl">XL</span>
+            <span class="milestone-pill pill-next">In planning</span>
+          </div>
+        </div>
+        <p class="ms-desc">Reproduce the full Unified Client Interface so any control that runs in production behaves identically locally. Multi-control hosting, form events, and form-level state all fall out of getting this right &mdash; no separate "form simulator" needed.</p>
+        <ul class="milestone-list">
+          <li>Close remaining <code>ComponentFramework.Context</code> gaps (~95% &rarr; 100%)</li>
+          <li>Complete <code>Xrm.WebApi</code> / <code>Xrm.Navigation</code> / <code>Xrm.Utility</code> coverage</li>
+          <li><strong>Full form-level API:</strong> <code>Xrm.Page</code> + modern <code>formContext</code> with <code>getAttribute</code>, <code>getControl</code>, <code>data</code>, <code>ui.tabs</code>, <code>ui.sections</code>, <code>addOnSave</code> / <code>addOnChange</code> / <code>addOnLoad</code></li>
+          <li><code>executionContext</code> passed to every registered handler</li>
+          <li>UCI-faithful form chrome around the viewport (header, command bar, tab strip, footer)</li>
+          <li><code>Xrm.Device</code>, <code>Xrm.Encoding</code>, <code>Xrm.App</code>, <code>Xrm.Panel</code> shims</li>
+          <li>Conformance test suite diffed against <code>@types/xrm</code> &amp; <code>@types/powerapps-component-framework</code></li>
+          <li>Coverage panel that flags any call hitting an unimplemented shim</li>
+          <li>Versioned shim profiles (Dataverse 9.x vs 9.2 vs latest)</li>
+        </ul>
+      </div>
+
+      <div class="milestone-card headline">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M2</span>Live Dataverse Bridge</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-l">L</span>
+            <span class="milestone-pill pill-headline">Headline</span>
+          </div>
+        </div>
+        <p class="ms-desc">Optional connected mode that replaces <code>data.json</code> with a real org via <code>pac auth</code>. Read-only by default. The killer feature: snapshot live data into <code>data.json</code> for offline replay.</p>
+        <ul class="milestone-list">
+          <li>Live mode toggle using the active <code>pac auth</code> profile</li>
+          <li>Read-only by default; writes require per-call confirmation</li>
+          <li>On-disk response cache &mdash; second run is offline-fast</li>
+          <li>One-click "snapshot live data into data.json"</li>
+          <li>Visual indicator when control is hitting live data</li>
+          <li>Per-scenario binding so scenarios pin to live or mock</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── Later ─── -->
+<section class="section" style="background:var(--neutral-100);padding-top:32px">
+  <div class="container">
+    <div class="section-header reveal">
+      <h2>Later milestones</h2>
+      <p>Larger investments lined up after the next release. Roughly in the order they'd ship.</p>
+    </div>
+    <div class="milestone-grid reveal">
+
+      <div class="milestone-card later">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M3</span>Scenario Runner + Playwright</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-l">L</span>
+            <span class="milestone-pill pill-later">Later</span>
+          </div>
+        </div>
+        <p class="ms-desc">Turn the harness into a test framework, not just a dev tool.</p>
+        <ul class="milestone-list">
+          <li>Headless runner across every saved scenario</li>
+          <li>Per-scenario screenshot, lifecycle log, perf metrics, console output</li>
+          <li>Visual regression with pixel-diff against committed baselines</li>
+          <li>Performance regression detection (render-time budget per scenario)</li>
+          <li>Reusable GitHub Actions workflow</li>
+        </ul>
+      </div>
+
+      <div class="milestone-card later">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M4</span>Diagnostics &amp; Linting</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-m">M</span>
+            <span class="milestone-pill pill-later">Later</span>
+          </div>
+        </div>
+        <p class="ms-desc">A new "Audit" tab that enforces PCF best-practice constraints automatically.</p>
+        <ul class="milestone-list">
+          <li>axe-core accessibility audit</li>
+          <li>Banned-API check (<code>localStorage</code>, <code>sessionStorage</code>, cookies)</li>
+          <li>Manifest validation (bound property must be <code>value</code>, version-bump check)</li>
+          <li>CSS scoping check (warn on unprefixed selectors)</li>
+          <li>Bundle size budget warning</li>
+          <li>Per-rule ignore via <code>.pcf-audit.json</code></li>
+        </ul>
+      </div>
+
+      <div class="milestone-card later">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M5</span>Field Service Mobile / Offline Profiles</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-m">M</span>
+            <span class="milestone-pill pill-later">Later</span>
+          </div>
+        </div>
+        <p class="ms-desc">Simulate the mobile app's offline-profile semantics so FSM controls can be validated locally.</p>
+        <ul class="milestone-list">
+          <li>Configurable mobile offline profile (which entities &amp; views are synced)</li>
+          <li>Warn when the control hits an entity not in the profile</li>
+          <li>Simulate aggressive bundle caching (mobile app behaviour)</li>
+          <li>Field Service form-factor preset</li>
+          <li>Offline-first checklist runner for FSM controls</li>
+        </ul>
+      </div>
+
+      <div class="milestone-card later">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M6</span>Add-in Framework</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-l">L</span>
+            <span class="milestone-pill pill-later">Later</span>
+          </div>
+        </div>
+        <p class="ms-desc">A plug-in system so the workbench is extensible without forking it.</p>
+        <ul class="milestone-list">
+          <li>Add-in manifest format and lifecycle hooks (<code>onLoad</code>, <code>onControlInit</code>, <code>onScenarioRun</code>, <code>onPanelMount</code>)</li>
+          <li>UI extension slots: sidebar tab, toolbar button, viewport overlay, panel section</li>
+          <li>Add-in API: read state, invoke shims, inspect manifest, read/write artifacts</li>
+          <li>Sandboxing model with per-add-in permission scopes</li>
+          <li>Add-in discovery and install UI</li>
+        </ul>
+      </div>
+
+      <div class="milestone-card later">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M7</span>First-party Add-ins</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-l">L</span>
+            <span class="milestone-pill pill-later">Later</span>
+          </div>
+        </div>
+        <p class="ms-desc">Built on top of the add-in framework. Bundled with the harness.</p>
+        <ul class="milestone-list">
+          <li><span class="milestone-size size-m" style="margin-right:6px">M</span><strong>AI Code Review</strong> &mdash; provider-agnostic AI bridge (Anthropic / OpenAI / Azure / Ollama / WebLLM / no-AI fallback) reviews PCF best practices, perf, a11y</li>
+          <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>GitHub</strong> &mdash; browse a configured org, clone a PCF repo, build it, load it into the gallery</li>
+          <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>Solution Push</strong> &mdash; push current control + test data into a Dataverse solution via PAC CLI</li>
+          <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>Schema-aware Data Generator</strong> &mdash; auto-fill <code>data.json</code> from a Dataverse table schema</li>
+          <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>Telemetry</strong> &mdash; capture &amp; replay App Insights / Dataverse telemetry events</li>
+        </ul>
+      </div>
+
+      <div class="milestone-card later">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M8</span>Polish</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-l">L</span>
+            <span class="milestone-pill pill-later">Later</span>
+          </div>
+        </div>
+        <p class="ms-desc">Smaller items, batched into a single release.</p>
+        <ul class="milestone-list">
+          <li>Auto-generate sample <code>data.json</code> &amp; <code>test-scenarios.json</code> during scaffolding</li>
+          <li>Scenario diff view (side-by-side compare)</li>
+          <li>Bundle analyzer (treemap of <code>bundle.js</code>)</li>
+          <li>Source-map debugging (TypeScript breakpoints)</li>
+          <li>Theme / RTL / high-contrast preview toggles</li>
+          <li>Recording mode &mdash; capture interactions, replay as scenario</li>
+          <li>VS Code extension wrapper for one-click harness launch</li>
+          <li>Side-by-side control-version comparison</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="roadmap-cta reveal">
+      <h3>Want to influence what ships next?</h3>
+      <p>The roadmap is open. Open an issue with your use case, your pain point, or the feature you'd build first &mdash; we prioritise based on real PCF teams.</p>
+      <div class="hero-actions" style="justify-content:center">
+        <a href="https://github.com/jaduplesms/PCF-Workbench/issues" target="_blank" rel="noopener" class="btn btn-primary" style="background:#fff;color:var(--brand)">Open an Issue</a>
+        <a href="https://github.com/jaduplesms/PCF-Workbench" target="_blank" rel="noopener" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.6)">View on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+<!-- ════════ END ROADMAP VIEW ════════ -->
 
 <!-- ════════ FOOTER ════════ -->
 <footer class="footer">

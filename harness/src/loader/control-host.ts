@@ -7,6 +7,9 @@ import { getReactDOMGlobal } from './platform-libs';
 import { ResourceTracker } from './resource-tracker';
 import { preloadBundleResources } from '../shim/resources';
 import { installXrmGlobalShims } from '../shim/xrm-global';
+import { bindXrmPageToFormContext } from '../shim/xrm-form';
+import { buildExecutionContext, buildFormContext, setFormContextLogger } from '../shim/form-context';
+import { fireOnLoad, seedFormState } from '../store/form-store';
 
 export interface ControlHostState {
   isLoaded: boolean;
@@ -72,6 +75,24 @@ export class ControlHost {
       // Preload image/font resources so getResource returns from cache instantly
       await preloadBundleResources();
 
+      // Seed the form state from data.json + manifest, then build the
+      // formContext that backs Xrm.Page and executionContext.getFormContext()
+      const initialState = this.getState();
+      seedFormState(
+        this.manifest,
+        initialState.pageEntityTypeName,
+        initialState.pageEntityId,
+        initialState.pageEntityRecordName,
+      );
+      setFormContextLogger((entry) => this.getState().addLogEntry(entry));
+      const formContext = buildFormContext({
+        getPageEntityId: () => this.getState().pageEntityId,
+        getPageEntityTypeName: () => this.getState().pageEntityTypeName,
+        getPageEntityRecordName: () => this.getState().pageEntityRecordName,
+        getPcfContext: () => this.context,
+      });
+      bindXrmPageToFormContext(formContext);
+
       // Build context
       this.context = createContext(this.manifest, this.getState, getEntityData, {
         requestRender: () => this.callUpdateView(),
@@ -121,6 +142,14 @@ export class ControlHost {
 
       // First updateView
       this.callUpdateView();
+
+      // Fire form-level onLoad handlers registered during init() (mirrors UCI
+      // semantics where form scripts add onLoad before the form is "ready").
+      try {
+        fireOnLoad(buildExecutionContext('form.load', null));
+      } catch (e) {
+        console.error('[pcf-workbench] onLoad handlers threw', e);
+      }
 
       this.onStateChange({ isLoaded: true, error: null });
     } catch (err: any) {
