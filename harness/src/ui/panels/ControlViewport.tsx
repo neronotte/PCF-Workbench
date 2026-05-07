@@ -136,6 +136,15 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
   const host = useHarnessStore(s => s.host);
   const datasetState = useHarnessStore(s => s.datasetState);
   const dataVersion = useHarnessStore(s => s.dataVersion);
+  const isAuthoringMode = useHarnessStore(s => s.isAuthoringMode);
+
+  // Authoring mode is read on init() in real Dataverse and doesn't change at
+  // runtime — but for harness UX we want toggling the switch to take effect
+  // immediately. Force a full re-init when it flips.
+  useEffect(() => {
+    if (!hostRef.current?.isLoaded()) return;
+    hostRef.current.reload();
+  }, [isAuthoringMode]);
 
   // Initialize control host
   useEffect(() => {
