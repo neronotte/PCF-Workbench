@@ -13,8 +13,8 @@ const useStyles = makeStyles({
     backgroundColor: '#f5f5f5',
   },
   header: {
-    backgroundColor: '#0078d4',
-    color: 'white',
+    backgroundColor: tokens.colorBrandBackground,
+    color: tokens.colorNeutralForegroundOnBrand,
     padding: '24px 40px',
   },
   headerTitle: {
