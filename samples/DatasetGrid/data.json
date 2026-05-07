@@ -1,0 +1,29 @@
+{
+  "bookableresourcebooking": [
+    {
+      "bookableresourcebookingid": "11111111-1111-1111-1111-111111111101",
+      "primaryName": "Onsite — North Tower #14",
+      "status": "Scheduled"
+    },
+    {
+      "bookableresourcebookingid": "11111111-1111-1111-1111-111111111102",
+      "primaryName": "Remote callback — Acme Corp",
+      "status": "In Progress"
+    },
+    {
+      "bookableresourcebookingid": "11111111-1111-1111-1111-111111111103",
+      "primaryName": "Quarterly inspection — Plant 7",
+      "status": "Completed"
+    },
+    {
+      "bookableresourcebookingid": "11111111-1111-1111-1111-111111111104",
+      "primaryName": "Emergency repair — Substation B",
+      "status": "Scheduled"
+    },
+    {
+      "bookableresourcebookingid": "11111111-1111-1111-1111-111111111105",
+      "primaryName": "Follow-up consultation — Beta Industries",
+      "status": "Pending"
+    }
+  ]
+}

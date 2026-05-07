@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="PcfWorkbench" constructor="DatasetGrid" version="0.0.1" display-name-key="DatasetGrid" description-key="A minimal dataset-bound grid for harness validation" control-type="virtual" >
+    <external-service-usage enabled="false">
+    </external-service-usage>
+    <!-- Dataset binding with a typed property-set so the harness can exercise
+         columns, sortedRecordIds, getValue, openDatasetItem, refresh, and
+         paging on a real dataset shape. -->
+    <data-set name="records" display-name-key="Records">
+      <property-set name="primaryName" display-name-key="Primary Name" description-key="The display name field" of-type="SingleLine.Text" usage="bound" required="true" />
+      <property-set name="status" display-name-key="Status" description-key="Two-option status field" of-type-group="strings" usage="bound" required="false" />
+    </data-set>
+    <type-group name="strings">
+      <type>SingleLine.Text</type>
+      <type>OptionSet</type>
+    </type-group>
+    <resources>
+      <code path="index.ts" order="1"/>
+      <platform-library name="React" version="16.14.0" />
+      <platform-library name="Fluent" version="9.68.0" />
+    </resources>
+    <feature-usage>
+      <uses-feature name="Utility" required="true" />
+    </feature-usage>
+  </control>
+</manifest>
+
