@@ -83,22 +83,79 @@ export async function loadPlatformLibraries(resources: ManifestResources): Promi
     }
   }
 
-  // Set up Fluent UI stub
+  // Set up Fluent UI — try real UMD via /__pcf/fluent-cdn first, fall back to stub.
   const fluentLib = libs.find(l => l.name === 'Fluent');
   if (fluentLib) {
-    // Deployed/extracted controls often have manifests that declare one Fluent
-    // version but the bundle imports a different versioned global (e.g. manifest
-    // says 8.29.0 but bundle imports FluentUIReactv940). Set up ALL known
-    // versioned globals against the same stub so the bundle finds what it wants
-    // regardless of manifest drift.
-    const stub = createFluentStub(w);
-    const globalNames = ['FluentUIReactv940', 'FluentUIReactv8290', 'FluentUIReactv81211'];
-    console.log(`[pcf-workbench] Fluent setup: manifest declares v${fluentLib.version} — exposing ${globalNames.join(', ')}`);
-    for (const name of globalNames) {
-      if (!w[name]) w[name] = stub;
-      else console.warn(`[pcf-workbench] Fluent UI global window.${name} already exists — keeping existing.`);
+    const real = await tryLoadRealFluent(fluentLib.version);
+    if (real) {
+      // Real UMD loaded — alias whatever canonical global it exposed under all
+      // versioned names so bundles find the version they expect (manifest drift).
+      const major = fluentLib.version.split('.')[0] === '9' ? 'v9' : 'v8';
+      const canonical = major === 'v9' ? 'FluentUIReactv940' : 'FluentUIReact';
+      const aliasNames = [
+        'FluentUIReact', 'FluentUIReactv940', 'FluentUIReactv946',
+        'FluentUIReactv8290', 'FluentUIReactv81211',
+      ];
+      const fluentNs = w[canonical];
+      for (const name of aliasNames) {
+        if (!w[name]) w[name] = fluentNs;
+      }
+      console.log(`[pcf-workbench] Fluent ${major} ${fluentLib.version} loaded from /__pcf/fluent-cdn — aliased under ${aliasNames.join(', ')}`);
+    } else {
+      // CDN unavailable (offline, npm install failed, etc.) — fall back to lightweight
+      // stub. ConformanceTester and other in-tree samples don't declare Fluent so this
+      // path normally only runs for deployed controls.
+      const stub = createFluentStub(w);
+      const globalNames = ['FluentUIReactv940', 'FluentUIReactv8290', 'FluentUIReactv81211'];
+      console.warn(`[pcf-workbench] Fluent setup: real UMD unavailable, falling back to stub — exposing ${globalNames.join(', ')}`);
+      for (const name of globalNames) {
+        if (!w[name]) w[name] = stub;
+        else console.warn(`[pcf-workbench] Fluent UI global window.${name} already exists — keeping existing.`);
+      }
     }
   }
+}
+
+/**
+ * Try to load a real Fluent UMD via the /__pcf/fluent-cdn middleware. Returns
+ * true if a script with `__pcfwbReal` marker becomes available on window, false
+ * otherwise (network failure, build failure, marker missing). Safe to call from
+ * any browser context — never throws.
+ */
+async function tryLoadRealFluent(version: string): Promise<boolean> {
+  const w = window as any;
+  const major = version.split('.')[0] === '9' ? 'v9' : 'v8';
+  const canonical = major === 'v9' ? 'FluentUIReactv940' : 'FluentUIReact';
+
+  // Already loaded by a previous control switch?
+  if (w.__pcfwbFluentReal?.[major] && w[canonical]) return true;
+
+  const url = `/__pcf/fluent-cdn/${major}/${version}/bundle.js`;
+  console.log(`[pcf-workbench] Fluent: requesting real UMD ${url} (first request may take 10-60s for npm install + esbuild)`);
+
+  return new Promise<boolean>(resolve => {
+    const existing = document.querySelector(`script[data-pcf-fluent-cdn="${major}-${version}"]`);
+    if (existing) {
+      // Another loader is already in flight — re-check after a tick.
+      setTimeout(() => resolve(!!(w.__pcfwbFluentReal?.[major] && w[canonical])), 100);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = url;
+    s.setAttribute('data-pcf-fluent-cdn', `${major}-${version}`);
+    s.onload = () => {
+      if (w.__pcfwbFluentReal?.[major] && w[canonical]) resolve(true);
+      else {
+        console.warn(`[pcf-workbench] Fluent CDN script loaded but window.${canonical} or marker missing.`);
+        resolve(false);
+      }
+    };
+    s.onerror = () => {
+      console.warn(`[pcf-workbench] Fluent CDN load failed for ${url}. Falling back to stub.`);
+      resolve(false);
+    };
+    document.head.appendChild(s);
+  });
 }
 
 function createFluentStub(w: any) {

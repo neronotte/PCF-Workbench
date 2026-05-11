@@ -64,5 +64,8 @@ harness/__visual__/last-failure.png
 samples/_extracted/
 harness/.pcf-extracted/
 
+# M9.P2 — on-demand Fluent UMD cache (npm install + esbuild output, never commit)
+harness/.fluent-cache/
+
 # Playwright MCP scratch (interactive browser session artifacts)
 .playwright-mcp/
