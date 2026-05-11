@@ -351,6 +351,11 @@ export class ControlHost {
 
   async reload(): Promise<void> {
     if (!this.container) return;
+    // Bump the global reload epoch BEFORE destroying. This invalidates the
+    // live page-record cache so the auto-fetch hook re-pulls from Dataverse
+    // on the next render — gives the user a "Reload always means fresh data"
+    // contract without needing a separate "Fetch record" button.
+    this.getState().bumpReloadEpoch();
     this.destroy();
     this.resourceTracker = new ResourceTracker();
     this.getState().resetMetrics();

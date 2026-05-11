@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   makeStyles, tokens, Tab, TabList, Switch, Label, Button, Divider, Dropdown, Option,
 } from '@fluentui/react-components';
@@ -6,7 +6,7 @@ import {
   PlugConnected24Regular, Phone24Regular, TopSpeed24Regular,
   Settings24Regular, WeatherMoon24Regular, WeatherSunny24Regular,
   Database24Regular, Beaker24Regular, Play24Regular, Person24Regular,
-  Form24Regular, Shield24Regular, ArrowClockwise20Regular,
+  Form24Regular, Shield24Regular, ArrowClockwise20Regular, Globe16Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore, DEVICE_PRESETS, SHIM_PROFILE_LABELS, type ShimProfile } from '../store/harness-store';
 import { ControlViewport } from './panels/ControlViewport';
@@ -22,7 +22,9 @@ import { UserSettingsPanel } from './panels/UserSettingsPanel';
 import { FormPanel } from './panels/FormPanel';
 import { FormChrome } from './panels/FormChrome';
 import { AppNotificationBanner } from './AppNotificationBanner';
+import { LiveReauthBanner } from './LiveReauthBanner';
 import { CoveragePanel } from './panels/CoveragePanel';
+import { useLivePageRecord } from '../loader/use-live-page-record';
 import type { ManifestConfig } from '../types/manifest';
 
 const useStyles = makeStyles({
@@ -132,6 +134,24 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
   const shimProfile = useHarnessStore(s => s.shimProfile);
   const setShimProfile = useHarnessStore(s => s.setShimProfile);
   const reloadControl = useHarnessStore(s => s.reloadControl);
+  const dataSource = useHarnessStore(s => s.dataSource);
+  const liveProfile = useHarnessStore(s => s.liveProfile);
+
+  // Auto-fetch the live page record when in Live mode. Re-runs on profile,
+  // page id, or reloadEpoch change. See use-live-page-record for details.
+  useLivePageRecord();
+
+  // When the user toggles Mock <-> Live, treat it as a profile switch and
+  // re-init the control. Skip the very first render so we don't double-load
+  // on mount, and skip if the reload callback isn't wired yet (the control
+  // host registers it after init completes).
+  const lastDataSourceRef = useRef(dataSource);
+  useEffect(() => {
+    if (lastDataSourceRef.current !== dataSource) {
+      lastDataSourceRef.current = dataSource;
+      reloadControl?.();
+    }
+  }, [dataSource, reloadControl]);
 
   const devicePreset = useHarnessStore(s => s.devicePreset);
   const renderCount = useHarnessStore(s => s.renderCount);
@@ -173,6 +193,26 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         <span style={{ fontWeight: 600, fontSize: 13, letterSpacing: 0.2 }}>
           {manifest.namespace}.{manifest.constructor}
         </span>
+
+        {/* Live mode pill — visible only when dataSource === 'live' so users
+            never lose sight of the fact that fetches hit a real org. */}
+        {dataSource === 'live' && (
+          <span
+            data-test-id="live-pill"
+            title={liveProfile ? `Live: ${liveProfile.user} @ ${liveProfile.orgUrl}` : 'Live mode (no profile selected)'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+              padding: '2px 8px', borderRadius: 10,
+              color: '#ff9aa2',
+              backgroundColor: 'rgba(255, 80, 80, 0.25)',
+              border: '1px solid rgba(255, 80, 80, 0.5)',
+            }}
+          >
+            <Globe16Regular style={{ width: 12, height: 12 }} />
+            LIVE{liveProfile ? `: ${liveProfile.friendlyName}` : ''}
+          </span>
+        )}
 
         {/* Status badges */}
         {networkBadge && (
@@ -262,6 +302,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         <div className={styles.mainPanel}>
           <div className={styles.viewportArea}>
             <AppNotificationBanner />
+            <LiveReauthBanner />
             <FormChrome entityTypeName={pageEntityTypeName}>
               <ControlViewport manifest={manifest} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} />
             </FormChrome>

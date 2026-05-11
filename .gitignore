@@ -56,3 +56,6 @@ samples/**/generated/
 harness/test-results/
 harness/playwright-report/
 harness/__visual__/last-failure.png
+
+# M2 auth/CORS spike (disposable, do not commit)
+.spike/

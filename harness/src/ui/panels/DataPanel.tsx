@@ -1,11 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   makeStyles, tokens, Button, Badge, Textarea, MessageBar, MessageBarBody, Checkbox,
+  Radio, RadioGroup, Dropdown, Option, Spinner, Label, Input,
 } from '@fluentui/react-components';
-import { ArrowClockwise24Regular, Save24Regular } from '@fluentui/react-icons';
-import { useHarnessStore } from '../../store/harness-store';
-import { loadEntityData, getEntityData } from '../../store/data-store';
+import { ArrowClockwise24Regular, Save24Regular, Globe16Regular } from '@fluentui/react-icons';
+import { useHarnessStore, type DataSource, type PublicProfile } from '../../store/harness-store';
+import { loadEntityData } from '../../store/data-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
+import { listProfiles, DvProxyError } from '../../api/dv-client';
 
 const useStyles = makeStyles({
   root: {
@@ -77,6 +79,49 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
   },
+  modeBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '8px',
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  liveOnline: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorPaletteRedForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  pageCtxBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '8px',
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  pageCtxField: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  pageCtxLabel: {
+    fontSize: tokens.fontSizeBase200,
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: '8px',
+  },
+  pageCtxHint: {
+    fontFamily: "'Consolas', monospace",
+    fontSize: '10px',
+    color: tokens.colorNeutralForeground4,
+  },
 });
 
 interface DataSummary {
@@ -90,11 +135,239 @@ function getDataSummary(): DataSummary {
   return { tables: [], totalRecords: 0 };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Page Context — identifies the record the harness is "sitting on".          */
+/* Drives Mock lookup (via getEntityData) AND Live page-record auto-fetch.    */
+/* Lives on the Data tab (not Properties) because conceptually it's part of   */
+/* the data source, not control configuration.                                */
+/* -------------------------------------------------------------------------- */
+
+function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
+  const styles = useStyles();
+  const dataSource = useHarnessStore(s => s.dataSource);
+  const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
+  const pageEntityId = useHarnessStore(s => s.pageEntityId);
+  const pageEntityRecordName = useHarnessStore(s => s.pageEntityRecordName);
+  const setPageEntityTypeName = useHarnessStore(s => s.setPageEntityTypeName);
+  const setPageEntityId = useHarnessStore(s => s.setPageEntityId);
+  const setPageEntityRecordName = useHarnessStore(s => s.setPageEntityRecordName);
+  const livePageRecordError = useHarnessStore(s => s.livePageRecordError);
+
+  // In Mock mode the entity-type list comes from data.json; in Live mode
+  // it's free-text (any logical name resolvable via EntityDefinitions).
+  const showDropdown = dataSource === 'mock' && mockTableNames.length > 0;
+  const isLive = dataSource === 'live';
+
+  return (
+    <div className={styles.pageCtxBlock} data-test-id="page-context-block">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className={styles.header}>Page context</span>
+        <span className={styles.info} style={{ marginLeft: 'auto' }}>
+          context.page / context.mode.contextInfo
+        </span>
+      </div>
+      <div className={styles.pageCtxField}>
+        <div className={styles.pageCtxLabel}>
+          <span>Entity type name</span>
+          <span className={styles.pageCtxHint}>page.entityTypeName</span>
+        </div>
+        {showDropdown ? (
+          <Dropdown
+            size="small"
+            placeholder="Select entity type"
+            selectedOptions={pageEntityTypeName ? [pageEntityTypeName] : []}
+            value={pageEntityTypeName}
+            onOptionSelect={(_, d) => setPageEntityTypeName(d.optionValue ?? '')}
+          >
+            <Option value="" text="">— None —</Option>
+            {mockTableNames.map(t => (
+              <Option key={t} value={t} text={t}>{t}</Option>
+            ))}
+          </Dropdown>
+        ) : (
+          <Input
+            size="small"
+            placeholder={isLive ? 'e.g. contact' : 'e.g. msdyn_workorderservicetask'}
+            value={pageEntityTypeName}
+            onChange={(_, d) => setPageEntityTypeName(d.value)}
+          />
+        )}
+      </div>
+      <div className={styles.pageCtxField}>
+        <div className={styles.pageCtxLabel}>
+          <span>Entity ID</span>
+          <span className={styles.pageCtxHint}>page.entityId</span>
+        </div>
+        <Input
+          size="small"
+          placeholder="Record GUID"
+          value={pageEntityId}
+          onChange={(_, d) => setPageEntityId(d.value)}
+          data-test-id="page-context-entity-id"
+        />
+        {isLive && livePageRecordError && pageEntityTypeName && pageEntityId && (
+          <MessageBar intent="error" data-test-id="page-context-error" style={{ marginTop: 4 }}>
+            <MessageBarBody>{livePageRecordError}</MessageBarBody>
+          </MessageBar>
+        )}
+      </div>
+      <div className={styles.pageCtxField}>
+        <div className={styles.pageCtxLabel}>
+          <span>Entity record name</span>
+          <span className={styles.pageCtxHint}>
+            {isLive ? 'auto-derived from PrimaryNameAttribute' : 'contextInfo.entityRecordName'}
+          </span>
+        </div>
+        <Input
+          size="small"
+          placeholder={isLive ? 'Populates after successful fetch' : 'Record name'}
+          value={pageEntityRecordName}
+          onChange={(_, d) => setPageEntityRecordName(d.value)}
+          readOnly={isLive}
+          disabled={isLive}
+        />
+      </div>
+      {isLive && pageEntityTypeName && pageEntityId && !livePageRecordError && (
+        <div className={styles.info} style={{ marginTop: 4 }}>
+          Auto-fetches from Dataverse on Reload.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Live mode subpanel                                                          */
+/* -------------------------------------------------------------------------- */
+
+function LiveModeControls() {
+  const liveProfile = useHarnessStore(s => s.liveProfile);
+  const liveProfiles = useHarnessStore(s => s.liveProfiles);
+  const setLiveProfile = useHarnessStore(s => s.setLiveProfile);
+  const setLiveProfiles = useHarnessStore(s => s.setLiveProfiles);
+  const setReauth = useHarnessStore(s => s.setPacReauthRequired);
+  const reloadControl = useHarnessStore(s => s.reloadControl);
+  const addLogEntry = useHarnessStore(s => s.addLogEntry);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { profiles, current } = await listProfiles();
+      setLiveProfiles(profiles);
+      addLogEntry({ category: 'data', method: 'listProfiles', args: { count: profiles.length } });
+      // Restore last-used org from localStorage, else current PAC profile.
+      let chosen: PublicProfile | null = null;
+      try {
+        const last = localStorage.getItem('pcf.liveOrgUrl');
+        if (last) chosen = profiles.find(p => p.orgUrl === last) ?? null;
+      } catch { /* ignore */ }
+      if (!chosen && current) {
+        chosen = profiles.find(p => p.orgUrl === current) ?? null;
+      }
+      if (!chosen && profiles.length > 0) chosen = profiles[0];
+      // Only auto-select if nothing is currently selected.
+      if (!liveProfile && chosen) setLiveProfile(chosen);
+    } catch (e) {
+      const msg = e instanceof DvProxyError
+        ? `${e.body.error}: ${e.body.message}`
+        : (e as Error).message;
+      setError(msg);
+      addLogEntry({ category: 'data', method: 'listProfiles.error', args: { message: msg } });
+    } finally {
+      setLoading(false);
+    }
+  }, [setLiveProfiles, setLiveProfile, addLogEntry, liveProfile]);
+
+  // Lazy-load on first mount of Live controls.
+  useEffect(() => {
+    if (liveProfiles.length === 0 && !loading) {
+      void refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onSelect = useCallback((orgUrl: string) => {
+    const profile = liveProfiles.find(p => p.orgUrl === orgUrl) ?? null;
+    setLiveProfile(profile);
+    setReauth(null);
+    reloadControl?.();
+  }, [liveProfiles, setLiveProfile, setReauth, reloadControl]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Dropdown
+          size="small"
+          placeholder="Select PAC profile…"
+          value={liveProfile?.friendlyName ?? ''}
+          selectedOptions={liveProfile ? [liveProfile.orgUrl] : []}
+          onOptionSelect={(_, d) => onSelect(d.optionValue ?? '')}
+          disabled={loading || liveProfiles.length === 0}
+          style={{ flex: 1, minWidth: 0 }}
+          data-test-id="live-profile-dropdown"
+        >
+          {liveProfiles.map(p => (
+            <Option key={p.orgUrl} value={p.orgUrl} text={p.friendlyName}>
+              {p.friendlyName}
+              {p.isCurrent ? ' (current)' : ''}
+            </Option>
+          ))}
+        </Dropdown>
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={loading ? <Spinner size="tiny" /> : <ArrowClockwise24Regular />}
+          onClick={() => void refresh()}
+          disabled={loading}
+          title="Re-list PAC profiles (pac auth list)"
+          aria-label="Refresh profiles"
+        />
+      </div>
+
+      {liveProfile && (
+        <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3, lineHeight: 1.4 }}>
+          <div><strong>User:</strong> {liveProfile.user}</div>
+          <div><strong>Org:</strong> <code style={{ fontSize: 10 }}>{liveProfile.orgUrl}</code></div>
+          {liveProfile.environmentType && (
+            <div><strong>Environment:</strong> {liveProfile.environmentType}{liveProfile.environmentGeo ? ` · ${liveProfile.environmentGeo}` : ''}</div>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <MessageBar intent="error">
+          <MessageBarBody>{error}</MessageBarBody>
+        </MessageBar>
+      )}
+
+      {liveProfiles.length === 0 && !loading && !error && (
+        <MessageBar intent="warning">
+          <MessageBarBody>
+            No PAC profiles found. Run <code>pac auth create --url &lt;your-org&gt;</code> in a terminal, then click refresh.
+          </MessageBarBody>
+        </MessageBar>
+      )}
+
+      <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3 }}>
+        Live mode: read-only via <code>context.webAPI.retrieveRecord</code> /{' '}
+        <code>retrieveMultipleRecords</code>. Writes throw until M2.P3.
+      </div>
+    </div>
+  );
+}
+
 export function DataPanel() {
   const styles = useStyles();
   const addLogEntry = useHarnessStore(s => s.addLogEntry);
   const rebaseEnabled = useHarnessStore(s => s.rebaseDatesToToday);
   const setRebaseEnabled = useHarnessStore(s => s.setRebaseDatesToToday);
+  const dataSource = useHarnessStore(s => s.dataSource);
+  const setDataSource = useHarnessStore(s => s.setDataSource);
+  const reloadControl = useHarnessStore(s => s.reloadControl);
   const [tables, setTables] = useState<{ name: string; records: any[] }[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [editJson, setEditJson] = useState('');
@@ -162,80 +435,120 @@ export function DataPanel() {
 
   return (
     <div className={styles.root}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span className={styles.header}>Mock Data</span>
-        <Button
-          appearance="subtle"
-          icon={<ArrowClockwise24Regular />}
-          size="small"
-          onClick={loadData}
-          title="Reload data.json"
-        />
+      <div className={styles.modeBlock}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className={styles.header}>Data source</span>
+          {dataSource === 'live' && (
+            <span className={styles.liveOnline}>
+              <Globe16Regular />
+              LIVE
+            </span>
+          )}
+          <span style={{ flex: 1 }} />
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<ArrowClockwise24Regular />}
+            onClick={() => reloadControl?.()}
+            disabled={!reloadControl}
+            title="Reload control (full destroy + init + updateView)"
+            data-test-id="data-panel-reload"
+          >
+            Reload
+          </Button>
+        </div>
+        <RadioGroup
+          value={dataSource}
+          onChange={(_, d) => setDataSource(d.value as DataSource)}
+          layout="horizontal"
+          data-test-id="data-source-radio"
+        >
+          <Radio value="mock" label="Mock (data.json)" />
+          <Radio value="live" label="Live (PAC)" />
+        </RadioGroup>
+        {dataSource === 'live' && <LiveModeControls />}
       </div>
 
-      <Checkbox
-        checked={rebaseEnabled}
-        onChange={(_, d) => setRebaseEnabled(!!d.checked)}
-        label="Rebase dates to today"
-        style={{ marginBottom: 4 }}
-      />
+      <PageContextBlock mockTableNames={tables.map(t => t.name)} />
 
-      {tables.length === 0 && loaded && (
-        <div className={styles.info}>
-          No data.json found. Create one in the control directory:
-          <pre style={{ fontSize: 10, marginTop: 4, whiteSpace: 'pre-wrap' }}>
+      {dataSource === 'mock' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className={styles.header}>Mock Data</span>
+            <Button
+              appearance="subtle"
+              icon={<ArrowClockwise24Regular />}
+              size="small"
+              onClick={loadData}
+              title="Reload data.json"
+            />
+          </div>
+
+          <Checkbox
+            checked={rebaseEnabled}
+            onChange={(_, d) => setRebaseEnabled(!!d.checked)}
+            label="Rebase dates to today"
+            style={{ marginBottom: 4 }}
+          />
+
+          {tables.length === 0 && loaded && (
+            <div className={styles.info}>
+              No data.json found. Create one in the control directory:
+              <pre style={{ fontSize: 10, marginTop: 4, whiteSpace: 'pre-wrap' }}>
 {`{
   "tableName": [
     { "id": "...", "name": "..." }
   ]
 }`}
-          </pre>
-        </div>
-      )}
-
-      <div className={styles.tableList}>
-        {tables.map(t => (
-          <div
-            key={t.name}
-            className={`${styles.tableItem} ${selectedTable === t.name ? styles.tableItemActive : ''}`}
-            onClick={() => handleSelectTable(t.name)}
-          >
-            <span className={styles.tableName}>{t.name}</span>
-            <Badge appearance="filled" color={selectedTable === t.name ? 'subtle' : 'informative'} size="small">
-              {t.records.length}
-            </Badge>
-          </div>
-        ))}
-      </div>
-
-      {selectedTable && (
-        <div className={styles.editorArea}>
-          <div className={styles.editorHeader}>
-            <span style={{ fontWeight: 600 }}>{selectedTable}</span>
-            <span className={styles.info}>({tables.find(t => t.name === selectedTable)?.records.length} records)</span>
-            <span style={{ flex: 1 }} />
-            <Button
-              appearance="primary"
-              icon={<Save24Regular />}
-              size="small"
-              onClick={handleSaveTable}
-            >
-              Apply
-            </Button>
-          </div>
-          {editError && (
-            <MessageBar intent="error">
-              <MessageBarBody>{editError}</MessageBarBody>
-            </MessageBar>
+              </pre>
+            </div>
           )}
-          <Textarea
-            className={styles.textarea}
-            value={editJson}
-            onChange={(_, d) => setEditJson(d.value)}
-            resize="none"
-            style={{ minHeight: 150, flex: 1 }}
-          />
-        </div>
+
+          <div className={styles.tableList}>
+            {tables.map(t => (
+              <div
+                key={t.name}
+                className={`${styles.tableItem} ${selectedTable === t.name ? styles.tableItemActive : ''}`}
+                onClick={() => handleSelectTable(t.name)}
+              >
+                <span className={styles.tableName}>{t.name}</span>
+                <Badge appearance="filled" color={selectedTable === t.name ? 'subtle' : 'informative'} size="small">
+                  {t.records.length}
+                </Badge>
+              </div>
+            ))}
+          </div>
+
+          {selectedTable && (
+            <div className={styles.editorArea}>
+              <div className={styles.editorHeader}>
+                <span style={{ fontWeight: 600 }}>{selectedTable}</span>
+                <span className={styles.info}>({tables.find(t => t.name === selectedTable)?.records.length} records)</span>
+                <span style={{ flex: 1 }} />
+                <Button
+                  appearance="primary"
+                  icon={<Save24Regular />}
+                  size="small"
+                  onClick={handleSaveTable}
+                >
+                  Apply
+                </Button>
+              </div>
+              {editError && (
+                <MessageBar intent="error">
+                  <MessageBarBody>{editError}</MessageBarBody>
+                </MessageBar>
+              )}
+              <Textarea
+                className={styles.textarea}
+                value={editJson}
+                onChange={(_, d) => setEditJson(d.value)}
+                resize="none"
+                style={{ minHeight: 150, flex: 1 }}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

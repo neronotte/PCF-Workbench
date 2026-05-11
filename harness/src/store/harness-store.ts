@@ -75,6 +75,30 @@ export interface ResourceLeak {
 
 export type NetworkMode = 'online' | 'offline' | 'slow3g' | 'fast3g' | 'custom';
 
+/* -------------------------------------------------------------------------- */
+/* Live Dataverse (M2)                                                        */
+/* -------------------------------------------------------------------------- */
+
+export type DataSource = 'mock' | 'live';
+
+/** Public-shape PAC profile, mirrored from the Vite plugin's
+ *  `dataverse-proxy.ts`. Tokens never reach the browser. */
+export interface PublicProfile {
+  user: string;
+  orgUrl: string;
+  tenantId: string;
+  authority: string;
+  friendlyName: string;
+  environmentType: string | null;
+  environmentGeo: string | null;
+  isCurrent: boolean;
+}
+
+export interface PacReauthState {
+  /** Org URL that needs `pac auth create --url <org>`. */
+  org: string;
+}
+
 export interface DatasetSortStatus {
   name: string;
   sortDirection: 0 | 1; // 0 = ascending, 1 = descending
@@ -244,6 +268,46 @@ export interface HarnessStore {
   // Data loading options
   rebaseDatesToToday: boolean;
   setRebaseDatesToToday: (enabled: boolean) => void;
+
+  // Live Dataverse (M2.P1)
+  /** 'mock' (default) reads data.json; 'live' routes WebAPI through the
+   *  Vite plugin proxy to the user's Dataverse org via PAC auth. */
+  dataSource: DataSource;
+  /** Currently selected PAC profile (org), or null if Live mode hasn't been
+   *  initialised yet. */
+  liveProfile: PublicProfile | null;
+  /** Cached profile list from `/__pcf/dv/profiles`, refreshed on demand. */
+  liveProfiles: PublicProfile[];
+  /** Cached EntitySetName per logical entity name (e.g. contact -> contacts).
+   *  Session-only; not persisted across reloads. */
+  entitySetCache: Record<string, string>;
+  /** Cached page record(s) fetched from the live org, keyed by logical entity
+   *  name. Populated by the live page-record auto-fetch hook; cleared by
+   *  `clearLiveCache` and on every control reload via `bumpReloadEpoch`. */
+  liveRecordCache: Record<string, Record<string, any>>;
+  /** Increments on every `ControlHost.reload()`. The live page-record hook
+   *  watches this so user-driven reloads (top-bar Reload, FormChrome refresh,
+   *  bundle hot reload, etc.) implicitly re-fetch from Dataverse — no
+   *  separate "fetch record" button required. */
+  reloadEpoch: number;
+  /** When set, the proxy returned 401 pac-reauth-required for `org`; the UI
+   *  should surface a banner with the `pac auth create` instruction. */
+  pacReauthRequired: PacReauthState | null;
+  /** When set, the live page-record auto-fetch failed for the current
+   *  (entity, id). Surfaced inline in the Page Context block. Cleared on
+   *  successful re-fetch, on dataSource/profile change, and on control
+   *  reload (via bumpReloadEpoch). */
+  livePageRecordError: string | null;
+  setDataSource: (source: DataSource) => void;
+  setLiveProfile: (profile: PublicProfile | null) => void;
+  setLiveProfiles: (profiles: PublicProfile[]) => void;
+  setEntitySetName: (logicalName: string, entitySetName: string) => void;
+  clearEntitySetCache: () => void;
+  cacheLiveRecord: (entityType: string, record: Record<string, any>) => void;
+  clearLiveCache: () => void;
+  bumpReloadEpoch: () => void;
+  setPacReauthRequired: (state: PacReauthState | null) => void;
+  setLivePageRecordError: (msg: string | null) => void;
 }
 
 let nextLogId = 1;
@@ -499,4 +563,76 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   // Data loading options
   rebaseDatesToToday: true,
   setRebaseDatesToToday: (enabled) => set({ rebaseDatesToToday: enabled }),
+
+  // Live Dataverse (M2.P1) — dataSource + liveProfile.orgUrl persisted to
+  // localStorage so the dev's last setup survives reloads. Profile metadata
+  // is re-fetched from /__pcf/dv/profiles on each session.
+  dataSource: (() => {
+    try {
+      const v = typeof localStorage !== 'undefined' ? localStorage.getItem('pcf.dataSource') : null;
+      if (v === 'live') return 'live' as DataSource;
+    } catch { /* ignore */ }
+    return 'mock' as DataSource;
+  })(),
+  liveProfile: null,
+  liveProfiles: [],
+  entitySetCache: {},
+  liveRecordCache: {},
+  reloadEpoch: 0,
+  pacReauthRequired: null,
+  livePageRecordError: null,
+  setDataSource: (source) => {
+    try { localStorage.setItem('pcf.dataSource', source); } catch { /* ignore */ }
+    // Switching modes invalidates cached EntitySetNames and live records
+    // (different org may have different schema / data) and any stale
+    // reauth flag. Bump dataVersion so bound properties re-resolve.
+    set(s => ({
+      dataSource: source,
+      entitySetCache: {},
+      liveRecordCache: {},
+      pacReauthRequired: null,
+      livePageRecordError: null,
+      dataVersion: s.dataVersion + 1,
+    }));
+  },
+  setLiveProfile: (profile) => {
+    try {
+      if (profile?.orgUrl) {
+        localStorage.setItem('pcf.liveOrgUrl', profile.orgUrl);
+      } else {
+        localStorage.removeItem('pcf.liveOrgUrl');
+      }
+    } catch { /* ignore */ }
+    // Profile change → drop EntitySetName + live record cache (different
+    // org schema). Bump dataVersion so any in-flight render sees empty.
+    set(s => ({
+      liveProfile: profile,
+      entitySetCache: {},
+      liveRecordCache: {},
+      livePageRecordError: null,
+      dataVersion: s.dataVersion + 1,
+    }));
+  },
+  setLiveProfiles: (profiles) => set({ liveProfiles: profiles }),
+  setEntitySetName: (logicalName, entitySetName) => set(s => ({
+    entitySetCache: { ...s.entitySetCache, [logicalName]: entitySetName },
+  })),
+  clearEntitySetCache: () => set({ entitySetCache: {} }),
+  cacheLiveRecord: (entityType, record) => set(s => ({
+    liveRecordCache: { ...s.liveRecordCache, [entityType]: record },
+    dataVersion: s.dataVersion + 1,
+  })),
+  clearLiveCache: () => set(s => ({
+    liveRecordCache: {},
+    dataVersion: s.dataVersion + 1,
+  })),
+  bumpReloadEpoch: () => set(s => ({
+    reloadEpoch: s.reloadEpoch + 1,
+    // Reload always invalidates the live cache so the next render re-fetches.
+    liveRecordCache: {},
+    livePageRecordError: null,
+    dataVersion: s.dataVersion + 1,
+  })),
+  setPacReauthRequired: (state) => set({ pacReauthRequired: state }),
+  setLivePageRecordError: (msg) => set({ livePageRecordError: msg }),
 }));

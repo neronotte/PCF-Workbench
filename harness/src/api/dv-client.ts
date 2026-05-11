@@ -1,0 +1,327 @@
+/**
+ * Browser-side client for the Vite plugin's Dataverse proxy.
+ *
+ * Talks to `/__pcf/dv/*` (same-origin) — never directly to the org.
+ * Reads the per-session secret from `<meta name="pcf-session">` injected by
+ * the dataverse-security plugin; the proxy rejects requests without it.
+ *
+ * Adapts live OData responses (`{ value, "@odata.nextLink" }`) to the
+ * existing offline shim contract (`{ entities, nextLink }`) so that the
+ * rest of the harness UI keeps working unchanged regardless of dataSource.
+ */
+
+import { useHarnessStore, type PublicProfile } from '../store/harness-store';
+import { loadMetadata, getEntityMetadata } from '../store/metadata-store';
+
+const PROXY_BASE = '/__pcf/dv';
+
+let sessionSecretCache: string | null = null;
+
+function getSessionSecret(): string {
+  if (sessionSecretCache) return sessionSecretCache;
+  if (typeof document === 'undefined') {
+    throw new Error('dv-client: document not available (server-side render?)');
+  }
+  const meta = document.querySelector('meta[name="pcf-session"]');
+  const value = meta?.getAttribute('content') ?? '';
+  if (!value) {
+    throw new Error(
+      'dv-client: <meta name="pcf-session"> not found on the page. ' +
+        'Is the dataverse-security plugin enabled?',
+    );
+  }
+  sessionSecretCache = value;
+  return value;
+}
+
+function buildHeaders(extra?: Record<string, string>): Record<string, string> {
+  return {
+    Accept: 'application/json',
+    'x-pcf-session': getSessionSecret(),
+    ...extra,
+  };
+}
+
+export interface ProxyErrorBody {
+  error: string;
+  message: string;
+  meta?: Record<string, unknown>;
+}
+
+export class DvProxyError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: ProxyErrorBody,
+  ) {
+    super(`[${status}] ${body.error}: ${body.message}`);
+    this.name = 'DvProxyError';
+  }
+}
+
+async function parseError(res: Response): Promise<DvProxyError> {
+  let body: ProxyErrorBody;
+  try {
+    body = (await res.json()) as ProxyErrorBody;
+  } catch {
+    body = { error: 'upstream-error', message: `HTTP ${res.status} ${res.statusText}` };
+  }
+  return new DvProxyError(res.status, body);
+}
+
+function maybeFlagReauth(err: DvProxyError, orgUrl: string): void {
+  if (err.body.error === 'pac-reauth-required' || err.body.error === 'pac-profile-missing') {
+    useHarnessStore.getState().setPacReauthRequired({ org: orgUrl });
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Profile listing                                                             */
+/* -------------------------------------------------------------------------- */
+
+export interface ProfileListResponse {
+  profiles: PublicProfile[];
+  current: string | null;
+}
+
+export async function listProfiles(): Promise<ProfileListResponse> {
+  const res = await fetch(`${PROXY_BASE}/profiles`, { headers: buildHeaders() });
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as ProfileListResponse;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Raw GET                                                                     */
+/* -------------------------------------------------------------------------- */
+
+export async function dvGet<T = unknown>(orgUrl: string, path: string, prefer?: string): Promise<T> {
+  const sep = path.includes('?') ? '&' : '?';
+  const url = `${PROXY_BASE}${path}${sep}org=${encodeURIComponent(orgUrl)}`;
+  const headers = buildHeaders(prefer ? { Prefer: prefer } : undefined);
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const err = await parseError(res);
+    maybeFlagReauth(err, orgUrl);
+    throw err;
+  }
+  useHarnessStore.getState().setPacReauthRequired(null);
+  return (await res.json()) as T;
+}
+
+/* -------------------------------------------------------------------------- */
+/* OData response adapter                                                      */
+/* -------------------------------------------------------------------------- */
+
+interface ODataValueResponse<T = Record<string, unknown>> {
+  value: T[];
+  '@odata.nextLink'?: string;
+  '@odata.count'?: number;
+}
+
+export interface AdaptedMultiResponse {
+  entities: Record<string, unknown>[];
+  nextLink?: string;
+  totalRecordCount?: number;
+}
+
+export function adaptMultiResponse(raw: ODataValueResponse): AdaptedMultiResponse {
+  return {
+    entities: raw.value ?? [],
+    nextLink: raw['@odata.nextLink'],
+    totalRecordCount: raw['@odata.count'],
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Entity set name resolver                                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface EntityResolved {
+  entitySetName: string;
+  primaryNameAttribute?: string;
+  primaryIdAttribute?: string;
+}
+
+const entityMetaInflight = new Map<string, Promise<EntityResolved>>();
+
+/**
+ * Resolve the OData EntitySetName + PrimaryName/PrimaryId attributes for a
+ * Dataverse logical entity name. Cached in `entitySetCache` (single string-
+ * shaped slot per entity for back-compat: serialised JSON if extra fields
+ * are present). Falls back to `${logicalName}s` on any failure so a single
+ * 401/403 doesn't poison the rest of the session.
+ */
+export async function resolveEntityMetadata(orgUrl: string, logicalName: string): Promise<EntityResolved> {
+  const cache = useHarnessStore.getState().entitySetCache;
+  const cached = cache[logicalName];
+  if (cached) {
+    if (cached.startsWith('{')) {
+      try { return JSON.parse(cached) as EntityResolved; } catch { /* fall through */ }
+    }
+    return { entitySetName: cached };
+  }
+
+  const inflight = entityMetaInflight.get(logicalName);
+  if (inflight) return inflight;
+
+  const path = `/api/data/v9.2/EntityDefinitions(LogicalName='${encodeURIComponent(logicalName)}')`
+    + `?$select=EntitySetName,PrimaryNameAttribute,PrimaryIdAttribute`;
+  const p = (async () => {
+    try {
+      const r = await dvGet<{ EntitySetName?: string; PrimaryNameAttribute?: string; PrimaryIdAttribute?: string }>(orgUrl, path);
+      const resolved: EntityResolved = {
+        entitySetName: r.EntitySetName ?? `${logicalName}s`,
+        primaryNameAttribute: r.PrimaryNameAttribute,
+        primaryIdAttribute: r.PrimaryIdAttribute,
+      };
+      useHarnessStore.getState().setEntitySetName(logicalName, JSON.stringify(resolved));
+      return resolved;
+    } catch (e) {
+      useHarnessStore.getState().addLogEntry({
+        category: 'webAPI',
+        method: 'live.resolveEntityMetadata.fallback',
+        args: { logicalName, error: (e as Error).message },
+      });
+      const fallback: EntityResolved = { entitySetName: `${logicalName}s` };
+      useHarnessStore.getState().setEntitySetName(logicalName, fallback.entitySetName);
+      return fallback;
+    } finally {
+      entityMetaInflight.delete(logicalName);
+    }
+  })();
+  entityMetaInflight.set(logicalName, p);
+  return p;
+}
+
+export async function resolveEntitySetName(orgUrl: string, logicalName: string): Promise<string> {
+  return (await resolveEntityMetadata(orgUrl, logicalName)).entitySetName;
+}
+
+/* -------------------------------------------------------------------------- */
+/* High-level retrieve helpers used by the live web-api shim                   */
+/* -------------------------------------------------------------------------- */
+
+export async function liveRetrieveMultiple(
+  orgUrl: string,
+  logicalEntity: string,
+  options: string | undefined,
+  maxPageSize: number | undefined,
+): Promise<AdaptedMultiResponse> {
+  const setName = await resolveEntitySetName(orgUrl, logicalEntity);
+  const query = options
+    ? options.startsWith('?') ? options : `?${options}`
+    : '';
+  const path = `/api/data/v9.2/${setName}${query}`;
+  const prefer = maxPageSize ? `odata.maxpagesize=${maxPageSize}` : undefined;
+  const raw = await dvGet<ODataValueResponse>(orgUrl, path, prefer);
+  return adaptMultiResponse(raw);
+}
+
+export async function liveRetrieveSingle(
+  orgUrl: string,
+  logicalEntity: string,
+  id: string,
+  options: string | undefined,
+): Promise<Record<string, unknown>> {
+  const setName = await resolveEntitySetName(orgUrl, logicalEntity);
+  const normalId = id.replace(/[{}]/g, '');
+  const query = options
+    ? options.startsWith('?') ? options : `?${options}`
+    : '';
+  const path = `/api/data/v9.2/${setName}(${normalId})${query}`;
+  return await dvGet<Record<string, unknown>>(orgUrl, path);
+}
+
+/**
+ * Fetch the current page record from Dataverse with no $select / $expand —
+ * driven by the harness page-record auto-fetch hook so bound properties
+ * (resolved sync via `getEntityData`) can populate from a real org record.
+ *
+ * Returns the raw OData record with `@odata.*` annotations preserved so the
+ * existing `resolveColumnValue` path picks up `@OData.Community.Display.V1.FormattedValue`
+ * and `_<lookup>_value` shapes.
+ */
+export async function liveRetrievePageRecord(
+  orgUrl: string,
+  logicalEntity: string,
+  id: string,
+): Promise<{ record: Record<string, any>; primaryName: string | null }> {
+  const meta = await resolveEntityMetadata(orgUrl, logicalEntity);
+  // Fire attribute-metadata fetch in parallel with the record fetch — we
+  // don't await it because record rendering doesn't strictly need it (display
+  // names + types are progressive enhancement). Errors are logged and ignored.
+  void ensureLiveAttributeMetadata(orgUrl, logicalEntity);
+  const normalId = id.replace(/[{}]/g, '');
+  const record = await dvGet<Record<string, any>>(orgUrl, `/api/data/v9.2/${meta.entitySetName}(${normalId})`);
+  const primaryName = meta.primaryNameAttribute && record[meta.primaryNameAttribute] != null
+    ? String(record[meta.primaryNameAttribute])
+    : null;
+  return { record, primaryName };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Attribute-metadata fetcher (DisplayName + AttributeType)                    */
+/* -------------------------------------------------------------------------- */
+
+const attrMetaInflight = new Map<string, Promise<void>>();
+const attrMetaLoaded = new Set<string>();
+
+/**
+ * Fetch attribute metadata (LogicalName, DisplayName, AttributeType) for a
+ * Dataverse entity in live mode and merge it into the existing metadata
+ * store. The store's `parseDataverseEntity` already understands the
+ * `EntityDefinitions(...)?$expand=Attributes` shape, so we just hand it the
+ * raw response. Idempotent + once-per-entity per session.
+ */
+export async function ensureLiveAttributeMetadata(orgUrl: string, logicalName: string): Promise<void> {
+  // Mock-derived metadata wins — don't overwrite if a data.json already
+  // populated this entity. Only fetch in live mode.
+  if (useHarnessStore.getState().dataSource !== 'live') return;
+  if (attrMetaLoaded.has(logicalName)) return;
+  if (getEntityMetadata(logicalName)) {
+    attrMetaLoaded.add(logicalName);
+    return;
+  }
+  const inflight = attrMetaInflight.get(logicalName);
+  if (inflight) return inflight;
+
+  const path = `/api/data/v9.2/EntityDefinitions(LogicalName='${encodeURIComponent(logicalName)}')`
+    + `?$select=LogicalName,DisplayName`
+    + `&$expand=Attributes($select=LogicalName,DisplayName,AttributeType)`;
+  const p = (async () => {
+    try {
+      const entity = await dvGet<any>(orgUrl, path);
+      // parseDataverseEntity expects a single entity object (not the $value wrapper).
+      loadMetadata({ [logicalName]: entity });
+      attrMetaLoaded.add(logicalName);
+      useHarnessStore.getState().addLogEntry({
+        category: 'webAPI',
+        method: 'live.attributeMetadata.ok',
+        args: { logicalName, attributes: Array.isArray(entity?.Attributes) ? entity.Attributes.length : 0 },
+      });
+      // Bump dataVersion so any in-flight render picks up the new display
+      // names and column types (esp. duration formatting).
+      useHarnessStore.setState(s => ({ dataVersion: s.dataVersion + 1 }));
+    } catch (e) {
+      useHarnessStore.getState().addLogEntry({
+        category: 'webAPI',
+        method: 'live.attributeMetadata.error',
+        args: { logicalName, error: (e as Error).message },
+      });
+    } finally {
+      attrMetaInflight.delete(logicalName);
+    }
+  })();
+  attrMetaInflight.set(logicalName, p);
+  return p;
+}
+
+/** Test seam: clear in-process attribute-metadata caches. */
+export function __clearLiveAttributeMetadataCache(): void {
+  attrMetaInflight.clear();
+  attrMetaLoaded.clear();
+}
+
+export const __test__ = {
+  PROXY_BASE,
+  adaptMultiResponse,
+};

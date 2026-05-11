@@ -273,6 +273,7 @@ export function FormChrome({ entityTypeName, children }: Props) {
   const enabled = useHarnessStore(s => s.formChromeEnabled);
   const isDarkMode = useHarnessStore(s => s.isDarkMode);
   const reloadControl = useHarnessStore(s => s.reloadControl);
+  const dataSource = useHarnessStore(s => s.dataSource);
 
   // Subscribe to form-store version for entity header + tabs + dirty state.
   useSyncExternalStore(
@@ -321,7 +322,15 @@ export function FormChrome({ entityTypeName, children }: Props) {
 
   return (
     <FluentProvider theme={isDarkMode ? webDarkTheme : webLightTheme} className={styles.providerRoot}>
-      <div className={styles.root}>
+      <div
+        className={styles.root}
+        data-live={dataSource === 'live' ? 'true' : undefined}
+        style={dataSource === 'live' ? {
+          // 1px red ring tells the dev "anything you see here came from a real org".
+          // Inset so it doesn't shift layout vs mock mode.
+          boxShadow: 'inset 0 0 0 1px #d13438',
+        } : undefined}
+      >
       <div className={styles.header} data-test-id="form-chrome-header">
         <div className={styles.entityIcon} aria-hidden>{initials}</div>
         <div className={styles.headerText}>

@@ -1,5 +1,6 @@
 import type { HarnessStore } from '../store/harness-store';
 import { getEntityMetadata as getMetadataEntry } from '../store/metadata-store';
+import { resolveEntitySetName } from '../api/dv-client';
 import { pushDialog, type LookupDialogRequest } from './dialog-bus';
 
 export function createUtilsShim(getState: () => HarnessStore) {
@@ -7,7 +8,7 @@ export function createUtilsShim(getState: () => HarnessStore) {
     getState().addLogEntry({ category: 'utils', method, args });
 
   return {
-    getEntityMetadata(entityName: string, attributes?: string[]): Promise<any> {
+    async getEntityMetadata(entityName: string, attributes?: string[]): Promise<any> {
       log('getEntityMetadata', { entityName, attributes });
 
       const meta = getMetadataEntry(entityName);
@@ -27,9 +28,23 @@ export function createUtilsShim(getState: () => HarnessStore) {
         ? matched.map(([logical, col]) => buildAttribute(logical, col))
         : (attributes ?? []).map(a => buildAttribute(a));
 
-      return Promise.resolve({
+      // EntitySetName: in live mode, ask Dataverse via /EntityDefinitions
+      // (cached per-session) so we get the correct plural for entities like
+      // opportunity → opportunities and any custom table. In mock mode the
+      // legacy `<logical>s` heuristic is fine because data.json keys match.
+      const state = getState();
+      let entitySetName = `${entityName}s`;
+      if (state.dataSource === 'live' && state.liveProfile) {
+        try {
+          entitySetName = await resolveEntitySetName(state.liveProfile.orgUrl, entityName);
+        } catch {
+          // Fall back to the heuristic; resolveEntitySetName already logged it.
+        }
+      }
+
+      return {
         LogicalName: entityName,
-        EntitySetName: entityName + 's',
+        EntitySetName: entitySetName,
         DisplayName: meta?.displayName ?? entityName,
         PrimaryIdAttribute: entityName + 'id',
         PrimaryNameAttribute: 'name',
@@ -42,7 +57,7 @@ export function createUtilsShim(getState: () => HarnessStore) {
             return buildAttribute(name, col);
           },
         },
-      });
+      };
     },
     hasEntityPrivilege(
       _entityTypeName: string,

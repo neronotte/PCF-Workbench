@@ -71,6 +71,39 @@ Full mock implementation of the PCF Context interface:
 - Watches `out/controls/*/bundle.js` for changes
 - When you rebuild the PCF project (`npm run build`), the harness auto-destroys and re-initialises the control
 
+### Live Dataverse Mode (M2.P1, Windows-only, read-only)
+
+Switch the **Data** panel from **Mock** to **Live** to point `context.webAPI.retrieveRecord` and `retrieveMultipleRecords` at a real Dataverse org instead of `data.json`. Useful for verifying a control against production-shape data, FormattedValue annotations, lookup logical names, and large/edge-case rowsets.
+
+**Setup (one-time, per org):**
+```powershell
+# In a regular terminal — PAC owns the interactive sign-in flow.
+pac auth create --url https://<yourorg>.crm.dynamics.com
+```
+
+**Usage:**
+1. Start the harness as normal (`npx vite --port 8181`).
+2. Open the **Data** panel → click **Live (PAC)**.
+3. Pick a profile from the dropdown (auto-selected from your last choice or `pac auth select`).
+4. The control re-initialises automatically; the top bar shows a red **🌐 LIVE: \<org\>** pill and the form chrome gets a 1px red border.
+
+**Limits in P1:**
+- **Read-only.** `createRecord` / `updateRecord` / `deleteRecord` throw — writes unlock in M2.P3.
+- **Windows-only.** Reads PAC's MSAL token cache via DPAPI (`%LOCALAPPDATA%\Microsoft\PowerAppsCli\tokencache_msalv3.dat`). macOS / Linux support is M2-future.
+- **No on-disk response cache.** Each call hits the org. Caching arrives in M2.P2.
+- If your PAC token expired, the harness shows a click-to-copy `pac auth create --url <org>` banner. Run it in a terminal, then click **Retry**.
+
+**How it works:**
+- A Vite plugin (`harness/src/vite-plugin/dataverse-proxy.ts`) reads PAC's profile list (`authprofiles_v2.json`) and the encrypted MSAL cache, exposes a per-session-secret-gated proxy at `/__pcf/dv/*`, and forwards browser GET requests to `<orgUrl>/api/data/v9.2/...` with a fresh access token attached server-side.
+- **No Dataverse access tokens ever reach the browser** — the access token lives in the Node process for the duration of a single fetch.
+- Origin/Host allowlist (localhost / 127.0.0.1 only) plus a per-session secret injected via `<meta name="pcf-session">` block any other process on the dev box from hitting the proxy.
+
+**Security notes:**
+- The proxy binds to `127.0.0.1` and refuses requests from other Origins.
+- The per-session secret rotates on every `vite dev` restart.
+- Server logs are `[dv-proxy] METHOD PATH → STATUS BYTES` only — no tokens, no request/response bodies, no PII.
+- Annotation `Prefer` header (`FormattedValue`, `lookuplogicalname`, `associatednavigationproperty`) is always added so live responses match the shape model-driven controls expect.
+
 ## Project Files
 
 ### Control-Side Files

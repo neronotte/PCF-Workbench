@@ -544,15 +544,11 @@ export function PropertyEditor({ manifest }: Props) {
   const styles = useStyles();
   const pageEntityId = useHarnessStore(s => s.pageEntityId);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
-  const pageEntityRecordName = useHarnessStore(s => s.pageEntityRecordName);
-  const setPageEntityId = useHarnessStore(s => s.setPageEntityId);
-  const setPageEntityTypeName = useHarnessStore(s => s.setPageEntityTypeName);
-  const setPageEntityRecordName = useHarnessStore(s => s.setPageEntityRecordName);
 
-  // Get available entity types from data.json
-  const entityTypes = useMemo(() => getEntityStoreKeys(), []);
-
-  // Get columns for the selected entity type
+  // Get columns for the selected entity type. The page context selectors
+  // (entity type / id / record name) live on the Data tab — see PageContextBlock
+  // in DataPanel.tsx. PropertyEditor still needs pageEntityTypeName so the
+  // bound-property dropdowns can show the right column list.
   const entityColumns = useMemo(() => getEntityColumns(pageEntityTypeName), [pageEntityTypeName]);
 
   const boundProps = manifest.properties.filter(p => p.usage === 'bound');
@@ -561,61 +557,6 @@ export function PropertyEditor({ manifest }: Props) {
   return (
     <div className={styles.root}>
       <ControlInfoCard manifest={manifest} />
-
-      {/* Page Context */}
-      <Label size="small" weight="semibold" style={{ opacity: 0.6 }}>Page Context</Label>
-      <div className={styles.field}>
-        <div className={styles.label}>
-          Entity Type Name
-          <span className={styles.typeHint}>context.page.entityTypeName</span>
-        </div>
-        {entityTypes.length > 0 ? (
-          <Dropdown
-            size="small"
-            placeholder="Select entity type"
-            selectedOptions={pageEntityTypeName ? [pageEntityTypeName] : []}
-            value={pageEntityTypeName}
-            onOptionSelect={(_, d) => setPageEntityTypeName(d.optionValue ?? '')}
-          >
-            <Option value="" text="">— None —</Option>
-            {entityTypes.map(t => (
-              <Option key={t} value={t} text={t}>{t}</Option>
-            ))}
-          </Dropdown>
-        ) : (
-          <Input
-            size="small"
-            placeholder="e.g. msdyn_workorderservicetask"
-            value={pageEntityTypeName}
-            onChange={(_, d) => setPageEntityTypeName(d.value)}
-          />
-        )}
-      </div>
-      <div className={styles.field}>
-        <div className={styles.label}>
-          Entity ID
-          <span className={styles.typeHint}>context.page.entityId</span>
-        </div>
-        <Input
-          size="small"
-          placeholder="Record GUID"
-          value={pageEntityId}
-          onChange={(_, d) => setPageEntityId(d.value)}
-        />
-      </div>
-      <div className={styles.field}>
-        <div className={styles.label}>
-          Entity Record Name
-          <span className={styles.typeHint}>context.mode.contextInfo.entityRecordName</span>
-        </div>
-        <Input
-          size="small"
-          placeholder="Record name"
-          value={pageEntityRecordName}
-          onChange={(_, d) => setPageEntityRecordName(d.value)}
-        />
-      </div>
-      <Divider style={{ margin: '8px 0' }} />
 
       <div className={styles.header}>Properties</div>
 

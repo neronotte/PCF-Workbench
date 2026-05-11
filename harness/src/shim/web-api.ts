@@ -1,6 +1,7 @@
 import type { HarnessStore } from '../store/harness-store';
 import { addEntityRecord, updateEntityRecord, deleteEntityRecord } from '../store/data-store';
 import { getExecuteMock } from '../store/execute-mock-store';
+import { liveRetrieveMultiple, liveRetrieveSingle, DvProxyError } from '../api/dv-client';
 
 const NETWORK_DELAYS: Record<string, number> = {
   online: 0,
@@ -222,6 +223,11 @@ export function createWebApiShim(
       async createRecord(entityType: string, data: Record<string, any>): Promise<any> {
         const start = performance.now();
         log(`${prefix}createRecord`, { entityType, data });
+        if (getState().dataSource === 'live') {
+          throw new Error(
+            'Live writes are not supported in M2.P1 (read-only). Writes unlock in M2.P3.',
+          );
+        }
         await applyNetworkConditions(mode);
         const record = addEntityRecord(entityType, { ...data });
         const idField = Object.keys(record).find(k => k.toLowerCase().endsWith('id') || k === 'id') ?? 'id';
@@ -237,6 +243,11 @@ export function createWebApiShim(
       async deleteRecord(entityType: string, id: string): Promise<any> {
         const start = performance.now();
         log(`${prefix}deleteRecord`, { entityType, id });
+        if (getState().dataSource === 'live') {
+          throw new Error(
+            'Live writes are not supported in M2.P1 (read-only). Writes unlock in M2.P3.',
+          );
+        }
         await applyNetworkConditions(mode);
         deleteEntityRecord(entityType, id);
         getState().addWebApiCall({
@@ -249,6 +260,11 @@ export function createWebApiShim(
       async updateRecord(entityType: string, id: string, data: Record<string, any>): Promise<any> {
         const start = performance.now();
         log(`${prefix}updateRecord`, { entityType, id, data });
+        if (getState().dataSource === 'live') {
+          throw new Error(
+            'Live writes are not supported in M2.P1 (read-only). Writes unlock in M2.P3.',
+          );
+        }
         await applyNetworkConditions(mode);
         updateEntityRecord(entityType, id, data);
         getState().addWebApiCall({
@@ -265,6 +281,44 @@ export function createWebApiShim(
       ): Promise<{ entities: Record<string, any>[]; nextLink?: string }> {
         const start = performance.now();
         log(`${prefix}retrieveMultipleRecords`, { entityType, options, maxPageSize });
+
+        // ---- Live branch ---------------------------------------------------
+        const state = getState();
+        if (state.dataSource === 'live') {
+          const profile = state.liveProfile;
+          if (!profile) {
+            const err = 'Live mode requires a selected PAC profile (Data panel → Live → pick org).';
+            getState().addWebApiCall({
+              method: `${prefix}retrieveMultipleRecords`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, options, error: err,
+            });
+            throw new Error(err);
+          }
+          try {
+            const adapted = await liveRetrieveMultiple(profile.orgUrl, entityType, options, maxPageSize);
+            const duration = performance.now() - start;
+            const size = estimateSize(adapted);
+            log(`${prefix}retrieveMultipleRecords.live`, {
+              entityType, count: adapted.entities.length, durationMs: Math.round(duration), sizeBytes: size,
+            });
+            getState().addWebApiCall({
+              method: `${prefix}retrieveMultipleRecords`, entityType, durationMs: duration,
+              responseSize: size, recordCount: adapted.entities.length, options,
+            });
+            return { entities: adapted.entities as Record<string, any>[], nextLink: adapted.nextLink };
+          } catch (e) {
+            const err = e instanceof DvProxyError
+              ? `[live] ${e.body.error}: ${e.body.message}`
+              : (e as Error).message;
+            getState().addWebApiCall({
+              method: `${prefix}retrieveMultipleRecords`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, options, error: err,
+            });
+            throw e;
+          }
+        }
+
+        // ---- Mock branch (existing behaviour, unchanged) -------------------
         await applyNetworkConditions(mode);
 
         let entities = getEntityData(entityType);
@@ -319,6 +373,42 @@ export function createWebApiShim(
       ): Promise<Record<string, any>> {
         const start = performance.now();
         log(`${prefix}retrieveRecord`, { entityType, id, options });
+
+        // ---- Live branch ---------------------------------------------------
+        const state = getState();
+        if (state.dataSource === 'live') {
+          const profile = state.liveProfile;
+          if (!profile) {
+            const err = 'Live mode requires a selected PAC profile (Data panel → Live → pick org).';
+            getState().addWebApiCall({
+              method: `${prefix}retrieveRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, options, error: err,
+            });
+            throw new Error(err);
+          }
+          try {
+            const record = await liveRetrieveSingle(profile.orgUrl, entityType, id, options);
+            const duration = performance.now() - start;
+            const size = estimateSize(record);
+            log(`${prefix}retrieveRecord.live`, { entityType, id, durationMs: Math.round(duration), sizeBytes: size }, record);
+            getState().addWebApiCall({
+              method: `${prefix}retrieveRecord`, entityType, durationMs: duration,
+              responseSize: size, recordCount: 1, options,
+            });
+            return record as Record<string, any>;
+          } catch (e) {
+            const err = e instanceof DvProxyError
+              ? `[live] ${e.body.error}: ${e.body.message}`
+              : (e as Error).message;
+            getState().addWebApiCall({
+              method: `${prefix}retrieveRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, options, error: err,
+            });
+            throw e;
+          }
+        }
+
+        // ---- Mock branch (existing behaviour, unchanged) -------------------
         await applyNetworkConditions(mode);
 
         const all = getEntityData(entityType);

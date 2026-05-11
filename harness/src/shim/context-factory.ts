@@ -62,10 +62,41 @@ function buildProperty(prop: ManifestProperty, rawValue: any, boundColumn?: stri
   const isDuration = columnType === 'Integer' && boundColumn &&
     (boundColumn === 'duration' || boundColumn.endsWith('duration'));
 
+  // Format duration minutes as "Nd Nh Nm" (matches UCI Duration display).
+  // 0 → "0 minutes", 90 → "1 hour 30 minutes", 1500 → "1 day 1 hour".
+  function formatDurationMinutes(mins: number): string {
+    if (!Number.isFinite(mins) || mins < 0) return String(mins);
+    if (mins === 0) return '0 minutes';
+    const d = Math.floor(mins / 1440);
+    const h = Math.floor((mins % 1440) / 60);
+    const m = mins % 60;
+    const parts: string[] = [];
+    if (d) parts.push(`${d} day${d === 1 ? '' : 's'}`);
+    if (h) parts.push(`${h} hour${h === 1 ? '' : 's'}`);
+    if (m) parts.push(`${m} minute${m === 1 ? '' : 's'}`);
+    return parts.join(' ');
+  }
+
+  // Default formatted: best-effort sync stringify. Special-cased per-type below.
+  let baseFormatted = '';
+  if (rawValue != null) {
+    if (isDuration && typeof rawValue === 'number') {
+      baseFormatted = formatDurationMinutes(rawValue);
+    } else if (Array.isArray(rawValue) && rawValue[0]?.name) {
+      // LookupValue[] — use the lookup name
+      baseFormatted = String(rawValue[0].name);
+    } else if (typeof rawValue === 'object') {
+      // Avoid raw "[object Object]" when something slips through as an object.
+      baseFormatted = '';
+    } else {
+      baseFormatted = String(rawValue);
+    }
+  }
+
   const base = {
     error: false,
     errorMessage: '',
-    formatted: rawValue != null ? String(rawValue) : '',
+    formatted: baseFormatted,
     type: prop.ofType,
     attributes: {
       LogicalName: boundColumn || prop.name,

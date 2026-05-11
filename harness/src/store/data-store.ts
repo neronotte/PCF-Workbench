@@ -2,7 +2,14 @@
  * In-memory entity data store.
  * Loaded from data.json in the PCF project directory (if present).
  * Falls back to empty collections.
+ *
+ * In Live mode (M2.P1), reads are first served from
+ * `useHarnessStore.liveRecordCache` (one record per logical entity, fetched
+ * from the user's PAC-authenticated org). Writes still go to the in-memory
+ * mock store — Live writes throw at the WebAPI shim layer in P1.
  */
+
+import { useHarnessStore } from './harness-store';
 
 let entityStore: Record<string, Record<string, any>[]> = {};
 const listeners = new Set<() => void>();
@@ -17,10 +24,23 @@ export function loadEntityData(data: Record<string, any[]>): void {
 }
 
 export function getEntityData(entityType: string): Record<string, any>[] {
+  // In live mode, prefer the cached page record for this entity type. If it
+  // hasn't been fetched yet (or fetch errored) the array is empty — bound
+  // properties resolve to null and the control re-renders once the fetch
+  // completes and bumps dataVersion.
+  const s = useHarnessStore.getState();
+  if (s.dataSource === 'live') {
+    const cached = s.liveRecordCache[entityType];
+    return cached ? [cached] : [];
+  }
   return entityStore[entityType] ?? [];
 }
 
 export function getEntityStoreKeys(): string[] {
+  // Live mode: surface entity names that currently have a cached record so
+  // dataset fallbacks can find them.
+  const s = useHarnessStore.getState();
+  if (s.dataSource === 'live') return Object.keys(s.liveRecordCache);
   return Object.keys(entityStore);
 }
 
