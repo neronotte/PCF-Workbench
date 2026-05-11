@@ -46,22 +46,57 @@ export async function loadPlatformLibraries(resources: ManifestResources): Promi
     w[reactGlobal] = w.React;
     w[reactDomGlobal] = w.ReactDOM;
     console.log(`[pcf-workbench] React ${major} aliased: window.${reactGlobal}, window.${reactDomGlobal}`);
+
+    // Deployed bundles compiled against Fluent v8/v9 reference React via versioned
+    // globals like Reactv940 / Reactv8290 (the React instance bundled with that
+    // Fluent version), not window.React. Alias the loaded React under all known
+    // versioned globals so bundles find what they expect regardless of manifest drift.
+    const versionedReactGlobals = ['Reactv16', 'Reactv17', 'Reactv18', 'Reactv940', 'Reactv8290', 'Reactv81211'];
+    const versionedReactDomGlobals = ['ReactDOMv16', 'ReactDOMv17', 'ReactDOMv18', 'ReactDOMv940', 'ReactDOMv8290', 'ReactDOMv81211'];
+    for (const name of versionedReactGlobals) if (!w[name]) w[name] = w.React;
+    for (const name of versionedReactDomGlobals) if (!w[name]) w[name] = w.ReactDOM;
+
+    // Polyfill React 18-only APIs that Fluent v9 controls expect even on React 16/17.
+    // The platform (UCI) provides similar polyfills implicitly; deployed bundles assume
+    // they exist. Without these, controls crash on first render with cryptic errors.
+    if (typeof w.React.useId !== 'function') {
+      let _idCounter = 0;
+      w.React.useId = () => w.React.useMemo(() => `:pcfwb-${(_idCounter++).toString(36)}:`, []);
+      console.log(`[pcf-workbench] Polyfilled React.useId for compatibility with Fluent v9`);
+    }
+    if (typeof w.React.useSyncExternalStore !== 'function') {
+      // Minimal polyfill — sufficient for Fluent v9's internal use
+      w.React.useSyncExternalStore = (subscribe: any, getSnapshot: any) => {
+        const [value, setValue] = w.React.useState(getSnapshot());
+        w.React.useEffect(() => {
+          const handler = () => setValue(getSnapshot());
+          handler();
+          return subscribe(handler);
+        }, [subscribe, getSnapshot]);
+        return value;
+      };
+      console.log(`[pcf-workbench] Polyfilled React.useSyncExternalStore`);
+    }
+    if (typeof w.React.useInsertionEffect !== 'function') {
+      w.React.useInsertionEffect = w.React.useLayoutEffect ?? w.React.useEffect;
+      console.log(`[pcf-workbench] Polyfilled React.useInsertionEffect → useLayoutEffect`);
+    }
   }
 
   // Set up Fluent UI stub
   const fluentLib = libs.find(l => l.name === 'Fluent');
   if (fluentLib) {
-    const [major, minor, patch] = fluentLib.version.split('.').map(Number);
-    const globalName = major >= 9
-      ? 'FluentUIReactv940'
-      : (minor <= 29 && patch <= 0) ? 'FluentUIReactv8290' : 'FluentUIReactv81211';
-
-    console.log(`[pcf-workbench] Fluent setup: version=${fluentLib.version}, globalName=${globalName}, alreadyExists=${!!w[globalName]}`);
-    if (!w[globalName]) {
-      console.log(`[pcf-workbench] Fluent UI v${fluentLib.version} — stub as window.${globalName}`);
-      w[globalName] = createFluentStub(w);
-    } else {
-      console.warn(`[pcf-workbench] Fluent UI global window.${globalName} already exists — skipping stub. Dialog shim will NOT be active.`);
+    // Deployed/extracted controls often have manifests that declare one Fluent
+    // version but the bundle imports a different versioned global (e.g. manifest
+    // says 8.29.0 but bundle imports FluentUIReactv940). Set up ALL known
+    // versioned globals against the same stub so the bundle finds what it wants
+    // regardless of manifest drift.
+    const stub = createFluentStub(w);
+    const globalNames = ['FluentUIReactv940', 'FluentUIReactv8290', 'FluentUIReactv81211'];
+    console.log(`[pcf-workbench] Fluent setup: manifest declares v${fluentLib.version} — exposing ${globalNames.join(', ')}`);
+    for (const name of globalNames) {
+      if (!w[name]) w[name] = stub;
+      else console.warn(`[pcf-workbench] Fluent UI global window.${name} already exists — keeping existing.`);
     }
   }
 }
@@ -688,6 +723,73 @@ function createFluentStub(w: any) {
       });
     },
   };
+
+  // Common Fluent v9 hooks that bundles import. Provide minimal working stubs
+  // so deployed controls don't crash on first render.
+  let _hookIdCounter = 0;
+  const fluentHooks: Record<string, any> = {
+    useId: (prefix?: string) => {
+      const R = getReact();
+      if (!R) return `:fluent-${(_hookIdCounter++).toString(36)}:`;
+      return R.useMemo(() => `${prefix ?? ':fluent'}-${(_hookIdCounter++).toString(36)}:`, []);
+    },
+    useFluent: () => ({ targetDocument: typeof document !== 'undefined' ? document : undefined, dir: 'ltr', theme: v9WebLightTheme }),
+    useFluent_unstable: () => ({ targetDocument: typeof document !== 'undefined' ? document : undefined, dir: 'ltr', theme: v9WebLightTheme }),
+    useThemeClassName_unstable: () => '',
+    useTheme: () => v9WebLightTheme,
+    useArrowNavigationGroup: () => ({}),
+    useFocusableGroup: () => ({}),
+    useFocusFinders: () => ({ findFirstFocusable: () => null, findLastFocusable: () => null, findAllFocusable: () => [] }),
+    useTabster: () => null,
+    useFocusVisible: () => ({}),
+    useFocusWithin: () => () => {},
+    useMergedRefs: (...refs: any[]) => (instance: any) => {
+      for (const ref of refs) {
+        if (typeof ref === 'function') ref(instance);
+        else if (ref && typeof ref === 'object') ref.current = instance;
+      }
+    },
+    useEventCallback: (fn: any) => {
+      const R = getReact();
+      if (!R) return fn;
+      const ref = R.useRef(fn);
+      R.useLayoutEffect ? R.useLayoutEffect(() => { ref.current = fn; }) : (ref.current = fn);
+      return R.useCallback((...args: any[]) => ref.current?.(...args), []);
+    },
+    useFirstMount: () => false,
+    useIsomorphicLayoutEffect: (fn: any, deps: any) => {
+      const R = getReact();
+      if (!R) return;
+      (R.useLayoutEffect ?? R.useEffect)(fn, deps);
+    },
+    useControllableState: (opts: any) => {
+      const R = getReact();
+      if (!R) return [opts?.defaultState, () => {}];
+      const [state, setState] = R.useState(opts?.state !== undefined ? opts.state : (typeof opts?.defaultState === 'function' ? opts.defaultState() : opts?.defaultState));
+      return [opts?.state !== undefined ? opts.state : state, setState];
+    },
+    useOnClickOutside: () => {},
+    useOnScrollOutside: () => {},
+    canUseDOM: typeof document !== 'undefined',
+    isHTMLElement: (x: any) => typeof HTMLElement !== 'undefined' && x instanceof HTMLElement,
+    elementContains: (parent: any, child: any) => parent?.contains?.(child) ?? false,
+    getNativeElementProps: (tag: string, props: any, excludedProps: any[] = []) => {
+      const out: any = {};
+      for (const k in props) if (!excludedProps.includes(k)) out[k] = props[k];
+      return out;
+    },
+    getIntrinsicElementProps: (tag: string, props: any, excludedProps: any[] = []) => {
+      const out: any = {};
+      for (const k in props) if (!excludedProps.includes(k)) out[k] = props[k];
+      return out;
+    },
+    getSlots: (state: any) => ({ slots: state?.components ?? {}, slotProps: state ?? {} }),
+    getSlotsNext: (state: any) => ({ slots: state?.components ?? {}, slotProps: state ?? {} }),
+    resolveShorthand: (value: any) => (value == null ? undefined : (typeof value === 'object' ? value : { children: value })),
+    slot: { always: (v: any) => v, optional: (v: any) => v },
+    mergeCallbacks: (...cbs: any[]) => (...args: any[]) => { for (const cb of cbs) cb?.(...args); },
+  };
+  Object.assign(allExports, fluentHooks);
 
   // Merge: v9 tokens/styles first, then v9 dialog components, then DataGrid family.
   // v9 Dialog component handles both v8 (hidden prop) and v9 (open prop).

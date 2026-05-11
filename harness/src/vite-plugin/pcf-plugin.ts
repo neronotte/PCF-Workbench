@@ -219,7 +219,16 @@ export function pcfPlugin(): Plugin {
 
       // Inject React UMD scripts BEFORE everything else so globals exist
       // when the PCF bundle loads
-      const reactLib = libs.find(l => l.name === 'React');
+      let reactLib = libs.find(l => l.name === 'React');
+
+      // M9 / extracted controls: deployed manifests often only declare Fluent,
+      // but the bundle still references the React global because pcf-scripts
+      // externalizes React in production builds. UCI provides React implicitly.
+      // If Fluent is declared without React, infer React 16 (Fluent v9 baseline).
+      if (!reactLib && libs.some(l => l.name === 'Fluent')) {
+        reactLib = { name: 'React', version: '16.14.0' };
+      }
+
       if (reactLib) {
         const major = reactLib.version.split('.')[0];
         if (major === '16') {

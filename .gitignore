@@ -59,3 +59,10 @@ harness/__visual__/last-failure.png
 
 # M2 auth/CORS spike (disposable, do not commit)
 .spike/
+
+# M9 — extracted controls cache (disposable, never commit)
+samples/_extracted/
+harness/.pcf-extracted/
+
+# Playwright MCP scratch (interactive browser session artifacts)
+.playwright-mcp/
