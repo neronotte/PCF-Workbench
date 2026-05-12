@@ -45,4 +45,13 @@ export interface ManifestResources {
   code: { path: string; order: number }[];
   css: { path: string; order: number }[];
   platformLibraries: { name: string; version: string }[];
+  /**
+   * Fluent UI majors actually referenced by the compiled bundle (detected by
+   * scanning bundle.js for FluentUIReactv<N> globals). Populated by the Vite
+   * plugin in `loadControl`, not by the manifest parser. Used by
+   * `loadPlatformLibraries` to load the real Fluent UMDs that the bundle
+   * actually imports — which can be a different set from what the manifest
+   * declares (deployed-control "manifest drift").
+   */
+  fluentNeeds?: { v8?: string; v9?: string };
 }

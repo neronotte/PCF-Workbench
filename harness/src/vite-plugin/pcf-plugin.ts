@@ -51,6 +51,69 @@ function resolveOutDir(controlDir: string, manifest: ManifestConfig): string {
   );
 }
 
+/** Pinned defaults when the bundle references a Fluent major that the manifest
+ *  doesn't declare a version for. Keep these on stable, widely-deployed lines —
+ *  Fluent v8 LTS-ish and the v9 release series UCI shipped during M9 testing. */
+const FLUENT_DEFAULT_VERSION: Record<'v8' | 'v9', string> = {
+  v8: '8.121.1',
+  v9: '9.46.0',
+};
+
+/**
+ * Scan the compiled bundle for `FluentUIReactv<digits>` global references and
+ * return the set of Fluent majors needed (with a chosen npm version per major).
+ *
+ * Why this is necessary (M9 finding): a deployed bundle's manifest is not a
+ * reliable source of truth for which Fluent versions it actually imports.
+ * Production controls routinely use v8 utilities (color, styling) alongside
+ * v9 components in the same bundle while the manifest declares only one.
+ *
+ * Version selection rule per major:
+ *   1. If the manifest's Fluent platform-library entry matches this major, use
+ *      that version (best fidelity to what the control was built against).
+ *   2. Otherwise use FLUENT_DEFAULT_VERSION[major].
+ *
+ * Returns undefined if the bundle references no Fluent globals at all.
+ */
+function detectFluentNeeds(
+  outDir: string,
+  manifest: ManifestConfig,
+): { v8?: string; v9?: string } | undefined {
+  const bundlePath = path.join(outDir, 'bundle.js');
+  if (!fs.existsSync(bundlePath)) return undefined;
+  let source: string;
+  try {
+    source = fs.readFileSync(bundlePath, 'utf-8');
+  } catch {
+    return undefined;
+  }
+
+  const matches = source.matchAll(/FluentUIReactv(\d+)/g);
+  const majors = new Set<'v8' | 'v9'>();
+  for (const m of matches) {
+    const lead = m[1][0];
+    if (lead === '8') majors.add('v8');
+    else if (lead === '9') majors.add('v9');
+  }
+  if (majors.size === 0) return undefined;
+
+  const declaredFluent = manifest.resources.platformLibraries.find(l => l.name === 'Fluent');
+  const declaredMajor: 'v8' | 'v9' | null = declaredFluent
+    ? declaredFluent.version.split('.')[0] === '9' ? 'v9' : 'v8'
+    : null;
+
+  const out: { v8?: string; v9?: string } = {};
+  for (const m of majors) {
+    out[m] = (declaredMajor === m && declaredFluent)
+      ? declaredFluent.version
+      : FLUENT_DEFAULT_VERSION[m];
+  }
+  console.log(
+    `[pcf-workbench] Fluent needs (from bundle scan): ${Object.entries(out).map(([k, v]) => `${k}@${v}`).join(', ')}`
+  );
+  return out;
+}
+
 function loadControl(state: PcfPluginState): void {
   if (!state.controlDir) return;
 
@@ -82,6 +145,14 @@ function loadControl(state: PcfPluginState): void {
 
   // CSS files
   state.cssFiles = state.manifest.resources.css.map(c => c.path);
+
+  // M9 — detect Fluent majors actually referenced by the compiled bundle.
+  // Deployed controls routinely mix Fluent v8 and v9: the manifest may declare
+  // only one but the bundle imports both (e.g. v8 color utils + v9 UI). Without
+  // this scan, the loader can only load one major, which leaves the other major's
+  // globals undefined → cryptic runtime crashes (e.g. "undefined.gap" when v8 is
+  // aliased over v9 calls to shorthands.gap).
+  state.manifest.resources.fluentNeeds = detectFluentNeeds(state.outDir, state.manifest);
 
   // RESX — bucketed by LCID parsed from filename like `name.1033.resx`.
   // Files without a 4-digit LCID stem fall into bucket 0 (treated as default).

@@ -83,34 +83,50 @@ export async function loadPlatformLibraries(resources: ManifestResources): Promi
     }
   }
 
-  // Set up Fluent UI — try real UMD via /__pcf/fluent-cdn first, fall back to stub.
+  // Set up Fluent UI — load every major actually referenced by the bundle.
+  //
+  // M9 fix: previously we loaded a single Fluent version (from the manifest)
+  // and aliased it under every versioned global name. That worked for controls
+  // that used only one Fluent line but BROKE deployed controls that mix v8 + v9
+  // (e.g. ColorPicker uses v8 color utils + v9 UI). Calling v9-style APIs like
+  // `FluentUIReactv940.shorthands.gap()` against an aliased v8 namespace blew
+  // up with "Cannot read properties of undefined (reading 'gap')".
+  //
+  // The Vite plugin pre-scans the bundle for FluentUIReactv<N> references and
+  // populates `resources.fluentNeeds` with the majors and versions to load.
+  // We honour that here. If the manifest declares Fluent but the scan didn't
+  // run (older code path / older extracted control) we fall back to a
+  // single-version load.
   const fluentLib = libs.find(l => l.name === 'Fluent');
-  if (fluentLib) {
-    const real = await tryLoadRealFluent(fluentLib.version);
-    if (real) {
-      // Real UMD loaded — alias whatever canonical global it exposed under all
-      // versioned names so bundles find the version they expect (manifest drift).
-      const major = fluentLib.version.split('.')[0] === '9' ? 'v9' : 'v8';
-      const canonical = major === 'v9' ? 'FluentUIReactv940' : 'FluentUIReact';
-      const aliasNames = [
-        'FluentUIReact', 'FluentUIReactv940', 'FluentUIReactv946',
-        'FluentUIReactv8290', 'FluentUIReactv81211',
-      ];
-      const fluentNs = w[canonical];
-      for (const name of aliasNames) {
-        if (!w[name]) w[name] = fluentNs;
-      }
-      console.log(`[pcf-workbench] Fluent ${major} ${fluentLib.version} loaded from /__pcf/fluent-cdn — aliased under ${aliasNames.join(', ')}`);
-    } else {
-      // CDN unavailable (offline, npm install failed, etc.) — fall back to lightweight
-      // stub. ConformanceTester and other in-tree samples don't declare Fluent so this
-      // path normally only runs for deployed controls.
-      const stub = createFluentStub(w);
-      const globalNames = ['FluentUIReactv940', 'FluentUIReactv8290', 'FluentUIReactv81211'];
-      console.warn(`[pcf-workbench] Fluent setup: real UMD unavailable, falling back to stub — exposing ${globalNames.join(', ')}`);
-      for (const name of globalNames) {
-        if (!w[name]) w[name] = stub;
-        else console.warn(`[pcf-workbench] Fluent UI global window.${name} already exists — keeping existing.`);
+  const needs = resources.fluentNeeds;
+  const targets: { major: 'v8' | 'v9'; version: string }[] = [];
+  if (needs?.v8) targets.push({ major: 'v8', version: needs.v8 });
+  if (needs?.v9) targets.push({ major: 'v9', version: needs.v9 });
+  if (targets.length === 0 && fluentLib) {
+    const major: 'v8' | 'v9' = fluentLib.version.split('.')[0] === '9' ? 'v9' : 'v8';
+    targets.push({ major, version: fluentLib.version });
+  }
+
+  if (targets.length > 0) {
+    const results = await Promise.all(
+      targets.map(async t => ({ ...t, ok: await tryLoadRealFluent(t.major, t.version) })),
+    );
+    for (const r of results) {
+      if (r.ok) {
+        console.log(`[pcf-workbench] Fluent ${r.major} ${r.version} loaded from /__pcf/fluent-cdn`);
+      } else {
+        // CDN unavailable for this major (offline, npm install failed, etc.) —
+        // fall back to the lightweight stub for ONLY this major's globals.
+        // Don't touch the other major's globals (they may have loaded fine).
+        const stub = createFluentStub(w);
+        const stubGlobals = r.major === 'v9'
+          ? ['FluentUIReactv940', 'FluentUIReactv946']
+          : ['FluentUIReact', 'FluentUIReactv8290', 'FluentUIReactv81211'];
+        console.warn(`[pcf-workbench] Fluent ${r.major} setup: real UMD unavailable, falling back to stub — exposing ${stubGlobals.join(', ')}`);
+        for (const name of stubGlobals) {
+          if (!w[name]) w[name] = stub;
+          else console.warn(`[pcf-workbench] Fluent UI global window.${name} already exists — keeping existing.`);
+        }
       }
     }
   }
@@ -121,10 +137,13 @@ export async function loadPlatformLibraries(resources: ManifestResources): Promi
  * true if a script with `__pcfwbReal` marker becomes available on window, false
  * otherwise (network failure, build failure, marker missing). Safe to call from
  * any browser context — never throws.
+ *
+ * `major` is supplied by the caller because v8/v9 detection happens at the
+ * scan stage, not from the version string (e.g. a v9 reference may pair with
+ * a manifest-declared v8 version when the bundle mixes both lines).
  */
-async function tryLoadRealFluent(version: string): Promise<boolean> {
+async function tryLoadRealFluent(major: 'v8' | 'v9', version: string): Promise<boolean> {
   const w = window as any;
-  const major = version.split('.')[0] === '9' ? 'v9' : 'v8';
   const canonical = major === 'v9' ? 'FluentUIReactv940' : 'FluentUIReact';
 
   // Already loaded by a previous control switch?

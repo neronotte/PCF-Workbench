@@ -174,6 +174,18 @@ program
     const bundlePath = path.join(bundleDir, 'bundle.js');
     fs.writeFileSync(bundlePath, decodedBundle, 'utf8');
 
+    // M9.P2 — record which Fluent majors the bundle actually references. The
+    // Vite plugin re-detects this at load time too, but persisting it here gives
+    // us traceability ("which deployed controls are v8-only vs v8+v9?") and a
+    // sanity check that extraction captured what the bundle expects.
+    const fluentMajors = new Set<'v8' | 'v9'>();
+    for (const m of decodedBundle.matchAll(/FluentUIReactv(\d+)/g)) {
+      const lead = m[1][0];
+      if (lead === '8') fluentMajors.add('v8');
+      else if (lead === '9') fluentMajors.add('v9');
+    }
+    const requiredFluentMajors = [...fluentMajors].sort();
+
     fs.writeFileSync(
       path.join(outRoot, '.extract-meta.json'),
       JSON.stringify(
@@ -190,12 +202,14 @@ program
           manifestBytes: row.manifest.length,
           bundleBytes: decodedBundle.length,
           bundleWebresourceName: wr.name,
+          requiredFluentMajors,
         },
         null,
         2,
       ),
       'utf8',
     );
+    console.log(`[extract-control]   fluent majors referenced: ${requiredFluentMajors.length ? requiredFluentMajors.join(', ') : '(none)'}`);
 
     console.log(`\n[extract-control] Wrote:`);
     console.log(`  ${path.relative(repoRoot, manifestPath)}`);
