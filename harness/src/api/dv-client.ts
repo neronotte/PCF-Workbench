@@ -321,6 +321,85 @@ export function __clearLiveAttributeMetadataCache(): void {
   attrMetaLoaded.clear();
 }
 
+/* -------------------------------------------------------------------------- */
+/* Extracted-controls API (M9.P2 chunk 3)                                     */
+/* -------------------------------------------------------------------------- */
+
+const EXTRACTED_BASE = '/api/extracted';
+
+export interface ExtractedMeta {
+  extractedAt: string;
+  orgUrl: string;
+  extractedBy: string;
+  customcontrolid: string;
+  deployedName: string;
+  namespace: string;
+  constructor: string;
+  version: string;
+  compatibledatatypes: string | null;
+  manifestBytes: number;
+  bundleBytes: number;
+  bundleWebresourceName: string;
+  requiredFluentMajors: Array<'v8' | 'v9'>;
+}
+
+export interface CachedExtractDto {
+  safe: string;
+  controlDir: string;
+  projectRoot: string;
+  cacheBase: string;
+  meta: ExtractedMeta | null;
+  isComplete: boolean;
+}
+
+export interface ExtractedListResponse {
+  defaultCacheBase: string;
+  extracts: CachedExtractDto[];
+}
+
+export async function listExtractedControls(): Promise<ExtractedListResponse> {
+  const res = await fetch(`${EXTRACTED_BASE}/list`, { headers: buildHeaders() });
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as ExtractedListResponse;
+}
+
+export interface ExtractDeployedRequest {
+  orgUrl: string;
+  controlName: string;
+  outBase?: string;
+}
+
+export interface ExtractDeployedResponse {
+  controlDir: string;
+  projectRoot: string;
+  meta: ExtractedMeta;
+}
+
+export async function extractDeployedControl(
+  req: ExtractDeployedRequest,
+): Promise<ExtractDeployedResponse> {
+  const res = await fetch(`${EXTRACTED_BASE}/extract`, {
+    method: 'POST',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await parseError(res);
+    maybeFlagReauth(err, req.orgUrl);
+    throw err;
+  }
+  return (await res.json()) as ExtractDeployedResponse;
+}
+
+export async function deleteExtractedControl(safe: string, cacheBase?: string): Promise<void> {
+  const res = await fetch(`${EXTRACTED_BASE}/delete`, {
+    method: 'POST',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ safe, cacheBase }),
+  });
+  if (!res.ok) throw await parseError(res);
+}
+
 export const __test__ = {
   PROXY_BASE,
   adaptMultiResponse,

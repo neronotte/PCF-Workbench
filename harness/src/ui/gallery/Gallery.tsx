@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   makeStyles, tokens, Spinner, Badge, Button, Input, MessageBar, MessageBarBody, Switch, Tooltip,
+  TabList, Tab,
 } from '@fluentui/react-components';
 import {
   Search24Regular, ArrowClockwise24Regular, Open24Regular, EyeOff24Regular, Folder24Regular,
 } from '@fluentui/react-icons';
+import { DeployedTab } from './DeployedTab';
 
 const useStyles = makeStyles({
   root: {
@@ -168,6 +170,10 @@ interface GalleryControl {
 
 export function Gallery() {
   const styles = useStyles();
+  const [tab, setTab] = useState<'workspace' | 'deployed'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('tab') === 'deployed' ? 'deployed' : 'workspace';
+  });
   const [controls, setControls] = useState<GalleryControl[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -315,7 +321,7 @@ export function Gallery() {
     } catch { return null; }
   };
 
-  if (loading) {
+  if (loading && tab === 'workspace') {
     return (
       <div className={styles.root}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -383,6 +389,27 @@ export function Gallery() {
         </div>
       </div>
 
+      <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '0 40px', backgroundColor: 'white', borderBottom: `1px solid ${tokens.colorNeutralStroke2}` }}>
+        <TabList
+          selectedValue={tab}
+          onTabSelect={(_, d) => {
+            const next = d.value === 'deployed' ? 'deployed' : 'workspace';
+            setTab(next);
+            const url = new URL(window.location.href);
+            if (next === 'deployed') url.searchParams.set('tab', 'deployed');
+            else url.searchParams.delete('tab');
+            window.history.replaceState({}, '', url.toString());
+          }}
+        >
+          <Tab value="workspace">Workspace</Tab>
+          <Tab value="deployed">Deployed</Tab>
+        </TabList>
+      </div>
+
+      {tab === 'deployed' ? (
+        <DeployedTab />
+      ) : (
+        <>
       <div className={styles.toolbar}>
         <Input
           size="medium"
@@ -538,6 +565,8 @@ export function Gallery() {
         <div style={{ textAlign: 'center', padding: 40, color: tokens.colorNeutralForeground3 }}>
           {search ? `No controls matching "${search}"` : 'No PCF controls found in workspace'}
         </div>
+      )}
+        </>
       )}
     </div>
   );

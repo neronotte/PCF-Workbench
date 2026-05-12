@@ -5,6 +5,15 @@ import { parseManifest } from '../parser/manifest-parser';
 import { parseResx } from '../parser/resx-parser';
 import { scanWorkspace } from '../scanner/workspace-scanner';
 import type { ManifestConfig } from '../types/manifest';
+import {
+  extractDeployedControl,
+  listCachedExtracts,
+  deleteCachedExtract,
+  ExtractError,
+  safeName as extractSafeName,
+} from './extract-control';
+import { getSessionSecret } from './dataverse-security';
+import crypto from 'node:crypto';
 
 const VIRTUAL_ID = 'virtual:pcf-manifest';
 const RESOLVED_ID = '\0' + VIRTUAL_ID;
@@ -378,6 +387,154 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
             res.end(JSON.stringify({ error: err.message }));
           }
         });
+      });
+
+      /* -------------------------------------------------------------------- */
+      /* M9.P2 chunk 3 — extracted-controls API (Gallery "Deployed" tab)      */
+      /* -------------------------------------------------------------------- */
+      // Gated by the per-session `x-pcf-session` secret (same as the dv proxy).
+      // Cache locations:
+      //   1. harness/.pcf-extracted/   — default, set by the CLI + the
+      //      in-process extractor (gitignored).
+      //   2. samples/_extracted/       — legacy location from M9.P1; still
+      //      readable so existing extracts survive the move.
+      const harnessRootForExtracts = process.cwd();
+      const extractCacheBases = [
+        path.join(harnessRootForExtracts, '.pcf-extracted'),
+        path.resolve(harnessRootForExtracts, '..', 'samples', '_extracted'),
+      ];
+      const defaultExtractCacheBase = extractCacheBases[0];
+
+      function checkExtractedSession(req: any, res: any): boolean {
+        const presented = req.headers['x-pcf-session'];
+        const expected = getSessionSecret();
+        if (typeof presented !== 'string') {
+          res.statusCode = 403;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: 'forbidden', message: 'Missing or invalid x-pcf-session header.' }));
+          return false;
+        }
+        const a = Buffer.from(presented, 'utf8');
+        const b = Buffer.from(expected, 'utf8');
+        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+          res.statusCode = 403;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: 'forbidden', message: 'Missing or invalid x-pcf-session header.' }));
+          return false;
+        }
+        return true;
+      }
+
+      server.middlewares.use('/api/extracted', (req, res, next) => {
+        if (!req.url) return next();
+        const urlPath = req.url.split('?')[0];
+        const method = req.method ?? 'GET';
+
+        if (!checkExtractedSession(req, res)) return;
+
+        // GET /api/extracted/list
+        if (method === 'GET' && (urlPath === '/list' || urlPath === '/' || urlPath === '')) {
+          try {
+            const extracts = listCachedExtracts(extractCacheBases);
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-store');
+            res.end(JSON.stringify({ defaultCacheBase: defaultExtractCacheBase, extracts }));
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(JSON.stringify({ error: 'list-failed', message: err.message }));
+          }
+          return;
+        }
+
+        // POST /api/extracted/extract  body: { orgUrl, controlName, outBase? }
+        if (method === 'POST' && urlPath === '/extract') {
+          let body = '';
+          req.on('data', (c: string) => body += c);
+          req.on('end', () => {
+            (async () => {
+              try {
+                const parsed = JSON.parse(body || '{}') as { orgUrl?: string; controlName?: string; outBase?: string };
+                const { orgUrl, controlName } = parsed;
+                if (!orgUrl || !controlName) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                  res.end(JSON.stringify({ error: 'bad-request', message: 'orgUrl and controlName are required.' }));
+                  return;
+                }
+                // Force the cache to one of the recognized bases so we never
+                // accidentally write somewhere arbitrary based on client input.
+                const requestedBase = parsed.outBase ? path.resolve(parsed.outBase) : defaultExtractCacheBase;
+                const allowedBase = extractCacheBases.find(
+                  (b) => path.resolve(b) === requestedBase,
+                ) ?? defaultExtractCacheBase;
+
+                console.log(`[pcf-workbench] Extracting "${controlName}" from ${orgUrl} -> ${allowedBase}`);
+                const result = await extractDeployedControl({
+                  orgUrl,
+                  controlName,
+                  outBase: allowedBase,
+                });
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.setHeader('Cache-Control', 'no-store');
+                res.end(JSON.stringify({
+                  controlDir: result.controlDir,
+                  projectRoot: result.projectRoot,
+                  meta: result.meta,
+                }));
+              } catch (err: any) {
+                if (err instanceof ExtractError) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                  res.end(JSON.stringify({ error: err.code, message: err.message }));
+                } else {
+                  res.statusCode = 500;
+                  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                  res.end(JSON.stringify({ error: 'extract-failed', message: err?.message ?? String(err) }));
+                }
+              }
+            })();
+          });
+          return;
+        }
+
+        // POST /api/extracted/delete  body: { safe, cacheBase? }
+        if (method === 'POST' && urlPath === '/delete') {
+          let body = '';
+          req.on('data', (c: string) => body += c);
+          req.on('end', () => {
+            try {
+              const parsed = JSON.parse(body || '{}') as { safe?: string; cacheBase?: string };
+              const { safe } = parsed;
+              if (!safe || safe !== extractSafeName(safe)) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(JSON.stringify({ error: 'bad-request', message: 'safe must be a sanitized folder name.' }));
+                return;
+              }
+              const requestedBase = parsed.cacheBase ? path.resolve(parsed.cacheBase) : defaultExtractCacheBase;
+              const allowedBase = extractCacheBases.find(
+                (b) => path.resolve(b) === requestedBase,
+              );
+              if (!allowedBase) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(JSON.stringify({ error: 'bad-request', message: 'cacheBase is not a recognized extract cache.' }));
+                return;
+              }
+              deleteCachedExtract(allowedBase, safe);
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ ok: true }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ error: 'delete-failed', message: err?.message ?? String(err) }));
+            }
+          });
+          return;
+        }
+
+        next();
       });
 
       // Watch bundle.js for changes and notify client for hot reload
