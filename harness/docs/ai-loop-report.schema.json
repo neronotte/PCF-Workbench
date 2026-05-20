@@ -1,0 +1,260 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/jaduplesms/PCF-Workbench/harness/docs/ai-loop-report.schema.json",
+  "title": "PCF Workbench AI Build Loop Report",
+  "description": "Deterministic JSON report emitted by `pcf-harness loop`. Agents can diff successive reports to detect regressions and decide on remediation. Path fields use OS-native separators (forward slashes on POSIX, backslashes on Windows) — agents should normalise before comparison.",
+  "type": "object",
+  "required": ["schemaVersion", "runId", "capturedAt", "control", "build", "harness", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "Bumped on breaking changes. Agents must reject reports with an unexpected version."
+    },
+    "runId": {
+      "type": "string",
+      "description": "Opaque, sortable identifier for this run. Format: `<base36-ms>-<random>`."
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp at which the report was written."
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Wall-clock duration of the full loop (build + render + report)."
+    },
+    "control": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path passed via `--path`."
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "required": ["ok", "skipped", "durationMs", "errors"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "skipped": { "type": "boolean", "description": "True when --skip-build was used." },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Up to 30 lines from stdout+stderr matching /error|failed|TS\\d+/. Empty on success."
+        }
+      }
+    },
+    "harness": {
+      "type": "object",
+      "required": ["url", "ok", "consoleErrors", "pageErrors"],
+      "properties": {
+        "url": { "type": ["string", "null"], "description": "Local URL the Playwright driver navigated to. Null when build failed before Vite started." },
+        "ok": { "type": "boolean", "description": "True iff the control reached its first successful updateView before --timeout." },
+        "error": { "type": "string", "description": "Render-side error message when `ok` is false." },
+        "consoleErrors": { "type": "array", "items": { "type": "string" }, "description": "Browser console.error texts captured for the lifetime of the page." },
+        "pageErrors": { "type": "array", "items": { "type": "string" }, "description": "Uncaught exceptions captured via Playwright `pageerror`." },
+        "screenshot": { "type": ["string", "null"], "description": "Filename of the full-page screenshot relative to the report directory (`screenshot.png` when present)." },
+        "report": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/harnessReport" }
+          ],
+          "description": "Snapshot returned by `window.__pcfwbHarnessReport()` (see test-bridge.ts). Null when the bridge could not be reached (e.g. timeout before mount)."
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["status", "headline", "errors", "leaks"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "warn", "fail"],
+          "description": "pass = build ok, control rendered, no errors / leaks / budget fails. warn = rendered with resource leaks (no errors) OR budget soft-warn. fail = build failed OR control never rendered OR console/page errors > 0 OR perf budget hard-fail."
+        },
+        "headline": { "type": "string", "description": "Single-line human-readable summary suitable for CI/agent log lines." },
+        "errors": { "type": "integer", "minimum": 0, "description": "consoleErrors + pageErrors count." },
+        "leaks": { "type": "integer", "minimum": 0, "description": "harness.report.leaks.length, or 0 when report is null." }
+      }
+    },
+    "budget": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/definitions/budgetReport" }
+      ],
+      "description": "Perf-budget evaluation result. Null when no `perfBudget` was found in data.json. When non-null, `status === 'fail'` flips `summary.status` to `fail` and the CLI exits non-zero. See definitions.budgetReport for the shape and definitions.perfBudgetConfig for the user-supplied budget shape that produced it."
+    }
+  },
+  "definitions": {
+    "perfBudgetConfig": {
+      "type": "object",
+      "description": "User-supplied budget shape, lives under `perfBudget` in the control's `data.json` (control dir first, then project root). All metrics optional. Each metric value is either a bare number (hard `fail` limit) or `{ warn?: number, fail?: number }` for independent soft + hard thresholds.",
+      "additionalProperties": false,
+      "properties": {
+        "firstUpdateViewMs": { "$ref": "#/definitions/budgetLimit", "description": "Gap from init → first updateView." },
+        "avgRenderTimeMs": { "$ref": "#/definitions/budgetLimit", "description": "Mean ms inside updateView across the run." },
+        "lastRenderTimeMs": { "$ref": "#/definitions/budgetLimit", "description": "ms inside the most recent updateView." },
+        "renderCount": { "$ref": "#/definitions/budgetLimit", "description": "Total updateView calls. Useful to catch render storms." },
+        "leaks": { "$ref": "#/definitions/budgetLimit", "description": "Resource leak count (listeners + timers + observers)." },
+        "unimplementedCount": { "$ref": "#/definitions/budgetLimit", "description": "Shim log entries flagged unimplemented." }
+      }
+    },
+    "budgetLimit": {
+      "oneOf": [
+        { "type": "number", "minimum": 0 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "warn": { "type": "number", "minimum": 0 },
+            "fail": { "type": "number", "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "budgetReport": {
+      "type": "object",
+      "required": ["status", "source", "budget", "violations"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "warn", "fail"],
+          "description": "Overall budget status. `fail` if any metric exceeded its hard `fail` threshold; `warn` if only soft thresholds tripped; `pass` otherwise."
+        },
+        "source": {
+          "type": ["string", "null"],
+          "description": "Absolute path of the data.json file the budget was read from. Null if no data.json was found (in which case the budget would be empty and this field would not appear under normal evaluation)."
+        },
+        "budget": {
+          "$ref": "#/definitions/perfBudgetConfig",
+          "description": "The budget config as it was read from disk, echoed back for diffing across runs."
+        },
+        "violations": {
+          "type": "array",
+          "description": "One entry per metric that exceeded its threshold.",
+          "items": {
+            "type": "object",
+            "required": ["metric", "actual", "budget", "delta", "severity"],
+            "properties": {
+              "metric": { "type": "string", "enum": ["firstUpdateViewMs", "avgRenderTimeMs", "lastRenderTimeMs", "renderCount", "leaks", "unimplementedCount"] },
+              "actual": { "type": "number", "description": "Measured value from this run." },
+              "budget": { "type": "number", "description": "Threshold that was exceeded (either the soft `warn` or the hard `fail` limit, depending on severity)." },
+              "delta": { "type": "number", "description": "actual - budget. Always positive when the entry is a violation." },
+              "severity": { "type": "string", "enum": ["warn", "fail"] }
+            }
+          }
+        }
+      }
+    },
+    "harnessReport": {
+      "type": "object",
+      "required": ["schemaVersion", "capturedAt", "control", "lifecycle", "performance", "leaks", "webApi", "logs"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "capturedAt": { "type": "integer", "description": "Date.now() at snapshot." },
+        "control": {
+          "type": "object",
+          "properties": {
+            "namespace": { "type": ["string", "null"] },
+            "constructor": { "type": ["string", "null"] },
+            "version": { "type": ["string", "null"] },
+            "type": { "type": ["string", "null"], "enum": [null, "standard", "virtual"] }
+          }
+        },
+        "lifecycle": {
+          "type": "object",
+          "required": ["events", "initCalled", "firstUpdateViewMs"],
+          "properties": {
+            "events": {
+              "type": "array",
+              "description": "Last 50 PCF lifecycle events (init / updateView / getOutputs / destroy / notifyOutputChanged).",
+              "items": {
+                "type": "object",
+                "required": ["method", "durationMs", "timestamp"],
+                "properties": {
+                  "method": { "type": "string", "enum": ["init", "updateView", "getOutputs", "destroy", "notifyOutputChanged"] },
+                  "durationMs": { "type": "number" },
+                  "error": { "type": "string" },
+                  "timestamp": { "type": "integer" }
+                }
+              }
+            },
+            "initCalled": { "type": "boolean" },
+            "firstUpdateViewMs": { "type": ["number", "null"], "description": "Gap from init→first updateView in ms; null if not yet rendered." }
+          }
+        },
+        "performance": {
+          "type": "object",
+          "properties": {
+            "renderCount": { "type": "integer", "minimum": 0 },
+            "lastRenderTimeMs": { "type": "number", "minimum": 0 },
+            "avgRenderTimeMs": { "type": "number", "minimum": 0 },
+            "domNodeCount": { "type": "integer", "minimum": 0 },
+            "jsHeapUsedMB": { "type": "number", "minimum": 0 }
+          }
+        },
+        "leaks": {
+          "type": "array",
+          "description": "Resource leaks detected by resource-tracker.ts (event listeners / timers / observers not cleaned up after destroy).",
+          "items": {
+            "type": "object",
+            "required": ["type", "detail"],
+            "properties": {
+              "type": { "type": "string", "enum": ["eventListener", "timer", "observer"] },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "webApi": {
+          "type": "object",
+          "required": ["totalCalls", "errorCount", "calls"],
+          "properties": {
+            "totalCalls": { "type": "integer", "minimum": 0 },
+            "errorCount": { "type": "integer", "minimum": 0 },
+            "calls": {
+              "type": "array",
+              "description": "Last 50 WebAPI calls.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "method": { "type": "string" },
+                  "entityType": { "type": "string" },
+                  "durationMs": { "type": "number" },
+                  "recordCount": { "type": "integer" },
+                  "error": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "logs": {
+          "type": "object",
+          "properties": {
+            "recent": {
+              "type": "array",
+              "description": "Last 50 shim log entries.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "category": { "type": "string" },
+                  "method": { "type": "string" },
+                  "coverage": { "type": "string", "enum": ["implemented", "stub", "unimplemented"] }
+                }
+              }
+            },
+            "unimplementedCount": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Count of log entries flagged as `unimplemented` — i.e. the control hit a shim that is wired but has no real behaviour. Treat as a soft warning during refactor."
+            }
+          }
+        }
+      }
+    }
+  }
+}
