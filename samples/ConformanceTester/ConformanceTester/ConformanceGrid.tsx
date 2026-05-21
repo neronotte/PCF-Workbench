@@ -149,6 +149,24 @@ const TESTS: TestRow[] = [
         run: (ctx) => fmt(ctx.userSettings?.userId),
     },
     {
+        id: "context-orgSettings-maxuploadfilesize",
+        category: "Context",
+        name: "context.orgSettings.attributes.maxuploadfilesize",
+        run: (ctx) => fmt((ctx as any).orgSettings?.attributes?.maxuploadfilesize),
+    },
+    {
+        id: "context-orgSettings-languageId",
+        category: "Context",
+        name: "context.orgSettings.languageId",
+        run: (ctx) => fmt((ctx as any).orgSettings?.languageId),
+    },
+    {
+        id: "context-orgSettings-isAutoSaveEnabled",
+        category: "Context",
+        name: "context.orgSettings.isAutoSaveEnabled",
+        run: (ctx) => fmt((ctx as any).orgSettings?.isAutoSaveEnabled),
+    },
+    {
         id: "context-utils-getEntityMetadata",
         category: "Context",
         name: "context.utils.getEntityMetadata",

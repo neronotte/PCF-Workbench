@@ -6,6 +6,7 @@ import { createModeShim } from './mode';
 import { createNavigationShim } from './navigation';
 import { createFormattingShim } from './formatting';
 import { createUserSettingsShim } from './user-settings';
+import { createOrgSettingsShim } from './org-settings';
 import { createUtilsShim } from './utils';
 import { createResourcesShim } from './resources';
 import { createWebApiShim } from './web-api';
@@ -536,6 +537,7 @@ export function createContext(
     navigation: createNavigationShim(getState),
     resources: createResourcesShim(getState),
     userSettings: createUserSettingsShim(getState),
+    orgSettings: createOrgSettingsShim(getState),
     utils: createUtilsShim(getState),
     webAPI: createWebApiShim(getState, getEntityData),
     updatedProperties: ['all'],

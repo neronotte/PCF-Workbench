@@ -155,7 +155,9 @@ export class ControlHost {
       this.onStateChange({ isLoaded: true, error: null });
     } catch (err: any) {
       const message = err.message || String(err);
+      const stack = err?.stack ? String(err.stack) : undefined;
       console.error('[pcf-workbench] Load error:', message);
+      if (stack) console.error('[pcf-workbench] Load error stack:\n' + stack);
       this.onStateChange({ isLoaded: false, error: message });
     }
   }

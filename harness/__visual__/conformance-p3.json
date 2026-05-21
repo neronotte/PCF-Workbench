@@ -1,6 +1,6 @@
 {
   "summary": {
-    "passText": "47 pass",
+    "passText": "50 pass",
     "failText": "0 fail",
     "naText": "0 n/a",
     "idleText": "0 idle"
@@ -30,6 +30,21 @@
       "id": "context-userSettings-userId",
       "status": "pass",
       "detail": "{00000000-0000-0000-0000-000000000001}"
+    },
+    {
+      "id": "context-orgSettings-maxuploadfilesize",
+      "status": "pass",
+      "detail": "5242880"
+    },
+    {
+      "id": "context-orgSettings-languageId",
+      "status": "pass",
+      "detail": "1033"
+    },
+    {
+      "id": "context-orgSettings-isAutoSaveEnabled",
+      "status": "pass",
+      "detail": "false"
     },
     {
       "id": "context-utils-getEntityMetadata",
@@ -69,7 +84,7 @@
     {
       "id": "context-page-getClientUrl",
       "status": "pass",
-      "detail": "http://127.0.0.1:8181"
+      "detail": "http://127.0.0.1:8184"
     },
     {
       "id": "context-accessibility-getState",
