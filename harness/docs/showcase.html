@@ -2064,10 +2064,21 @@ curl -o .github/workflows/pcf-loop.yml \
 git add .github/workflows/pcf-loop.yml
 git commit -m <span class="string">"ci: add PCF build-loop check"</span></pre>
 
-        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">2. Open a pull request</h3>
-        <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow auto-triggers when a PR touches <code>**/*.ts</code>, <code>**/*.tsx</code>, <code>**/ControlManifest.Input.xml</code>, <code>**/*.css</code>, or <code>**/data.json</code>. <code>workflow_dispatch</code> is also wired so you can run it on demand from the Actions tab.</p>
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">2. Commit a CI scenario <span class="badge badge-new">important</span></h3>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">Without a scenario the harness boots with manifest defaults — usually blank — so the loop just confirms "it didn't crash on an empty form". To assert real behaviour, save a scenario from the Scenarios panel, export it into <code>test-scenarios.json</code>, and commit it. Then set <code>PCF_SCENARIO</code>:</p>
+<pre class="code-block"><span class="comment"># in your PCF repo</span>
+<span class="comment"># Scenarios panel → Save as "ci-smoke" → Export → save next to ControlManifest.Input.xml</span>
+git add test-scenarios.json
 
-        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">3. Block merge on red</h3>
+<span class="comment"># in .github/workflows/pcf-loop.yml, set:</span>
+<span class="comment">env:</span>
+<span class="comment">  PCF_SCENARIO: 'ci-smoke'</span></pre>
+        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px">The workflow auto-passes <code>--scenario "$PCF_SCENARIO"</code> to <code>pcf-harness loop</code>, which appends <code>?scenario=ci-smoke</code> to the harness URL. Property values, page entity, network, and device preset are all applied before the control mounts — exactly as if you'd clicked "Load" in the Scenarios panel.</p>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">3. Open a pull request</h3>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow auto-triggers when a PR touches <code>**/*.ts</code>, <code>**/*.tsx</code>, <code>**/ControlManifest.Input.xml</code>, <code>**/*.css</code>, <code>**/data.json</code>, or <code>**/test-scenarios.json</code>. <code>workflow_dispatch</code> is also wired so you can run it on demand from the Actions tab.</p>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">4. Block merge on red</h3>
         <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow exits non-zero on <code>warn</code> or <code>fail</code>. Add it to your branch protection rules as a required check and broken PCFs cannot ship.</p>
       </div>
 
@@ -2077,7 +2088,8 @@ git commit -m <span class="string">"ci: add PCF build-loop check"</span></pre>
           <li>Checks out your PCF and clones Workbench at <code>PCF_WORKBENCH_REF</code></li>
           <li>Caches npm + Playwright browser binaries (~30s first run, ~5s after)</li>
           <li>Builds your control with <code>npm run build</code></li>
-          <li>Runs <code>npx pcf-harness loop --skip-build --path &lt;control&gt;</code></li>
+          <li>Runs <code>npx pcf-harness loop --skip-build --path &lt;control&gt; --scenario "$PCF_SCENARIO"</code></li>
+          <li>Harness auto-applies the scenario before mount (property values, page entity, network, device)</li>
           <li>Uploads <code>report.json</code> + <code>screenshot.png</code> as the <code>pcf-loop-reports</code> artifact (30-day retention)</li>
           <li>Posts a sticky PR comment (updated on every push) with a one-table summary</li>
           <li>Exits non-zero on <code>warn</code>/<code>fail</code> so the PR check turns red</li>

@@ -22,6 +22,7 @@ on:
       - '**/*.tsx'
       - '**/*.css'
       - '**/data.json'
+      - '**/test-scenarios.json'
       - '.github/workflows/pcf-loop.yml'
   push:
     branches: [main]
@@ -40,6 +41,12 @@ env:
   # Pin a known-good Workbench commit (or use 'main'). Pinning protects you
   # from upstream changes; bump deliberately.
   PCF_WORKBENCH_REF: 'main'
+  # OPTIONAL: name of a scenario in test-scenarios.json to auto-load before
+  # the control mounts. Without this the control renders with manifest
+  # defaults (often blank) — which is rarely what you want to assert on.
+  # Recommended: commit a "ci-smoke" scenario alongside the control with
+  # representative property values, then point this at it.
+  PCF_SCENARIO: ''
   # ───────────────────────────────────────────────────────────────────────
 
 jobs:
@@ -90,7 +97,8 @@ jobs:
           npm run harness -- loop \
             --path "${GITHUB_WORKSPACE}/${PCF_CONTROL_DIR}" \
             --skip-build \
-            --out "${GITHUB_WORKSPACE}/pcf-loop-reports"
+            --out "${GITHUB_WORKSPACE}/pcf-loop-reports" \
+            ${PCF_SCENARIO:+--scenario "${PCF_SCENARIO}"}
         continue-on-error: true
 
       - name: Upload report artifact

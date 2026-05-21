@@ -184,11 +184,15 @@ A ready-to-use GitHub Actions workflow lives at
 [`examples/pcf-loop.yml`](./examples/pcf-loop.yml). Copy it into your
 PCF project at `.github/workflows/pcf-loop.yml`, edit the three `env`
 variables (`PCF_PROJECT_DIR`, `PCF_CONTROL_DIR`, `PCF_WORKBENCH_REF`),
-and commit. From the next PR onwards:
+optionally set `PCF_SCENARIO` to auto-load a saved scenario before
+mount (highly recommended — see below), and commit. From the next PR
+onwards:
 
 1. Workflow triggers when a PR touches `**/*.ts`, `**/*.tsx`,
-   `**/ControlManifest.Input.xml`, `**/*.css`, or `**/data.json`.
-2. It builds your control, clones Workbench, runs `pcf-harness loop`.
+   `**/ControlManifest.Input.xml`, `**/*.css`, `**/data.json`, or
+   `**/test-scenarios.json`.
+2. It builds your control, clones Workbench, runs `pcf-harness loop`
+   with `--scenario "$PCF_SCENARIO"` if set.
 3. `report.json` + `screenshot.png` are uploaded as the
    `pcf-loop-reports` artifact (30-day retention by default).
 4. A sticky comment is posted (and updated on each push) on the PR
@@ -204,6 +208,24 @@ and commit. From the next PR onwards:
    ```
 5. The workflow exits non-zero on `warn` or `fail`, turning the PR
    check red. Combine with branch protection to block merge.
+
+**Set `PCF_SCENARIO` or you're testing a blank control.** Without a
+scenario, the harness boots with manifest defaults — for most field /
+dataset controls that means empty values, no bound record, and no
+useful UI to render. The loop will report `pass` because nothing
+crashed, but you're not actually exercising the control. To assert
+real behaviour:
+
+1. Run the harness locally, configure properties + page entity + data
+   + network the way a real user would see them, save as a named
+   scenario in the Scenarios panel.
+2. Export → commit `test-scenarios.json` to the repo next to the
+   manifest.
+3. Set `PCF_SCENARIO: 'your-scenario-name'` in the workflow env.
+
+The harness auto-applies the scenario via the `?scenario=<name>` URL
+param before mount, exactly as if you'd clicked "Load" in the
+Scenarios panel.
 
 **Pin the Workbench ref.** The example sets `PCF_WORKBENCH_REF: 'main'`
 so you always get the latest, but production teams should pin to a

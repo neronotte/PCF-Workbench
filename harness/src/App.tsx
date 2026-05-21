@@ -12,6 +12,7 @@ import { loadMetadata } from './store/metadata-store';
 import { rebaseDatesToToday } from './store/date-rebase';
 import { setResxStrings } from './shim/resources';
 import type { ManifestConfig } from './types/manifest';
+import { findScenarioByName, applyScenarioToStore } from './lib/scenario-loader';
 
 // Import from virtual module (provided by pcf-plugin).
 import { manifest as manifestData, bundlePath, cssFiles, resxStrings, isGalleryMode, controlDir, launchedAsGallery } from 'virtual:pcf-manifest';
@@ -62,7 +63,7 @@ export function App() {
       fetch('/pcf-data/data.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/pcf-data/metadata.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/pcf-data/execute-mocks.json').then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([data, metadata, executeMocks]) => {
+    ]).then(async ([data, metadata, executeMocks]) => {
       if (data && Object.keys(data).length > 0) {
         const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
         const finalData = shouldRebase ? rebaseDatesToToday(data) : data;
@@ -85,6 +86,27 @@ export function App() {
       if (executeMocks && Object.keys(executeMocks).length > 0) {
         loadExecuteMocks(executeMocks);
       }
+
+      // ?scenario=<name> — auto-apply a saved scenario before the control
+      // mounts. Used by the loop CLI in CI so the harness boots in the
+      // requested state instead of with default/empty property values.
+      // Must run AFTER data loads so fieldBindings resolve correctly.
+      try {
+        const scenarioParam = new URLSearchParams(window.location.search).get('scenario');
+        if (scenarioParam && manifestData) {
+          const controlId = `${manifestData.namespace}.${manifestData.constructor}`;
+          const scenario = await findScenarioByName(controlId, scenarioParam);
+          if (scenario) {
+            applyScenarioToStore(scenario);
+            console.log(`[pcf-workbench] Auto-loaded scenario "${scenarioParam}" from ?scenario= URL param`);
+          } else {
+            console.warn(`[pcf-workbench] ?scenario=${scenarioParam} requested but no scenario with that name was found in test-scenarios.json or localStorage`);
+          }
+        }
+      } catch (err) {
+        console.warn('[pcf-workbench] scenario auto-load failed:', err);
+      }
+
       setReady(true);
     });
     return unsubscribe;

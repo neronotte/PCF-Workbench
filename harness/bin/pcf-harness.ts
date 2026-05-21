@@ -78,6 +78,7 @@ program
   .option('--skip-build', 'Skip the npm run build step (use existing out/ bundle)', false)
   .option('--timeout <ms>', 'Max ms to wait for the control to render', '60000')
   .option('--headed', 'Run Playwright in headed mode for debugging', false)
+  .option('--scenario <name>', 'Load this saved test scenario before rendering (must exist in test-scenarios.json). Default: render with manifest defaults.')
   .action(async (opts) => {
     const controlPath = path.resolve(opts.path);
     assertControlDir(controlPath);
@@ -90,6 +91,7 @@ program
       skipBuild: !!opts.skipBuild,
       timeoutMs: parseInt(opts.timeout, 10),
       headed: !!opts.headed,
+      scenario: opts.scenario,
     });
     process.exit(exitCode);
   });
@@ -224,6 +226,7 @@ interface LoopOpts {
   skipBuild: boolean;
   timeoutMs: number;
   headed: boolean;
+  scenario?: string;
 }
 
 interface BuildResult {
@@ -268,7 +271,10 @@ async function runLoop(opts: LoopOpts): Promise<number> {
     logLevel: 'warn',
   });
   await server.listen();
-  const url = `http://127.0.0.1:${port}/?chrome=none`;
+  const url = `http://127.0.0.1:${port}/?chrome=none${opts.scenario ? `&scenario=${encodeURIComponent(opts.scenario)}` : ''}`;
+  if (opts.scenario) {
+    console.log(`  [scenario] requesting "${opts.scenario}" via ?scenario= URL param`);
+  }
 
   /* --- 3. Playwright drive -------------------------------------- */
   // Lazy-import to keep `pcf-harness --path` startup fast.
