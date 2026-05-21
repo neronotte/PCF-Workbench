@@ -354,15 +354,24 @@ export function pcfPlugin(): Plugin {
       // when the PCF bundle loads. The effective version was resolved during
       // loadControl via resolveReactVersion — it reconciles the manifest
       // declaration with Fluent v9 ≥ 9.40's hard requirement on React 17/18.
+      //
+      // CRITICAL: when we *upgrade* a manifest-declared R<18 control to R18
+      // (source: 'fluent-upgrade'), we MUST NOT load a separate React 18 UMD —
+      // the harness is already running React 18, and two R18 instances in the
+      // same page collide on griffel's shared dispatcher state and unstyle the
+      // harness chrome. Instead, main.tsx exposes the harness's bundled React
+      // on window.React/window.ReactDOM and react-aliases.ts aliases it under
+      // the versioned globals (Reactv16/Reactv17/Reactv18) the control bundle
+      // imports as `external`. Single React 18 instance, no clash.
       const effective = state.manifest.resources.effectiveReactVersion ?? '16.14.0';
+      const source = state.manifest.resources.effectiveReactSource;
       const major = effective.split('.')[0];
+      const reuseHarnessReact = major === '18' && (source === 'fluent-upgrade' || source === 'default');
 
-      if (major === '16') {
-        tags.push(
-          { tag: 'script', attrs: { src: `https://unpkg.com/react@${effective}/umd/react.development.js` }, injectTo: 'head-prepend' },
-          { tag: 'script', attrs: { src: `https://unpkg.com/react-dom@${effective}/umd/react-dom.development.js` }, injectTo: 'head-prepend' },
-        );
-      } else if (major === '17' || major === '18') {
+      if (reuseHarnessReact) {
+        // No UMD injection — main.tsx already assigned window.React/ReactDOM
+        // from the harness's bundled React 18.
+      } else if (major === '16' || major === '17' || major === '18') {
         tags.push(
           { tag: 'script', attrs: { src: `https://unpkg.com/react@${effective}/umd/react.development.js` }, injectTo: 'head-prepend' },
           { tag: 'script', attrs: { src: `https://unpkg.com/react-dom@${effective}/umd/react-dom.development.js` }, injectTo: 'head-prepend' },
