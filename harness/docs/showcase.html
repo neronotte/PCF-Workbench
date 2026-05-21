@@ -2035,6 +2035,79 @@ Copy-Item &lt;workbench&gt;\harness\docs\ai-loop-skill.md `
   </div>
 </section>
 
+<!-- ── GitHub Actions section ─── -->
+<section style="background:var(--neutral-100);border-top:1px solid var(--neutral-90)">
+  <div class="container">
+    <div class="why-hero reveal">
+      <h2>Run it in GitHub Actions <span class="badge badge-new">PR-time gate</span></h2>
+      <p>The same <code>pcf-harness loop</code> command runs unattended in CI. A ready-to-use workflow at <a href="https://github.com/jaduplesms/PCF-Workbench/blob/main/harness/docs/examples/pcf-loop.yml"><code>harness/docs/examples/pcf-loop.yml</code></a> turns every pull request into a render-and-render-clean check &mdash; broken PCFs are caught before merge, not after a user reports a blank tile in production.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="usage-grid reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start">
+
+      <div>
+        <h3 style="font-size:1.15rem;margin-bottom:8px">1. Drop the workflow in</h3>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin-bottom:0">Copy the example into your PCF project and edit three <code>env</code> values:</p>
+<pre class="code-block"><span class="comment"># in your PCF repo</span>
+mkdir -p .github/workflows
+curl -o .github/workflows/pcf-loop.yml \
+  https://raw.githubusercontent.com/jaduplesms/PCF-Workbench/main/harness/docs/examples/pcf-loop.yml
+
+<span class="comment"># edit these three:</span>
+<span class="comment">#   PCF_PROJECT_DIR   ← folder with package.json</span>
+<span class="comment">#   PCF_CONTROL_DIR   ← folder with ControlManifest.Input.xml</span>
+<span class="comment">#   PCF_WORKBENCH_REF ← 'main' or a pinned commit SHA</span>
+git add .github/workflows/pcf-loop.yml
+git commit -m <span class="string">"ci: add PCF build-loop check"</span></pre>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">2. Open a pull request</h3>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow auto-triggers when a PR touches <code>**/*.ts</code>, <code>**/*.tsx</code>, <code>**/ControlManifest.Input.xml</code>, <code>**/*.css</code>, or <code>**/data.json</code>. <code>workflow_dispatch</code> is also wired so you can run it on demand from the Actions tab.</p>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">3. Block merge on red</h3>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow exits non-zero on <code>warn</code> or <code>fail</code>. Add it to your branch protection rules as a required check and broken PCFs cannot ship.</p>
+      </div>
+
+      <div>
+        <h3 style="font-size:1.15rem;margin-bottom:8px">What runs on every PR</h3>
+        <ol style="font-size:.88rem;color:var(--neutral-30);line-height:1.7;padding-left:20px;margin-top:8px">
+          <li>Checks out your PCF and clones Workbench at <code>PCF_WORKBENCH_REF</code></li>
+          <li>Caches npm + Playwright browser binaries (~30s first run, ~5s after)</li>
+          <li>Builds your control with <code>npm run build</code></li>
+          <li>Runs <code>npx pcf-harness loop --skip-build --path &lt;control&gt;</code></li>
+          <li>Uploads <code>report.json</code> + <code>screenshot.png</code> as the <code>pcf-loop-reports</code> artifact (30-day retention)</li>
+          <li>Posts a sticky PR comment (updated on every push) with a one-table summary</li>
+          <li>Exits non-zero on <code>warn</code>/<code>fail</code> so the PR check turns red</li>
+        </ol>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:24px">Example PR comment</h3>
+<pre class="code-block"><span class="comment">🤖 PCF Build Loop &mdash; ❌ FAIL</span>
+Render: ✅ rendered
+Leaks:  ✅ none
+Budget: ❌ fail
+        ❌ avgRenderTimeMs 312 (fail &gt;200)
+Perf:   firstUpdateView: 180ms ·
+        avgRender: 312ms · renders: 1</pre>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:24px">Cost &amp; pinning</h3>
+        <ul style="font-size:.88rem;color:var(--neutral-30);line-height:1.7;padding-left:20px;margin-top:8px">
+          <li><strong>~90s per run</strong> on <code>ubuntu-latest</code> &mdash; free for public repos; 2,000 min/month free on private repos</li>
+          <li><strong>Pin <code>PCF_WORKBENCH_REF</code> to a SHA</strong> in production so upstream Workbench changes can't silently flip the check</li>
+          <li>No Dataverse, no Power Platform CLI, no licence &mdash; everything runs against the same mock surface the local harness uses</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="reveal" style="margin-top:48px;padding:20px 24px;background:var(--neutral-95);border-radius:var(--radius-m);font-size:.88rem;color:var(--neutral-30)">
+      <strong>Same loop, same JSON, same answer.</strong> A green Workbench loop on your laptop is the same green loop in CI &mdash; if it passes locally with <code>npx pcf-harness loop</code>, the GitHub Actions run will too. No CI-only flakiness, no environment drift.
+    </div>
+  </div>
+</section>
+
 </div>
 <!-- ════════ END AI BUILD LOOP VIEW ════════ -->
 
