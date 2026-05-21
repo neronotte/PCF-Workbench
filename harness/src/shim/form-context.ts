@@ -28,8 +28,9 @@
  */
 
 import * as fs from '../store/form-store';
+import type { CoverageStatus } from '../store/harness-store';
 
-type LogFn = (entry: { category: string; method: string; args?: any; result?: any }) => void;
+type LogFn = (entry: { category: string; method: string; args?: any; result?: any; coverage?: CoverageStatus }) => void;
 
 let logEntry: LogFn = () => {};
 
@@ -38,8 +39,8 @@ export function setFormContextLogger(fn: LogFn): void {
   logEntry = fn;
 }
 
-function log(method: string, args?: any): void {
-  try { logEntry({ category: 'formContext', method, args }); } catch { /* swallow */ }
+function log(method: string, args?: any, coverage: CoverageStatus = 'implemented'): void {
+  try { logEntry({ category: 'formContext', method, args, coverage }); } catch { /* swallow */ }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -153,7 +154,7 @@ function buildControl(name: string): any | null {
       log('control.setDisabled', { name, disabled: d });
       fs.setControlDisabled(name, d);
     },
-    setFocus: () => { log('control.setFocus', { name }); },
+    setFocus: () => { log('control.setFocus', { name }, 'stub'); },
     setNotification: (message: string, uniqueId: string) => {
       log('control.setNotification', { name, message, uniqueId });
       fs.setControlNotification(name, {
@@ -244,7 +245,7 @@ function buildTab(name: string): any | null {
     setVisible: (v: boolean) => { log('tab.setVisible', { name, visible: v }); fs.setTabVisible(name, v); },
     getDisplayState: () => fs.getTabState(name)?.displayState ?? 'expanded',
     setDisplayState: (d: fs.DisplayState) => { log('tab.setDisplayState', { name, d }); fs.setTabDisplayState(name, d); },
-    setFocus: () => { log('tab.setFocus', { name }); t.focused = true; },
+    setFocus: () => { log('tab.setFocus', { name }, 'stub'); t.focused = true; },
     sections: {
       get: (filter?: number | string | ((c: any, i: number) => boolean)) => {
         const list = t.sections.map(buildSection).filter(Boolean) as any[];
@@ -342,8 +343,8 @@ function buildUi(): any {
       return getFormNotificationApi().clearFormNotification(id);
     },
     getFormType: () => fs.getFormType(),
-    refreshRibbon: (refreshAll?: boolean) => { log('ui.refreshRibbon', { refreshAll }); },
-    close: () => { log('ui.close'); },
+    refreshRibbon: (refreshAll?: boolean) => { log('ui.refreshRibbon', { refreshAll }, 'stub'); },
+    close: () => { log('ui.close', undefined, 'stub'); },
     getViewPortHeight: () => window.innerHeight,
     getViewPortWidth: () => window.innerWidth,
     addOnLoad: (handler: fs.FormHandler) => { log('ui.addOnLoad'); fs.addOnLoad(handler); },
@@ -353,7 +354,7 @@ function buildUi(): any {
       getCurrentItem: () => ({
         getId: () => fs.getFormId(),
         getLabel: () => 'Default Form',
-        navigate: () => log('formSelector.navigate'),
+        navigate: () => log('formSelector.navigate', undefined, 'stub'),
       }),
       items: {
         get: () => [],
@@ -370,15 +371,15 @@ function buildUi(): any {
       getActiveProcess: () => null,
       getActiveStage: () => null,
       getProcessInstances: (cb: (i: any) => void) => cb({}),
-      reset: () => log('ui.process.reset'),
+      reset: () => log('ui.process.reset', undefined, 'stub'),
     },
     headerSection: {
       getBodyVisible: () => true,
-      setBodyVisible: (v: boolean) => log('headerSection.setBodyVisible', { v }),
+      setBodyVisible: (v: boolean) => log('headerSection.setBodyVisible', { v }, 'stub'),
       getCommandBarVisible: () => true,
-      setCommandBarVisible: (v: boolean) => log('headerSection.setCommandBarVisible', { v }),
+      setCommandBarVisible: (v: boolean) => log('headerSection.setCommandBarVisible', { v }, 'stub'),
       getTabNavigatorVisible: () => true,
-      setTabNavigatorVisible: (v: boolean) => log('headerSection.setTabNavigatorVisible', { v }),
+      setTabNavigatorVisible: (v: boolean) => log('headerSection.setTabNavigatorVisible', { v }, 'stub'),
     },
   };
 }
@@ -408,7 +409,7 @@ export function buildFormContext(hooks: FormContextHooks): any {
     getAttribute: (name: string) => {
       const a = fs.getAttributeState(name);
       if (!a) {
-        log('getAttribute.missing', { name });
+        log('getAttribute.missing', { name }, 'unimplemented');
         return null;
       }
       return buildAttribute(name);
@@ -416,7 +417,7 @@ export function buildFormContext(hooks: FormContextHooks): any {
     getControl: (name: string) => {
       const c = fs.getControlState(name);
       if (!c) {
-        log('getControl.missing', { name });
+        log('getControl.missing', { name }, 'unimplemented');
         return null;
       }
       return buildControl(name);
@@ -424,7 +425,7 @@ export function buildFormContext(hooks: FormContextHooks): any {
     data: {
       entity: buildEntity(hooks.getPageEntityId, hooks.getPageEntityTypeName, hooks.getPageEntityRecordName),
       isValid: () => true,
-      refresh: (save?: boolean) => { log('data.refresh', { save }); return Promise.resolve(); },
+      refresh: (save?: boolean) => { log('data.refresh', { save }, 'stub'); return Promise.resolve(); },
       save: () => {
         log('data.save');
         return fc.data.entity.save();
