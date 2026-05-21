@@ -279,7 +279,11 @@ async function runLoop(opts: LoopOpts): Promise<number> {
 
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
-  page.on('pageerror', (err) => pageErrors.push(err.message));
+  const pageErrorStacks: (string | undefined)[] = [];
+  page.on('pageerror', (err) => {
+    pageErrors.push(err.message);
+    pageErrorStacks.push(err.stack);
+  });
   page.on('console', (msg) => {
     if (msg.type() === 'error') consoleErrors.push(msg.text());
   });
@@ -372,7 +376,7 @@ async function runLoop(opts: LoopOpts): Promise<number> {
       error: renderError,
       consoleErrors,
       pageErrors,
-      diagnostics: buildDiagnostics(consoleErrors, pageErrors, renderError),
+      diagnostics: buildDiagnostics(consoleErrors, pageErrors, pageErrorStacks, renderError),
       report: harnessReport,
       screenshot: 'screenshot.png',
     },
@@ -495,20 +499,24 @@ interface ErrorDiagnostic {
 function buildDiagnostics(
   consoleErrors: string[],
   pageErrors: string[],
+  pageErrorStacks: (string | undefined)[],
   renderError: string | undefined,
 ): ErrorDiagnostic[] {
   const out: ErrorDiagnostic[] = [];
   const seen = new Set<string>();
-  const push = (source: ErrorDiagnostic['source'], msg: string) => {
-    const exp = explainError(msg);
+  const push = (source: ErrorDiagnostic['source'], msg: string, stack?: string) => {
+    const exp = explainError(msg, stack);
     if (!exp) return;
     const key = `${source}:${exp.ruleId}`;
     if (seen.has(key)) return;
     seen.add(key);
     out.push({ source, message: msg, ...exp });
   };
-  for (const m of pageErrors) push('pageError', m);
-  for (const m of consoleErrors) push('consoleError', m);
+  for (let i = 0; i < pageErrors.length; i++) push('pageError', pageErrors[i], pageErrorStacks[i]);
+  // Console error text from page.on('console') often includes the stack already
+  // (Chrome formats `TypeError: foo\n    at bar (file:1:2)\n    ...` as one string),
+  // so passing the message as both arg gives stack-aware rules a chance to match.
+  for (const m of consoleErrors) push('consoleError', m, m);
   if (renderError) push('renderError', renderError);
   return out;
 }

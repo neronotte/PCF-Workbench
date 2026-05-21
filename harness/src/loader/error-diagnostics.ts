@@ -58,6 +58,37 @@ const RULES: DiagnosticRule[] = [
     },
   },
 
+  // ─── Generic React commit-phase crash inside a Fluent component ───────────
+  // Same root cause as react16-fluent9-late but with a different undefined
+  // property (Fluent's internal store API surfaces .set / .getSnapshot /
+  // .subscribe etc. depending on the Fluent component). Catches the long tail.
+  {
+    ruleId: 'react-commit-fluent-crash',
+    match: (msg, stack) => {
+      if (!stack) return null;
+      const undefAccess = /Cannot read propert(?:y|ies) of (?:undefined|null)/i.test(msg);
+      const commitPhase = /commitHookEffectListMount|commitLifeCycles|commitLayoutEffects|commitPassiveHookEffects/i.test(stack);
+      const fluentFrame = /fluentui|Fluent|@fluentui/i.test(stack);
+      if (!undefAccess || !commitPhase || !fluentFrame) return null;
+      const propMatch = /reading ['"]([^'"]+)['"]/i.exec(msg);
+      const prop = propMatch?.[1];
+      return {
+        ruleId: 'react-commit-fluent-crash',
+        severity: 'fatal',
+        summary: 'A Fluent UI component crashed during React commit — almost always a React/Fluent version mismatch.',
+        likelyCause:
+          `The crash happened inside React's commit phase (${commitPhase ? 'commitHookEffectListMount or similar' : 'commit'}) ` +
+          `while a Fluent component was mounting. ` +
+          (prop ? `Fluent tried to read .${prop} on a missing dispatcher. ` : '') +
+          `This is the same family of failure as react16-fluent9-late: Fluent v9.40+ expects React 17/18 hooks that aren\'t available on React 16.14.`,
+        suggestedFix:
+          'Most reliable: downgrade @fluentui/react-components to a version <9.40 in the control project. ' +
+          'Alternative: wait for the harness React-17/18 loader (todo: react17-fluent9-late). ' +
+          'Quick check: open package.json in the failing control and look at the @fluentui/react-components version pin.',
+      };
+    },
+  },
+
   // ─── Missing context.orgSettings.attributes accessor ──────────────────────
   {
     ruleId: 'orgsettings-attributes-undefined',
