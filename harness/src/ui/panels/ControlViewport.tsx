@@ -1,9 +1,10 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { makeStyles, tokens, Spinner, MessageBar, MessageBarBody } from '@fluentui/react-components';
+import { makeStyles, tokens, Spinner } from '@fluentui/react-components';
 import { useHarnessStore } from '../../store/harness-store';
 import { ControlHost, type ControlHostState } from '../../loader/control-host';
 import type { ManifestConfig } from '../../types/manifest';
 import { FormNotificationBanner } from '../FormNotificationBanner';
+import { ControlErrorBanner } from '../ControlErrorBanner';
 import { registerHarnessHost } from '../../test-bridge';
 
 const useStyles = makeStyles({
@@ -232,6 +233,42 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
     };
   }, [propertyValues, networkMode, isControlDisabled, formFactor, isDarkMode, pageEntityId, pageEntityTypeName, pageEntityRecordName, containerWidth, containerHeight, isFullscreen, userLanguageId, userIsRTL, userTimeZoneOffsetMinutes, host, datasetState, dataVersion]);
 
+  // Capture runtime errors thrown outside control-host's try/catch blocks
+  // (async callbacks, event handlers, promise rejections inside the bundle).
+  // We only forward errors whose stack mentions the bundle path or known
+  // PCF/Fluent frames so harness-internal errors don't get attributed to
+  // the user's control.
+  useEffect(() => {
+    const bundleHint = bundlePath.split('/').pop()?.replace(/\?.*$/, '') ?? '';
+    const looksLikeControlError = (stack: string | undefined): boolean => {
+      if (!stack) return false;
+      if (bundleHint && stack.includes(bundleHint)) return true;
+      // Common PCF / Fluent / React frames that almost always indicate the
+      // control crashed rather than the harness shell.
+      return /bundle\.js|fluentui|react-dom|useSyncExternalStore|commitHookEffectListMount/i.test(stack);
+    };
+
+    const onError = (ev: ErrorEvent) => {
+      const stack = ev.error?.stack ? String(ev.error.stack) : undefined;
+      if (!looksLikeControlError(stack)) return;
+      hostRef.current?.reportRuntimeError(ev.message || String(ev.error), stack);
+    };
+    const onRejection = (ev: PromiseRejectionEvent) => {
+      const reason: any = ev.reason;
+      const stack = reason?.stack ? String(reason.stack) : undefined;
+      if (!looksLikeControlError(stack)) return;
+      const message = reason?.message || String(reason);
+      hostRef.current?.reportRuntimeError(message, stack);
+    };
+
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, [bundlePath]);
+
   const handleReload = useCallback(() => {
     hostRef.current?.reload();
   }, []);
@@ -265,9 +302,11 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
             }}
           >
             {hostState.error && (
-              <MessageBar intent="error" className={styles.error}>
-                <MessageBarBody>{hostState.error}</MessageBarBody>
-              </MessageBar>
+              <ControlErrorBanner
+                message={hostState.error}
+                stack={hostState.errorStack ?? undefined}
+                onReload={handleReload}
+              />
             )}
             {!hostState.isLoaded && !hostState.error && (
               <div className={styles.center}>

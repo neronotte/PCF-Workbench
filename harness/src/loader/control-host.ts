@@ -14,6 +14,7 @@ import { fireOnLoad, seedFormState } from '../store/form-store';
 export interface ControlHostState {
   isLoaded: boolean;
   error: string | null;
+  errorStack?: string | null;
 }
 
 /**
@@ -152,14 +153,25 @@ export class ControlHost {
         console.error('[pcf-workbench] onLoad handlers threw', e);
       }
 
-      this.onStateChange({ isLoaded: true, error: null });
+      this.onStateChange({ isLoaded: true, error: null, errorStack: null });
     } catch (err: any) {
       const message = err.message || String(err);
       const stack = err?.stack ? String(err.stack) : undefined;
       console.error('[pcf-workbench] Load error:', message);
       if (stack) console.error('[pcf-workbench] Load error stack:\n' + stack);
-      this.onStateChange({ isLoaded: false, error: message });
+      this.onStateChange({ isLoaded: false, error: message, errorStack: stack ?? null });
     }
+  }
+
+  /**
+   * Report a runtime error from outside the control's lifecycle methods
+   * (e.g. window.onerror, unhandledrejection). The host can be in either
+   * loaded or unloaded state when this is called.
+   */
+  reportRuntimeError(message: string, stack?: string): void {
+    console.error('[pcf-workbench] Runtime error:', message);
+    if (stack) console.error('[pcf-workbench] Runtime error stack:\n' + stack);
+    this.onStateChange({ isLoaded: false, error: message, errorStack: stack ?? null });
   }
 
   /**
@@ -235,46 +247,57 @@ export class ControlHost {
 
     const start = performance.now();
 
-    if (this.manifest.controlType === 'virtual' && this.container) {
-      // Virtual controls return a React.ReactElement from updateView
-      const element = this.control.updateView(this.context);
+    try {
+      if (this.manifest.controlType === 'virtual' && this.container) {
+        // Virtual controls return a React.ReactElement from updateView
+        const element = this.control.updateView(this.context);
 
-      if (element) {
-        const ReactDOM = getReactDOMGlobal(this.manifest.resources);
-        const React = (window as any).Reactv16 ?? (window as any).Reactv18 ?? (window as any).React;
+        if (element) {
+          const ReactDOM = getReactDOMGlobal(this.manifest.resources);
+          const React = (window as any).Reactv16 ?? (window as any).Reactv18 ?? (window as any).React;
 
-        if (!this.virtualForceUpdate && React && ReactDOM) {
-          // First render: mount a stable wrapper component that holds the element in a ref.
-          // Subsequent callUpdateView calls just update the ref and forceUpdate —
-          // this preserves the child component tree and its state (including loaded images).
-          const host = this;
-          const elementRef = { current: element };
-          host._virtualElementRef = elementRef;
+          if (!this.virtualForceUpdate && React && ReactDOM) {
+            // First render: mount a stable wrapper component that holds the element in a ref.
+            // Subsequent callUpdateView calls just update the ref and forceUpdate —
+            // this preserves the child component tree and its state (including loaded images).
+            const host = this;
+            const elementRef = { current: element };
+            host._virtualElementRef = elementRef;
 
-          class VirtualWrapper extends React.Component<{}, {}> {
-            constructor(props: any) {
-              super(props);
-              host.virtualForceUpdate = () => this.forceUpdate();
+            class VirtualWrapper extends React.Component<{}, {}> {
+              constructor(props: any) {
+                super(props);
+                host.virtualForceUpdate = () => this.forceUpdate();
+              }
+              render() {
+                return host._virtualElementRef?.current ?? null;
+              }
             }
-            render() {
-              return host._virtualElementRef?.current ?? null;
-            }
-          }
 
-          if (ReactDOM.render) {
-            ReactDOM.render(React.createElement(VirtualWrapper), this.container);
-          } else if (ReactDOM.createRoot) {
-            const root = ReactDOM.createRoot(this.container);
-            root.render(React.createElement(VirtualWrapper));
+            if (ReactDOM.render) {
+              ReactDOM.render(React.createElement(VirtualWrapper), this.container);
+            } else if (ReactDOM.createRoot) {
+              const root = ReactDOM.createRoot(this.container);
+              root.render(React.createElement(VirtualWrapper));
+            }
+          } else if (this.virtualForceUpdate) {
+            // Subsequent renders: update the ref and trigger re-render without remounting
+            (this as any)._virtualElementRef.current = element;
+            this.virtualForceUpdate();
           }
-        } else if (this.virtualForceUpdate) {
-          // Subsequent renders: update the ref and trigger re-render without remounting
-          (this as any)._virtualElementRef.current = element;
-          this.virtualForceUpdate();
         }
+      } else {
+        this.control.updateView(this.context);
       }
-    } else {
-      this.control.updateView(this.context);
+    } catch (err: any) {
+      const message = err?.message || String(err);
+      const stack = err?.stack ? String(err.stack) : undefined;
+      console.error('[pcf-workbench] updateView error:', message);
+      if (stack) console.error('[pcf-workbench] updateView stack:\n' + stack);
+      this.isUpdating = false;
+      this.onStateChange({ isLoaded: false, error: message, errorStack: stack ?? null });
+      this.getState().addLifecycleEvent({ method: 'updateView', durationMs: performance.now() - start, error: message });
+      return;
     }
 
     const elapsed = performance.now() - start;

@@ -17,6 +17,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
+import { explainError } from '../src/loader/error-diagnostics';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const harnessRoot = path.resolve(__dirname, '..');
@@ -371,6 +372,7 @@ async function runLoop(opts: LoopOpts): Promise<number> {
       error: renderError,
       consoleErrors,
       pageErrors,
+      diagnostics: buildDiagnostics(consoleErrors, pageErrors, renderError),
       report: harnessReport,
       screenshot: 'screenshot.png',
     },
@@ -392,6 +394,14 @@ async function runLoop(opts: LoopOpts): Promise<number> {
       ? 'all metrics within budget'
       : `${budget.violations.length} violation(s): ${budget.violations.map(v => `${v.metric} ${v.severity}`).join(', ')}`;
     console.log(`  [budget]  ${budget.status.toUpperCase()} — ${summary}`);
+  }
+  const diags = report.harness.diagnostics as ErrorDiagnostic[] | undefined;
+  if (diags && diags.length > 0) {
+    for (const d of diags) {
+      console.log(`  [explain] ${d.summary}`);
+      console.log(`            cause: ${d.likelyCause}`);
+      console.log(`            fix:   ${d.suggestedFix}`);
+    }
   }
   console.log(`  [report]  ${path.join(opts.outDir, 'report.json')}\n`);
 
@@ -470,6 +480,37 @@ function writeReport(outDir: string, report: any): void {
     path.join(outDir, 'report.json'),
     JSON.stringify(report, null, 2),
   );
+}
+
+interface ErrorDiagnostic {
+  source: 'pageError' | 'consoleError' | 'renderError';
+  message: string;
+  ruleId: string;
+  summary: string;
+  likelyCause: string;
+  suggestedFix: string;
+  severity: 'fatal' | 'warning' | 'info';
+}
+
+function buildDiagnostics(
+  consoleErrors: string[],
+  pageErrors: string[],
+  renderError: string | undefined,
+): ErrorDiagnostic[] {
+  const out: ErrorDiagnostic[] = [];
+  const seen = new Set<string>();
+  const push = (source: ErrorDiagnostic['source'], msg: string) => {
+    const exp = explainError(msg);
+    if (!exp) return;
+    const key = `${source}:${exp.ruleId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ source, message: msg, ...exp });
+  };
+  for (const m of pageErrors) push('pageError', m);
+  for (const m of consoleErrors) push('consoleError', m);
+  if (renderError) push('renderError', renderError);
+  return out;
 }
 
 function emptyReport(opts: LoopOpts, build: BuildResult, reason: string) {
