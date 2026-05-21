@@ -68,12 +68,38 @@ const CATEGORY_COLORS: Record<string, string> = {
   device: '#d13438',
   mode: '#107c10',
   utils: '#666',
+  utility: '#5c2d91',
   factory: '#999',
   data: '#107c10',
   scenario: '#881c98',
+  formContext: '#0b6a0b',
+  app: '#005a9e',
+  panel: '#005a9e',
+  copilot: '#8378de',
+  events: '#bf7900',
+  warning: '#a4262c',
 };
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_COLORS);
+
+const CATEGORY_TOOLTIPS: Record<string, string> = {
+  lifecycle: 'PCF lifecycle: init, updateView, getOutputs, destroy, notifyOutputChanged.',
+  webAPI: 'context.webAPI calls — createRecord / retrieveRecord / retrieveMultipleRecords / updateRecord / deleteRecord (online + offline routing).',
+  navigation: 'context.navigation / Xrm.Navigation — openForm, openUrl, openAlertDialog, openConfirmDialog, openFile, openWebResource.',
+  device: 'context.device — getBarcodeValue, getCurrentPosition, pickFile, captureAudio/Video/Image.',
+  mode: 'context.mode — setFullScreen, setControlState, trackContainerResize, isVisible/isControlDisabled reads.',
+  utils: 'context.utils — getEntityMetadata, lookupObjects, formatting helpers.',
+  utility: 'Xrm.Utility — getEntityMetadata, getResourceString, lookupObjects, progress indicators, refreshParentGrid.',
+  factory: 'context.factory + Fluent design — popups (create/open/close/update), requestRender, fireEvent.',
+  data: 'Dataset + data.json mutations — refresh, paging, save/delete/newRecord, live page-record fetches.',
+  scenario: 'Scenarios panel events — save/load/delete/generate.',
+  formContext: 'formContext / Xrm.Page — getAttribute, getControl, setValue, setVisible, setDisabled, addOnChange, ui.tabs.*, data.refresh, etc.',
+  app: 'Xrm.App — global notifications, sidePanes create/get/etc.',
+  panel: 'Xrm.Panel — loadPanel side-pane API (legacy).',
+  copilot: 'Copilot (M365) context shim calls.',
+  events: 'Event manifest pub-sub (addEventListener / fireEvent through context.events Proxy).',
+  warning: 'Best-practice warnings from shims (e.g. using Xrm.* legacy globals instead of context.*).',
+};
 
 export function ConsolePanel() {
   const styles = useStyles();
@@ -130,20 +156,21 @@ export function ConsolePanel() {
         </span>
         <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           {ALL_CATEGORIES.map(cat => (
-            <Badge
-              key={cat}
-              appearance={hiddenCategories.has(cat) ? 'outline' : 'filled'}
-              size="small"
-              color="informative"
-              style={{
-                cursor: 'pointer',
-                opacity: hiddenCategories.has(cat) ? 0.4 : 1,
-                fontSize: 9,
-              }}
-              onClick={() => toggleCategory(cat)}
-            >
-              {cat}
-            </Badge>
+            <span key={cat} title={CATEGORY_TOOLTIPS[cat] ?? cat} data-test-id={`console-filter-${cat}`}>
+              <Badge
+                appearance={hiddenCategories.has(cat) ? 'outline' : 'filled'}
+                size="small"
+                color="informative"
+                style={{
+                  cursor: 'pointer',
+                  opacity: hiddenCategories.has(cat) ? 0.4 : 1,
+                  fontSize: 9,
+                }}
+                onClick={() => toggleCategory(cat)}
+              >
+                {cat}
+              </Badge>
+            </span>
           ))}
         </div>
         <Button

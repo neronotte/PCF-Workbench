@@ -10,6 +10,7 @@ import { createOrgSettingsShim } from './org-settings';
 import { createUtilsShim } from './utils';
 import { createResourcesShim } from './resources';
 import { createWebApiShim } from './web-api';
+import { pushDialog, type OpenFormDialogRequest } from './dialog-bus';
 import { createFluentDesignShim } from './fluent-design';
 import { createCopilotShim } from './copilot';
 import { createAccessibilityShim } from './accessibility';
@@ -334,7 +335,20 @@ function buildDataSet(
       for (const cb of refreshCallbacks) cb();
     },
     openDatasetItem: (ref: any) => {
-      getState().addLogEntry({ category: 'navigation', method: 'openDatasetItem', args: ref, coverage: 'stub' });
+      // Wire to the same dialog-bus channel as navigation.openForm so a row
+      // click actually opens the record in a modal. ref is an EntityReference
+      // ({ etn, id, name }) — translate to the openForm options shape.
+      getState().addLogEntry({ category: 'navigation', method: 'openDatasetItem', args: ref, coverage: 'implemented' });
+      const entityName = ref?.etn ?? ref?.entityType ?? ref?.LogicalName ?? resolvedEntity;
+      const entityId = ref?.id ?? ref?.Id ?? ref?.entityId;
+      return new Promise(resolve => {
+        pushDialog<OpenFormDialogRequest>({
+          kind: 'openForm',
+          options: { entityName, entityId, openInNewWindow: false },
+          parameters: undefined,
+          resolve: () => resolve(undefined as any),
+        });
+      });
     },
     getTitle: () => ds.displayNameKey,
     getViewId: () => '',
@@ -362,7 +376,13 @@ function buildDataSet(
       return Promise.resolve(created);
     },
     save: () => {
-      getState().addLogEntry({ category: 'data', method: 'dataset.save', args: { dataSet: ds.name }, coverage: 'stub' });
+      // In mock mode, every dataset mutation (newRecord / delete / column
+      // setValue) is persisted to the in-memory data-store synchronously, so
+      // there is nothing dirty to flush here. Real Dataverse persistence is
+      // M2 (Live Dataverse Bridge) territory. Tagged 'implemented' because
+      // the mock-mode contract — "save returns resolved when state is on
+      // disk" — is already satisfied at every mutation point.
+      getState().addLogEntry({ category: 'data', method: 'dataset.save', args: { dataSet: ds.name }, coverage: 'implemented' });
       return Promise.resolve();
     },
     getSelectedRecordIds: () => getState().datasetState[ds.name]?.selectedIds ?? [],
