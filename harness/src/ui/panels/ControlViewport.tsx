@@ -316,6 +316,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
             <div ref={containerRef} className={styles.controlContainer} data-test-id="pcf-control-container" style={{
               width: containerWidth != null ? `${containerWidth}px` : '100%',
               height: containerHeight != null ? `${containerHeight}px` : '100%',
+              display: hostState.error ? 'none' : undefined,
             }} />
           </div>
         </div>
