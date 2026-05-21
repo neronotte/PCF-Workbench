@@ -19,12 +19,16 @@ import type { ManifestResources } from '../types/manifest';
  *
  * No-op if no React platform library is declared or window.React is missing.
  */
-export function setupReactAliases(libs: ManifestResources['platformLibraries']): void {
+export function setupReactAliases(libs: ManifestResources['platformLibraries'], resources?: ManifestResources): void {
   const w = window as any;
-  const reactLib = libs.find(l => l.name === 'React');
-  if (!reactLib || !w.React) return;
+  // Prefer the harness's resolved effective version (which may have been
+  // bumped from 16→18 for Fluent v9 ≥ 9.40); fall back to the manifest's
+  // declared React entry for backward compatibility.
+  const effective = resources?.effectiveReactVersion
+    ?? libs.find(l => l.name === 'React')?.version;
+  if (!effective || !w.React) return;
 
-  const major = reactLib.version.split('.')[0];
+  const major = effective.split('.')[0];
   const reactGlobal = `Reactv${major}`;
   const reactDomGlobal = `ReactDOMv${major}`;
 
@@ -44,13 +48,19 @@ export function setupReactAliases(libs: ManifestResources['platformLibraries']):
   // Polyfill React 18-only APIs that Fluent v9 controls expect even on React 16/17.
   // The platform (UCI) provides similar polyfills implicitly; deployed bundles assume
   // they exist. Without these, controls crash on first render with cryptic errors.
+  //
+  // NOTE: when effective React is 18 these are all no-ops (the real impls exist
+  // and have the dispatcher `.set` that Fluent v9.40+ needs). The 16-only path
+  // below cannot replicate that dispatcher — which is exactly why we auto-bump
+  // to React 18 for Fluent ≥ 9.40 in resolveReactVersion().
   if (typeof w.React.useId !== 'function') {
     let _idCounter = 0;
     w.React.useId = () => w.React.useMemo(() => `:pcfwb-${(_idCounter++).toString(36)}:`, []);
     console.log(`[pcf-workbench] Polyfilled React.useId for compatibility with Fluent v9`);
   }
   if (typeof w.React.useSyncExternalStore !== 'function') {
-    // Minimal polyfill — sufficient for Fluent v9's internal use
+    // Minimal polyfill — sufficient for Fluent v9 < 9.40's internal use.
+    // For 9.40+, the real React 18 is loaded instead (see resolveReactVersion).
     w.React.useSyncExternalStore = (subscribe: any, getSnapshot: any) => {
       const [value, setValue] = w.React.useState(getSnapshot());
       w.React.useEffect(() => {
@@ -72,9 +82,10 @@ export function setupReactAliases(libs: ManifestResources['platformLibraries']):
  * Get the versioned ReactDOM global for rendering virtual control output.
  */
 export function getReactDOMGlobal(resources: ManifestResources): any | null {
-  const reactLib = resources.platformLibraries.find(l => l.name === 'React');
-  if (!reactLib) return null;
-  const major = reactLib.version.split('.')[0];
+  const effective = resources.effectiveReactVersion
+    ?? resources.platformLibraries.find(l => l.name === 'React')?.version;
+  if (!effective) return (window as any).ReactDOM ?? null;
+  const major = effective.split('.')[0];
   const globalName = `ReactDOMv${major}`;
   return (window as any)[globalName] ?? (window as any).ReactDOM ?? null;
 }

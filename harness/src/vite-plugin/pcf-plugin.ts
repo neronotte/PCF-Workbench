@@ -123,6 +123,48 @@ function detectFluentNeeds(
   return out;
 }
 
+/**
+ * Reconcile the manifest's React platform-library version with what Fluent
+ * v9 needs at runtime.
+ *
+ * Why: deployed manifests routinely declare React 16 but bundle a recent
+ * Fluent v9 (≥ 9.40) that needs React 17/18's useSyncExternalStore
+ * dispatcher. The harness's React 16 polyfill of useSyncExternalStore is
+ * incomplete (it cannot replicate the internal dispatcher object with
+ * `.set`), so Fluent crashes in commit with "Cannot read properties of
+ * undefined (reading 'set')". Real UCI has the same issue — controls that
+ * ship this combination are de-facto broken in production too, but it's
+ * masked by hosting environment. We have to be pragmatic.
+ *
+ * Resolution order (first match wins):
+ *   1. Bundle uses Fluent v9 ≥ 9.40 AND declared React major < 18 →
+ *      upgrade to React 18.3.1 (override the manifest to make the control
+ *      actually run; warn loudly).
+ *   2. Manifest declares React explicitly → respect it.
+ *   3. Bundle uses Fluent v9 ≥ 9.40 (no React declared) → React 18.3.1.
+ *   4. Default → React 16.14.0 (matches UCI production).
+ */
+function resolveReactVersion(
+  manifest: ManifestConfig,
+): { version: string; source: 'manifest' | 'fluent-upgrade' | 'default' } {
+  const declared = manifest.resources.platformLibraries.find(l => l.name === 'React');
+  const fluentV9 = manifest.resources.fluentNeeds?.v9;
+  const fluentNeedsR18 = (() => {
+    if (!fluentV9) return false;
+    const [maj, minRaw] = fluentV9.split('.');
+    return maj === '9' && Number(minRaw ?? '0') >= 40;
+  })();
+
+  if (fluentNeedsR18) {
+    const declaredMajor = declared ? Number(declared.version.split('.')[0]) : NaN;
+    if (!declared || declaredMajor < 18) {
+      return { version: '18.3.1', source: 'fluent-upgrade' };
+    }
+  }
+  if (declared) return { version: declared.version, source: 'manifest' };
+  return { version: '16.14.0', source: 'default' };
+}
+
 function loadControl(state: PcfPluginState): void {
   if (!state.controlDir) return;
 
@@ -162,6 +204,18 @@ function loadControl(state: PcfPluginState): void {
   // globals undefined → cryptic runtime crashes (e.g. "undefined.gap" when v8 is
   // aliased over v9 calls to shorthands.gap).
   state.manifest.resources.fluentNeeds = detectFluentNeeds(state.outDir, state.manifest);
+  const { version: effReact, source: effReactSource } = resolveReactVersion(state.manifest);
+  state.manifest.resources.effectiveReactVersion = effReact;
+  state.manifest.resources.effectiveReactSource = effReactSource;
+  console.log(
+    `[pcf-workbench] React version: ${effReact} (source: ${effReactSource})` +
+    (effReactSource === 'fluent-upgrade'
+      ? ` — bumped to React 18 because Fluent v9 ≥ 9.40 needs the real useSyncExternalStore dispatcher` +
+        (state.manifest.resources.platformLibraries.find(l => l.name === 'React')
+          ? ` (manifest declared React ${state.manifest.resources.platformLibraries.find(l => l.name === 'React')!.version} — overridden to keep the control functional)`
+          : '')
+      : '')
+  );
 
   // RESX — bucketed by LCID parsed from filename like `name.1033.resx`.
   // Files without a 4-digit LCID stem fall into bucket 0 (treated as default).
@@ -294,34 +348,25 @@ export function pcfPlugin(): Plugin {
 
     transformIndexHtml() {
       if (!state.manifest) return [];
-      const libs = state.manifest.resources.platformLibraries;
       const tags: Array<{ tag: string; attrs: Record<string, string>; injectTo: 'head-prepend' }> = [];
 
       // Inject React UMD scripts BEFORE everything else so globals exist
-      // when the PCF bundle loads
-      let reactLib = libs.find(l => l.name === 'React');
+      // when the PCF bundle loads. The effective version was resolved during
+      // loadControl via resolveReactVersion — it reconciles the manifest
+      // declaration with Fluent v9 ≥ 9.40's hard requirement on React 17/18.
+      const effective = state.manifest.resources.effectiveReactVersion ?? '16.14.0';
+      const major = effective.split('.')[0];
 
-      // M9 / extracted controls: deployed manifests often only declare Fluent,
-      // but the bundle still references the React global because pcf-scripts
-      // externalizes React in production builds. UCI provides React implicitly.
-      // If Fluent is declared without React, infer React 16 (Fluent v9 baseline).
-      if (!reactLib && libs.some(l => l.name === 'Fluent')) {
-        reactLib = { name: 'React', version: '16.14.0' };
-      }
-
-      if (reactLib) {
-        const major = reactLib.version.split('.')[0];
-        if (major === '16') {
-          tags.push(
-            { tag: 'script', attrs: { src: 'https://unpkg.com/react@16.14.0/umd/react.development.js' }, injectTo: 'head-prepend' },
-            { tag: 'script', attrs: { src: 'https://unpkg.com/react-dom@16.14.0/umd/react-dom.development.js' }, injectTo: 'head-prepend' },
-          );
-        } else if (major === '18') {
-          tags.push(
-            { tag: 'script', attrs: { src: 'https://unpkg.com/react@18.3.1/umd/react.development.js' }, injectTo: 'head-prepend' },
-            { tag: 'script', attrs: { src: 'https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js' }, injectTo: 'head-prepend' },
-          );
-        }
+      if (major === '16') {
+        tags.push(
+          { tag: 'script', attrs: { src: `https://unpkg.com/react@${effective}/umd/react.development.js` }, injectTo: 'head-prepend' },
+          { tag: 'script', attrs: { src: `https://unpkg.com/react-dom@${effective}/umd/react-dom.development.js` }, injectTo: 'head-prepend' },
+        );
+      } else if (major === '17' || major === '18') {
+        tags.push(
+          { tag: 'script', attrs: { src: `https://unpkg.com/react@${effective}/umd/react.development.js` }, injectTo: 'head-prepend' },
+          { tag: 'script', attrs: { src: `https://unpkg.com/react-dom@${effective}/umd/react-dom.development.js` }, injectTo: 'head-prepend' },
+        );
       }
       return tags;
     },

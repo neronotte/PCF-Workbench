@@ -54,4 +54,17 @@ export interface ManifestResources {
    * declares (deployed-control "manifest drift").
    */
   fluentNeeds?: { v8?: string; v9?: string };
+  /**
+   * React major version the harness should actually inject as UMD, after
+   * reconciling the manifest declaration with what Fluent v9 needs to run.
+   * Fluent v9.40+ uses React 18's useSyncExternalStore dispatcher API, which
+   * the React 16 polyfill cannot replicate (missing `.set` on the dispatcher
+   * object). When the bundle scan detects Fluent v9 ≥ 9.40, this is bumped
+   * to 18 to avoid the "Cannot read properties of undefined (reading 'set')"
+   * commit-phase crash. Otherwise mirrors the manifest's declared React.
+   * Populated alongside fluentNeeds by the Vite plugin's loadControl.
+   */
+  effectiveReactVersion?: string;
+  /** Source of effectiveReactVersion for logging / diagnostics — 'manifest' | 'fluent-upgrade' | 'default'. */
+  effectiveReactSource?: 'manifest' | 'fluent-upgrade' | 'default';
 }

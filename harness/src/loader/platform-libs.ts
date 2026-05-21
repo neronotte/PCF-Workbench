@@ -28,7 +28,7 @@ export async function loadPlatformLibraries(resources: ManifestResources): Promi
 
   const w = window as any;
 
-  setupReactAliases(libs);
+  setupReactAliases(libs, resources);
 
   // Set up Fluent UI — load every major actually referenced by the bundle.
   //

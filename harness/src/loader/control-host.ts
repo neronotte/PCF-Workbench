@@ -35,6 +35,9 @@ export class ControlHost {
   private virtualForceUpdate: (() => void) | null = null;
   // For virtual controls: ref to the current element so the wrapper can re-render with updated content
   private _virtualElementRef: { current: any } | null = null;
+  // For React 18: store the createRoot handle so destroy() can unmount cleanly
+  // (React 18 removed unmountComponentAtNode for createRoot-mounted trees).
+  private _reactRoot: { unmount: () => void } | null = null;
   // Snapshot of state at the previous updateView, used to compute updatedProperties
   private prevSnapshot: {
     propertyValues: Record<string, any>;
@@ -274,11 +277,17 @@ export class ControlHost {
               }
             }
 
-            if (ReactDOM.render) {
+            if (ReactDOM.createRoot) {
+              // React 18+ path. Prefer createRoot to silence the deprecation
+              // warning and avoid the legacy-mode behavior that triggers some
+              // Fluent edge cases.
+              if (!this._reactRoot) {
+                this._reactRoot = ReactDOM.createRoot(this.container);
+              }
+              (this._reactRoot as any).render(React.createElement(VirtualWrapper));
+            } else if (ReactDOM.render) {
+              // React 16/17 path.
               ReactDOM.render(React.createElement(VirtualWrapper), this.container);
-            } else if (ReactDOM.createRoot) {
-              const root = ReactDOM.createRoot(this.container);
-              root.render(React.createElement(VirtualWrapper));
             }
           } else if (this.virtualForceUpdate) {
             // Subsequent renders: update the ref and trigger re-render without remounting
@@ -329,9 +338,15 @@ export class ControlHost {
     if (this.container && this.manifest.controlType === 'virtual') {
       // Unmount React tree before destroying the control
       try {
-        const ReactDOM = getReactDOMGlobal(this.manifest.resources);
-        if (ReactDOM?.unmountComponentAtNode) {
-          ReactDOM.unmountComponentAtNode(this.container);
+        if (this._reactRoot) {
+          // React 18+ createRoot tree
+          this._reactRoot.unmount();
+          this._reactRoot = null;
+        } else {
+          const ReactDOM = getReactDOMGlobal(this.manifest.resources);
+          if (ReactDOM?.unmountComponentAtNode) {
+            ReactDOM.unmountComponentAtNode(this.container);
+          }
         }
       } catch {
         // Ignore unmount errors
