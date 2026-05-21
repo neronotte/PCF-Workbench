@@ -119,6 +119,10 @@ function buildAttribute(name: string): any {
         if (typeof filter === 'string') return c.getName() === filter ? c : null;
         return [c].filter((x, i) => filter(x, i));
       },
+      getAll: () => {
+        const c = buildControl(name);
+        return c ? [c] : [];
+      },
       forEach: (cb: (c: any, i: number) => void) => {
         const c = buildControl(name);
         if (c) cb(c, 0);
@@ -228,6 +232,7 @@ function buildSection(name: string): any | null {
         if (typeof filter === 'string') return list.find(c => c.getName() === filter) ?? null;
         return list.filter((c, i) => filter(c, i));
       },
+      getAll: () => s.controls.map(buildControl).filter(Boolean) as any[],
       forEach: (cb: (c: any, i: number) => void) => s.controls.map(buildControl).forEach((c, i) => c && cb(c, i)),
       getLength: () => s.controls.length,
     },
@@ -254,6 +259,7 @@ function buildTab(name: string): any | null {
         if (typeof filter === 'string') return list.find(c => c.getName() === filter) ?? null;
         return list.filter((c, i) => filter(c, i));
       },
+      getAll: () => t.sections.map(buildSection).filter(Boolean) as any[],
       forEach: (cb: (c: any, i: number) => void) => t.sections.map(buildSection).forEach((c, i) => c && cb(c, i)),
       getLength: () => t.sections.length,
     },
@@ -274,6 +280,7 @@ function buildEntity(getPageEntityId: () => string, getPageEntityType: () => str
       return list.filter((a, i) => filter(a, i));
     },
     forEach: (cb: (a: any, i: number) => void) => fs.listAttributes().forEach((a, i) => cb(buildAttribute(a.name), i)),
+    getAll: () => fs.listAttributes().map(a => buildAttribute(a.name)),
     getLength: () => fs.listAttributes().length,
   };
 
@@ -326,11 +333,47 @@ function buildUi(): any {
       if (typeof filter === 'string') return list.find(t => t.getName() === filter) ?? null;
       return list.filter((t, i) => filter(t, i));
     },
+    getAll: () => fs.listTabs().map(t => buildTab(t.name)).filter(Boolean) as any[],
     forEach: (cb: (t: any, i: number) => void) => fs.listTabs().forEach((t, i) => {
       const tab = buildTab(t.name);
       if (tab) cb(tab, i);
     }),
     getLength: () => fs.listTabs().length,
+  };
+
+  // formContext.ui.controls — collection over every known control on the form.
+  // @types/xrm exposes this at the form root in addition to per-section/tab.
+  const controlsCollection = {
+    get: (filter?: number | string | ((c: any, i: number) => boolean)) => {
+      const list = fs.listControls().map(c => buildControl(c.name)).filter(Boolean) as any[];
+      if (filter == null) return list;
+      if (typeof filter === 'number') return list[filter] ?? null;
+      if (typeof filter === 'string') return list.find(c => c.getName() === filter) ?? null;
+      return list.filter((c, i) => filter(c, i));
+    },
+    getAll: () => fs.listControls().map(c => buildControl(c.name)).filter(Boolean) as any[],
+    forEach: (cb: (c: any, i: number) => void) => fs.listControls().forEach((c, i) => {
+      const ctrl = buildControl(c.name);
+      if (ctrl) cb(ctrl, i);
+    }),
+    getLength: () => fs.listControls().length,
+  };
+
+  // formContext.ui.sections — flat collection of every section across all tabs.
+  const sectionsCollection = {
+    get: (filter?: number | string | ((s: any, i: number) => boolean)) => {
+      const list = fs.listSections().map(s => buildSection(s.name)).filter(Boolean) as any[];
+      if (filter == null) return list;
+      if (typeof filter === 'number') return list[filter] ?? null;
+      if (typeof filter === 'string') return list.find(s => s.getName() === filter) ?? null;
+      return list.filter((s, i) => filter(s, i));
+    },
+    getAll: () => fs.listSections().map(s => buildSection(s.name)).filter(Boolean) as any[],
+    forEach: (cb: (s: any, i: number) => void) => fs.listSections().forEach((s, i) => {
+      const sec = buildSection(s.name);
+      if (sec) cb(sec, i);
+    }),
+    getLength: () => fs.listSections().length,
   };
 
   return {
@@ -350,6 +393,8 @@ function buildUi(): any {
     addOnLoad: (handler: fs.FormHandler) => { log('ui.addOnLoad'); fs.addOnLoad(handler); },
     removeOnLoad: (handler: fs.FormHandler) => { log('ui.removeOnLoad'); fs.removeOnLoad(handler); },
     tabs: tabsCollection,
+    controls: controlsCollection,
+    sections: sectionsCollection,
     formSelector: {
       getCurrentItem: () => ({
         getId: () => fs.getFormId(),
