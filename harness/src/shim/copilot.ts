@@ -9,7 +9,7 @@ import type { HarnessStore } from '../store/harness-store';
  */
 export function createCopilotShim(getState: () => HarnessStore) {
   const log = (method: string, args?: any) =>
-    getState().addLogEntry({ category: 'copilot', method, args });
+    getState().addLogEntry({ category: 'copilot', method, args, coverage: 'stub' });
 
   return {
     getRecommendations(options?: any): Promise<any[]> {

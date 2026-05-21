@@ -30,7 +30,7 @@ export function createModeShim(getState: () => HarnessStore) {
     },
     setFullScreen(value: boolean): void {
       const s = getState();
-      s.addLogEntry({ category: 'mode', method: 'setFullScreen', args: value });
+      s.addLogEntry({ category: 'mode', method: 'setFullScreen', args: value, coverage: 'implemented' });
       s.setFullscreen(value);
     },
     trackContainerResize(value: boolean): void {

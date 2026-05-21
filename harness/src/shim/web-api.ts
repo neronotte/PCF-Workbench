@@ -187,7 +187,7 @@ export function createWebApiShim(
   getEntityData: (entityType: string) => Record<string, any>[],
 ) {
   const log = (method: string, args?: any, result?: any) =>
-    getState().addLogEntry({ category: 'webAPI', method, args, result });
+    getState().addLogEntry({ category: 'webAPI', method, args, result, coverage: 'implemented' });
 
   /**
    * Apply network latency. In 'online-only' mode, rejects when offline.

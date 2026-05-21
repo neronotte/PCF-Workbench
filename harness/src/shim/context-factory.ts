@@ -273,21 +273,21 @@ function buildDataSet(
       hasNextPage,
       hasPreviousPage,
       loadNextPage: () => {
-        getState().addLogEntry({ category: 'data', method: 'paging.loadNextPage', args: { dataSet: ds.name } });
+        getState().addLogEntry({ category: 'data', method: 'paging.loadNextPage', args: { dataSet: ds.name }, coverage: 'implemented' });
         getState().setDatasetPage(ds.name, dsState.pageNumber + 1, dsState.pageSize);
       },
       loadPreviousPage: () => {
-        getState().addLogEntry({ category: 'data', method: 'paging.loadPreviousPage', args: { dataSet: ds.name } });
+        getState().addLogEntry({ category: 'data', method: 'paging.loadPreviousPage', args: { dataSet: ds.name }, coverage: 'implemented' });
         getState().setDatasetPage(ds.name, Math.max(1, dsState.pageNumber - 1), dsState.pageSize);
       },
       setPageSize: (size: number) => {
-        getState().addLogEntry({ category: 'data', method: 'paging.setPageSize', args: { dataSet: ds.name, size } });
+        getState().addLogEntry({ category: 'data', method: 'paging.setPageSize', args: { dataSet: ds.name, size }, coverage: 'implemented' });
         getState().setDatasetPage(ds.name, 1, size);
       },
       firstPageNumber: 1,
       lastPageNumber: Math.max(1, Math.ceil(totalResultCount / dsState.pageSize)),
       reset: () => {
-        getState().addLogEntry({ category: 'data', method: 'paging.reset', args: { dataSet: ds.name } });
+        getState().addLogEntry({ category: 'data', method: 'paging.reset', args: { dataSet: ds.name }, coverage: 'implemented' });
         getState().setDatasetPage(ds.name, 1, dsState.pageSize);
       },
     },
@@ -330,11 +330,11 @@ function buildDataSet(
     refresh: () => {
       // Capture any control-side mutations to sorting back into store, then trigger updateView.
       getState().setDatasetSorting(ds.name, liveSorting.map(s => ({ name: s.name, sortDirection: s.sortDirection })));
-      getState().addLogEntry({ category: 'data', method: 'dataset.refresh', args: { dataSet: ds.name } });
+      getState().addLogEntry({ category: 'data', method: 'dataset.refresh', args: { dataSet: ds.name }, coverage: 'implemented' });
       for (const cb of refreshCallbacks) cb();
     },
     openDatasetItem: (ref: any) => {
-      getState().addLogEntry({ category: 'navigation', method: 'openDatasetItem', args: ref });
+      getState().addLogEntry({ category: 'navigation', method: 'openDatasetItem', args: ref, coverage: 'stub' });
     },
     getTitle: () => ds.displayNameKey,
     getViewId: () => '',
@@ -344,7 +344,7 @@ function buildDataSet(
     addColumn: () => {},
     delete: () => {
       const ids = getState().datasetState[ds.name]?.selectedIds ?? [];
-      getState().addLogEntry({ category: 'data', method: 'dataset.delete', args: { dataSet: ds.name, ids } });
+      getState().addLogEntry({ category: 'data', method: 'dataset.delete', args: { dataSet: ds.name, ids }, coverage: 'implemented' });
       let removed = 0;
       for (const id of ids) {
         if (deleteEntityRecord(resolvedEntity, id)) removed++;
@@ -357,12 +357,12 @@ function buildDataSet(
     },
     newRecord: () => {
       const created = addEntityRecord(resolvedEntity, {});
-      getState().addLogEntry({ category: 'data', method: 'dataset.newRecord', args: { dataSet: ds.name, record: created } });
+      getState().addLogEntry({ category: 'data', method: 'dataset.newRecord', args: { dataSet: ds.name, record: created }, coverage: 'implemented' });
       getState().bumpDataVersion();
       return Promise.resolve(created);
     },
     save: () => {
-      getState().addLogEntry({ category: 'data', method: 'dataset.save', args: { dataSet: ds.name } });
+      getState().addLogEntry({ category: 'data', method: 'dataset.save', args: { dataSet: ds.name }, coverage: 'stub' });
       return Promise.resolve();
     },
     getSelectedRecordIds: () => getState().datasetState[ds.name]?.selectedIds ?? [],
@@ -463,6 +463,7 @@ function createEventsProxy(getState: () => HarnessStore): Record<string, (...arg
             category: 'events',
             method: prop,
             args: args.length === 1 ? args[0] : args,
+            coverage: 'stub',
           });
         };
       }
@@ -494,37 +495,37 @@ export function createContext(
     factory: {
       getPopupService: () => ({
         createPopup: (popup: any) => {
-          getState().addLogEntry({ category: 'factory', method: 'popup.create', args: { name: popup?.name } });
+          getState().addLogEntry({ category: 'factory', method: 'popup.create', args: { name: popup?.name }, coverage: 'implemented' });
           if (popup?.name) createPopupEntry(popup);
         },
         deletePopup: (name: string) => {
-          getState().addLogEntry({ category: 'factory', method: 'popup.delete', args: { name } });
+          getState().addLogEntry({ category: 'factory', method: 'popup.delete', args: { name }, coverage: 'implemented' });
           deletePopupEntry(name);
         },
         openPopup: (name: string) => {
-          getState().addLogEntry({ category: 'factory', method: 'popup.open', args: { name } });
+          getState().addLogEntry({ category: 'factory', method: 'popup.open', args: { name }, coverage: 'implemented' });
           openPopupEntry(name);
         },
         closePopup: (name: string) => {
-          getState().addLogEntry({ category: 'factory', method: 'popup.close', args: { name } });
+          getState().addLogEntry({ category: 'factory', method: 'popup.close', args: { name }, coverage: 'implemented' });
           closePopupEntry(name);
         },
         updatePopup: (popup: any) => {
-          getState().addLogEntry({ category: 'factory', method: 'popup.update', args: { name: popup?.name } });
+          getState().addLogEntry({ category: 'factory', method: 'popup.update', args: { name: popup?.name }, coverage: 'implemented' });
           if (popup?.name) updatePopupEntry(popup);
         },
         setPopupsId: (id: string) => {
-          getState().addLogEntry({ category: 'factory', method: 'popup.setPopupsId', args: { id } });
+          getState().addLogEntry({ category: 'factory', method: 'popup.setPopupsId', args: { id }, coverage: 'implemented' });
           setPopupsIdValue(id);
         },
         getPopupsId: () => getPopupsIdValue(),
       }),
       requestRender: () => {
-        getState().addLogEntry({ category: 'factory', method: 'requestRender' });
+        getState().addLogEntry({ category: 'factory', method: 'requestRender', coverage: 'implemented' });
         hooks.requestRender?.();
       },
       fireEvent: (name: string, payload?: any) => {
-        getState().addLogEntry({ category: 'factory', method: 'fireEvent', args: { name, payload } });
+        getState().addLogEntry({ category: 'factory', method: 'fireEvent', args: { name, payload }, coverage: 'implemented' });
         // Dispatch through the events Proxy so any registered listener fires.
         // The Proxy auto-creates a logging handler for any unknown event name.
         if (typeof (events as any)[name] === 'function') {

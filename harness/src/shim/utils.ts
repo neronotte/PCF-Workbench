@@ -5,7 +5,7 @@ import { pushDialog, type LookupDialogRequest } from './dialog-bus';
 
 export function createUtilsShim(getState: () => HarnessStore) {
   const log = (method: string, args?: any) =>
-    getState().addLogEntry({ category: 'utils', method, args });
+    getState().addLogEntry({ category: 'utils', method, args, coverage: 'implemented' });
 
   return {
     async getEntityMetadata(entityName: string, attributes?: string[]): Promise<any> {

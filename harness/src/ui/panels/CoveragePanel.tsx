@@ -103,6 +103,12 @@ interface AggregatedCall {
 function aggregate(log: readonly LogEntry[]): AggregatedCall[] {
   const map = new Map<string, AggregatedCall>();
   for (const e of log) {
+    // Skip entries that don't represent shim calls:
+    //  - 'warning' category = legacy Xrm.* deprecation notices (real call recorded under inner shim)
+    //  - 'lifecycle' category = control init/updateView/destroy, not a shim
+    //  - entries without an explicit coverage tag = harness-internal logging (e.g. host events)
+    if (e.category === 'warning' || e.category === 'lifecycle') continue;
+    if (!e.coverage) continue;
     const key = `${e.category}::${e.method}`;
     const existing = map.get(key);
     if (existing) {
@@ -112,7 +118,7 @@ function aggregate(log: readonly LogEntry[]): AggregatedCall[] {
         category: e.category,
         method: e.method,
         count: 1,
-        coverage: e.coverage ?? 'implemented',
+        coverage: e.coverage,
       });
     }
   }

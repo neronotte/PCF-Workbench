@@ -1,9 +1,9 @@
-import type { HarnessStore } from '../store/harness-store';
+import type { HarnessStore, CoverageStatus } from '../store/harness-store';
 import { pushDialog, type OpenFormDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest } from './dialog-bus';
 
 export function createNavigationShim(getState: () => HarnessStore) {
-  const log = (method: string, args?: any) =>
-    getState().addLogEntry({ category: 'navigation', method, args });
+  const log = (method: string, args?: any, coverage: CoverageStatus = 'implemented') =>
+    getState().addLogEntry({ category: 'navigation', method, args, coverage });
 
   return {
     openAlertDialog(alertStrings: any, options?: any): Promise<void> {
@@ -29,7 +29,7 @@ export function createNavigationShim(getState: () => HarnessStore) {
       });
     },
     openErrorDialog(options: any): Promise<void> {
-      log('openErrorDialog', options);
+      log('openErrorDialog', options, 'stub');
       window.alert(`Error: ${options.message || options.details || 'Unknown error'}`);
       return Promise.resolve();
     },
@@ -45,10 +45,10 @@ export function createNavigationShim(getState: () => HarnessStore) {
       });
     },
     openUrl(url: string, options?: any): void {
-      log('openUrl', { url, options });
+      log('openUrl', { url, options }, 'stub');
     },
     openWebResource(name: string, options?: any, data?: string): void {
-      log('openWebResource', { name, options, data });
+      log('openWebResource', { name, options, data }, 'stub');
     },
     items: {
       get: (_p?: any) => [] as any[],

@@ -1,4 +1,4 @@
-import type { HarnessStore } from '../store/harness-store';
+import type { HarnessStore, CoverageStatus } from '../store/harness-store';
 
 interface PickedFile {
   fileContent: string;
@@ -50,8 +50,8 @@ async function fileToPicked(file: File): Promise<PickedFile> {
 }
 
 export function createDeviceShim(getState: () => HarnessStore) {
-  const log = (method: string, args?: any) =>
-    getState().addLogEntry({ category: 'device', method, args });
+  const log = (method: string, args?: any, coverage: CoverageStatus = 'implemented') =>
+    getState().addLogEntry({ category: 'device', method, args, coverage });
 
   return {
     async captureAudio(): Promise<PickedFile | null> {
@@ -70,7 +70,7 @@ export function createDeviceShim(getState: () => HarnessStore) {
       return file ? fileToPicked(file) : null;
     },
     getBarcodeValue(): Promise<string> {
-      log('getBarcodeValue');
+      log('getBarcodeValue', undefined, 'stub');
       return Promise.resolve('MOCK-BARCODE-12345');
     },
     getCurrentPosition(): Promise<any> {
