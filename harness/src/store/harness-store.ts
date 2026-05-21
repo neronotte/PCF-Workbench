@@ -190,6 +190,17 @@ export interface HarnessStore {
   formChromeEnabled: boolean;
   toggleFormChrome: () => void;
 
+  // Workbench chrome — collapsible side / bottom panels. Persisted to
+  // localStorage so interactive users keep their layout across reloads.
+  // The loop CLI passes ?chrome=none in the URL to fully hide both
+  // panels for clean automated screenshots.
+  rightPanelCollapsed: boolean;
+  bottomPanelCollapsed: boolean;
+  chromeMode: 'full' | 'minimal' | 'none';
+  toggleRightPanel: () => void;
+  toggleBottomPanel: () => void;
+  setChromeMode: (mode: 'full' | 'minimal' | 'none') => void;
+
   // Versioned shim profile (Dataverse 9.0 / 9.2 / latest)
   // Controls feature gating in shims so a control built for 9.x can be
   // tested with the same restrictions it would face on a real org.
@@ -422,6 +433,41 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     const next = !s.formChromeEnabled;
     try { localStorage.setItem('pcf.formChromeEnabled', String(next)); } catch { /* ignore */ }
     return { formChromeEnabled: next };
+  }),
+
+  // Workbench chrome — initial state is "chrome=full, panels expanded".
+  // App.tsx parses ?chrome=minimal|none on mount and calls setChromeMode
+  // before first render. localStorage preferences override defaults but
+  // are ignored when the URL forces a chrome mode (so the loop CLI always
+  // gets clean screenshots regardless of user prefs).
+  rightPanelCollapsed: (() => {
+    try {
+      const v = typeof localStorage !== 'undefined' ? localStorage.getItem('pcf.rightPanelCollapsed') : null;
+      return v === 'true';
+    } catch { return false; }
+  })(),
+  bottomPanelCollapsed: (() => {
+    try {
+      const v = typeof localStorage !== 'undefined' ? localStorage.getItem('pcf.bottomPanelCollapsed') : null;
+      return v === 'true';
+    } catch { return false; }
+  })(),
+  chromeMode: 'full',
+  toggleRightPanel: () => set(s => {
+    const next = !s.rightPanelCollapsed;
+    try { localStorage.setItem('pcf.rightPanelCollapsed', String(next)); } catch { /* ignore */ }
+    return { rightPanelCollapsed: next };
+  }),
+  toggleBottomPanel: () => set(s => {
+    const next = !s.bottomPanelCollapsed;
+    try { localStorage.setItem('pcf.bottomPanelCollapsed', String(next)); } catch { /* ignore */ }
+    return { bottomPanelCollapsed: next };
+  }),
+  setChromeMode: (mode) => set(() => {
+    if (mode === 'none' || mode === 'minimal') {
+      return { chromeMode: mode, rightPanelCollapsed: true, bottomPanelCollapsed: true };
+    }
+    return { chromeMode: mode };
   }),
 
   // Shim profile — persisted so reloads keep the chosen Dataverse version.

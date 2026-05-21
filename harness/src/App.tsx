@@ -34,6 +34,16 @@ export function App() {
   useEffect(() => {
     setManifest(manifestData);
 
+    // Honour ?chrome=minimal|none from the URL. Used by the loop CLI to
+    // hide workbench chrome for clean automated screenshots, but also
+    // available to anyone sharing a link to a "headless-ish" view.
+    try {
+      const chromeParam = new URLSearchParams(window.location.search).get('chrome');
+      if (chromeParam === 'minimal' || chromeParam === 'none') {
+        useHarnessStore.getState().setChromeMode(chromeParam);
+      }
+    } catch { /* ignore */ }
+
     // Bridge data-store mutations into the harness store so ControlViewport rebuilds.
     const unsubscribe = subscribeData(() => {
       useHarnessStore.getState().bumpDataVersion();

@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  makeStyles, tokens, Tab, TabList, Switch, Label, Button, Divider, Dropdown, Option,
+  makeStyles, tokens, Tab, TabList, Switch, Label, Button, Divider, Dropdown, Option, mergeClasses,
 } from '@fluentui/react-components';
 import {
   PlugConnected24Regular, Phone24Regular, TopSpeed24Regular,
   Settings24Regular, WeatherMoon24Regular, WeatherSunny24Regular,
   Database24Regular, Beaker24Regular, Play24Regular, Person24Regular,
   Form24Regular, Shield24Regular, ArrowClockwise20Regular, Globe16Regular,
+  ChevronRight20Regular, ChevronLeft20Regular,
+  ChevronUp20Regular, ChevronDown20Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore, DEVICE_PRESETS, SHIM_PROFILE_LABELS, type ShimProfile } from '../store/harness-store';
 import { ControlViewport } from './panels/ControlViewport';
@@ -78,6 +80,10 @@ const useStyles = makeStyles({
     borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
     flexShrink: 0,
     overflow: 'hidden',
+    position: 'relative',
+  },
+  consoleAreaCollapsed: {
+    height: '28px',
   },
   sidePanel: {
     width: '360px',
@@ -86,6 +92,54 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     overflow: 'hidden',
     flexShrink: 0,
+    position: 'relative',
+  },
+  sidePanelCollapsed: {
+    width: '32px',
+  },
+  sidePanelHeader: {
+    height: '24px',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    paddingLeft: '4px',
+  },
+  panelToggle: {
+    minWidth: '24px',
+    width: '24px',
+    height: '20px',
+    padding: 0,
+  },
+  bottomToggle: {
+    position: 'absolute',
+    top: '2px',
+    right: '8px',
+    zIndex: 10,
+    minWidth: '24px',
+    width: '24px',
+    height: '24px',
+    padding: 0,
+  },
+  collapsedRail: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    writingMode: 'vertical-rl',
+    fontSize: '11px',
+    color: tokens.colorNeutralForeground3,
+    userSelect: 'none',
+  },
+  collapsedRailBottom: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    paddingLeft: '12px',
+    fontSize: '11px',
+    color: tokens.colorNeutralForeground3,
+    userSelect: 'none',
   },
   sidePanelTabs: {
     flexShrink: 0,
@@ -136,6 +190,11 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
   const reloadControl = useHarnessStore(s => s.reloadControl);
   const dataSource = useHarnessStore(s => s.dataSource);
   const liveProfile = useHarnessStore(s => s.liveProfile);
+  const rightPanelCollapsed = useHarnessStore(s => s.rightPanelCollapsed);
+  const bottomPanelCollapsed = useHarnessStore(s => s.bottomPanelCollapsed);
+  const chromeMode = useHarnessStore(s => s.chromeMode);
+  const toggleRightPanel = useHarnessStore(s => s.toggleRightPanel);
+  const toggleBottomPanel = useHarnessStore(s => s.toggleBottomPanel);
 
   // Auto-fetch the live page record when in Live mode. Re-runs on profile,
   // page id, or reloadEpoch change. See use-live-page-record for details.
@@ -307,44 +366,78 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
               <ControlViewport manifest={manifest} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} />
             </FormChrome>
           </div>
-          <div className={styles.consoleArea}>
-            <ConsolePanel />
-          </div>
+          {chromeMode !== 'none' && (
+            <div className={mergeClasses(styles.consoleArea, bottomPanelCollapsed && styles.consoleAreaCollapsed)}>
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={bottomPanelCollapsed ? <ChevronUp20Regular /> : <ChevronDown20Regular />}
+                className={styles.bottomToggle}
+                onClick={toggleBottomPanel}
+                title={bottomPanelCollapsed ? 'Expand console' : 'Collapse console'}
+                aria-label={bottomPanelCollapsed ? 'Expand console' : 'Collapse console'}
+              />
+              {bottomPanelCollapsed ? (
+                <div className={styles.collapsedRailBottom}>Console (collapsed)</div>
+              ) : (
+                <ConsolePanel />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Side panel: tabs */}
-        <div className={styles.sidePanel}>
-          <div className={styles.sidePanelTabs}>
-            <TabList
-              selectedValue={activeTab}
-              onTabSelect={(_, d) => setActiveTab(d.value as SidePanelTab)}
-              size="small"
-            >
-              <Tab value="properties" icon={<Settings24Regular />} title="Properties" />
-              <Tab value="form" icon={<Form24Regular />} title="Form (formContext)" />
-              <Tab value="data" icon={<Database24Regular />} title="Data (WebAPI Mock)" />
-              <Tab value="scenarios" icon={<Beaker24Regular />} title="Test Scenarios" />
-              <Tab value="network" icon={<PlugConnected24Regular />} title="Network Conditioning" />
-              <Tab value="device" icon={<Phone24Regular />} title="Device Emulation" />
-              <Tab value="user" icon={<Person24Regular />} title="User Settings" />
-              <Tab value="lifecycle" icon={<Play24Regular />} title="Lifecycle Monitor" />
-              <Tab value="performance" icon={<TopSpeed24Regular />} title="Performance" />
-              <Tab value="coverage" icon={<Shield24Regular />} title="Shim Coverage" />
-            </TabList>
+        {chromeMode !== 'none' && (
+          <div className={mergeClasses(styles.sidePanel, rightPanelCollapsed && styles.sidePanelCollapsed)}>
+            <div className={styles.sidePanelHeader}>
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={rightPanelCollapsed ? <ChevronLeft20Regular /> : <ChevronRight20Regular />}
+                className={styles.panelToggle}
+                onClick={toggleRightPanel}
+                title={rightPanelCollapsed ? 'Expand side panel' : 'Collapse side panel'}
+                aria-label={rightPanelCollapsed ? 'Expand side panel' : 'Collapse side panel'}
+              />
+            </div>
+            {rightPanelCollapsed ? (
+              <div className={styles.collapsedRail}>Workbench panels</div>
+            ) : (
+              <>
+                <div className={styles.sidePanelTabs}>
+                  <TabList
+                    selectedValue={activeTab}
+                    onTabSelect={(_, d) => setActiveTab(d.value as SidePanelTab)}
+                    size="small"
+                  >
+                    <Tab value="properties" icon={<Settings24Regular />} title="Properties" />
+                    <Tab value="form" icon={<Form24Regular />} title="Form (formContext)" />
+                    <Tab value="data" icon={<Database24Regular />} title="Data (WebAPI Mock)" />
+                    <Tab value="scenarios" icon={<Beaker24Regular />} title="Test Scenarios" />
+                    <Tab value="network" icon={<PlugConnected24Regular />} title="Network Conditioning" />
+                    <Tab value="device" icon={<Phone24Regular />} title="Device Emulation" />
+                    <Tab value="user" icon={<Person24Regular />} title="User Settings" />
+                    <Tab value="lifecycle" icon={<Play24Regular />} title="Lifecycle Monitor" />
+                    <Tab value="performance" icon={<TopSpeed24Regular />} title="Performance" />
+                    <Tab value="coverage" icon={<Shield24Regular />} title="Shim Coverage" />
+                  </TabList>
+                </div>
+                <div className={styles.sidePanelContent}>
+                  <div style={{ display: activeTab === 'properties' ? 'contents' : 'none' }}><PropertyEditor manifest={manifest} /></div>
+                  {activeTab === 'form' && <FormPanel />}
+                  <div style={{ display: activeTab === 'data' ? 'contents' : 'none' }}><DataPanel /></div>
+                  <div style={{ display: activeTab === 'scenarios' ? 'contents' : 'none' }}><ScenariosPanel controlId={`${manifest.namespace}.${manifest.constructor}`} onScenarioLoaded={() => setActiveTab('properties')} /></div>
+                  {activeTab === 'network' && <NetworkPanel />}
+                  {activeTab === 'device' && <DevicePanel />}
+                  {activeTab === 'user' && <UserSettingsPanel />}
+                  {activeTab === 'lifecycle' && <LifecyclePanel />}
+                  {activeTab === 'performance' && <PerformancePanel />}
+                  {activeTab === 'coverage' && <CoveragePanel />}
+                </div>
+              </>
+            )}
           </div>
-          <div className={styles.sidePanelContent}>
-            <div style={{ display: activeTab === 'properties' ? 'contents' : 'none' }}><PropertyEditor manifest={manifest} /></div>
-            {activeTab === 'form' && <FormPanel />}
-            <div style={{ display: activeTab === 'data' ? 'contents' : 'none' }}><DataPanel /></div>
-            <div style={{ display: activeTab === 'scenarios' ? 'contents' : 'none' }}><ScenariosPanel controlId={`${manifest.namespace}.${manifest.constructor}`} onScenarioLoaded={() => setActiveTab('properties')} /></div>
-            {activeTab === 'network' && <NetworkPanel />}
-            {activeTab === 'device' && <DevicePanel />}
-            {activeTab === 'user' && <UserSettingsPanel />}
-            {activeTab === 'lifecycle' && <LifecyclePanel />}
-            {activeTab === 'performance' && <PerformancePanel />}
-            {activeTab === 'coverage' && <CoveragePanel />}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

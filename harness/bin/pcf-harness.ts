@@ -267,7 +267,7 @@ async function runLoop(opts: LoopOpts): Promise<number> {
     logLevel: 'warn',
   });
   await server.listen();
-  const url = `http://127.0.0.1:${port}/`;
+  const url = `http://127.0.0.1:${port}/?chrome=none`;
 
   /* --- 3. Playwright drive -------------------------------------- */
   // Lazy-import to keep `pcf-harness --path` startup fast.
