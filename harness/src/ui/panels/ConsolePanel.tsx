@@ -122,7 +122,12 @@ export function ConsolePanel() {
   return (
     <div className={styles.root}>
       <div className={styles.header}>
-        <span className={styles.title}>Console ({filteredEntries.length})</span>
+        <span
+          className={styles.title}
+          title="Console — every shim call the control made (Context, Xrm, formContext, WebAPI, lifecycle). Filter by category using the pills on the right. Useful for tracing the exact API path a control took."
+        >
+          Console ({filteredEntries.length})
+        </span>
         <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           {ALL_CATEGORIES.map(cat => (
             <Badge

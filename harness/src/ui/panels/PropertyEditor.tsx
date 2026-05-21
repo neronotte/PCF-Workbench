@@ -558,11 +558,23 @@ export function PropertyEditor({ manifest }: Props) {
     <div className={styles.root}>
       <ControlInfoCard manifest={manifest} />
 
-      <div className={styles.header}>Properties</div>
+      <div
+        className={styles.header}
+        title="Properties — the manifest-declared inputs to the control. Bound properties read from a column on the host's record; input properties are static configuration the maker sets at design time. Edit values here to test how the control reacts to different inputs."
+      >
+        Properties
+      </div>
 
       {boundProps.length > 0 && (
         <>
-          <Label size="small" weight="semibold" style={{ opacity: 0.6 }}>Bound Properties</Label>
+          <Label
+            size="small"
+            weight="semibold"
+            style={{ opacity: 0.6 }}
+            title="Bound properties — properties with usage='bound' in the manifest. Each binds to a column on the host record (e.g. a field PCF binds to the field it is attached to; a dataset PCF columns bind to view columns). Toggle 'Static value' to test with literal values without a record."
+          >
+            Bound Properties
+          </Label>
           {boundProps.map(p => (
             <PropertyField
               key={p.name}
@@ -579,7 +591,14 @@ export function PropertyEditor({ manifest }: Props) {
       {inputProps.length > 0 && (
         <>
           <Divider style={{ margin: '8px 0' }} />
-          <Label size="small" weight="semibold" style={{ opacity: 0.6 }}>Input Properties</Label>
+          <Label
+            size="small"
+            weight="semibold"
+            style={{ opacity: 0.6 }}
+            title="Input properties — properties with usage='input' in the manifest. These are read-only configuration values the maker sets at design time (labels, colours, behaviour flags). The control reads them via context.parameters.<name>.raw."
+          >
+            Input Properties
+          </Label>
           {inputProps.map(p => (
             <PropertyField
               key={p.name}

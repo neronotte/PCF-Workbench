@@ -182,25 +182,39 @@ export function FormPanel(): JSX.Element {
   return (
     <div className={styles.root} data-test-id="form-panel">
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>Form metadata</div>
+        <div
+          className={styles.sectionTitle}
+          title="Form-level state the host would expose at runtime — what type of form the user opened (Create / Update / ReadOnly / Disabled / BulkEdit / ReadOptimized) and whether unsaved changes exist. Controls can read this via formContext.ui.getFormType() and formContext.data.getIsDirty()."
+        >
+          Form metadata
+        </div>
         <div className={styles.toolbar}>
-          <Badge appearance="outline" data-test-id="fp-form-type">
-            FormType: {FORM_TYPE_LABEL[snap.formType] ?? snap.formType}
-          </Badge>
-          <Badge
-            appearance={snap.dirty ? 'filled' : 'outline'}
-            color={snap.dirty ? 'warning' : undefined}
-            data-test-id="fp-form-dirty"
-          >
-            {snap.dirty ? `Dirty (${snap.dirtyCount})` : 'Clean'}
-          </Badge>
+          <span title="formContext.ui.getFormType() — the lifecycle stage the form is in. Create = brand-new record, Update = editing an existing record, ReadOnly = view-only, Disabled = all fields locked, BulkEdit = editing multiple records, ReadOptimized = high-performance read view.">
+            <Badge appearance="outline" data-test-id="fp-form-type">
+              FormType: {FORM_TYPE_LABEL[snap.formType] ?? snap.formType}
+            </Badge>
+          </span>
+          <span title="formContext.data.getIsDirty() — true if any attribute value has been changed in the harness since the last seed/save. The count shows how many attributes are currently dirty. Use the 'fire' button on an attribute row to push edits through onChange handlers.">
+            <Badge
+              appearance={snap.dirty ? 'filled' : 'outline'}
+              color={snap.dirty ? 'warning' : undefined}
+              data-test-id="fp-form-dirty"
+            >
+              {snap.dirty ? `Dirty (${snap.dirtyCount})` : 'Clean'}
+            </Badge>
+          </span>
         </div>
       </div>
 
       <Divider />
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>Attributes ({snap.attributes.length})</div>
+        <div
+          className={styles.sectionTitle}
+          title="Attributes — the data fields on the form's record. Each attribute is the underlying column value (formContext.getAttribute(name).getValue()) that controls read from and write to. Edits here fire onChange handlers attached to that attribute, just like typing into a real form field."
+        >
+          Attributes ({snap.attributes.length})
+        </div>
         {snap.attributes.length === 0 && (
           <div className={styles.emptyMsg}>
             No attributes seeded. Add records to <code>data.json</code> or bound
@@ -214,8 +228,18 @@ export function FormPanel(): JSX.Element {
             data-test-id={`fp-attr-${a.name}`}
           >
             <div className={styles.attrCell}>
-              <div className={styles.attrName} title={a.name}>{a.name}</div>
-              <div className={styles.attrType}>{a.attributeType}</div>
+              <div
+                className={styles.attrName}
+                title={`Attribute logical name: ${a.name}. This is the column on the entity record that the control binds to. Edit the value in the next field; click 'fire' to push the change through any registered onChange handlers.`}
+              >
+                {a.name}
+              </div>
+              <div
+                className={styles.attrType}
+                title={`Attribute type — controls what kind of value the field accepts. Examples: string, integer, decimal, money, boolean, datetime, optionset, lookup. Editing the value box will coerce input to this type.`}
+              >
+                {a.attributeType}
+              </div>
             </div>
             <Input
               size="small"
@@ -236,6 +260,7 @@ export function FormPanel(): JSX.Element {
               }}
               data-test-id={`fp-attr-${a.name}-input`}
               style={{ minWidth: 0 }}
+              title="Attribute value — calls formContext.getAttribute(name).setValue(...) on blur. Empty string is treated as null. Booleans accept true/false/1/0. Numbers are parsed; non-numeric input becomes null."
             />
             <Dropdown
               size="small"
@@ -246,6 +271,7 @@ export function FormPanel(): JSX.Element {
               }}
               style={{ minWidth: '92px', width: '92px' }}
               data-test-id={`fp-attr-${a.name}-required`}
+              title="Required level — none / recommended / required. Equivalent to formContext.getAttribute(name).setRequiredLevel(...). Tests how the control behaves when the field is marked mandatory."
             >
               {REQUIRED_LEVELS.map(l => <Option key={l} value={l}>{l}</Option>)}
             </Dropdown>
@@ -254,7 +280,7 @@ export function FormPanel(): JSX.Element {
               appearance="subtle"
               onClick={() => fireOnChange(a.name)}
               data-test-id={`fp-attr-${a.name}-fire`}
-              title="Fire onChange handlers"
+              title="Fire onChange handlers — manually triggers every callback registered with formContext.getAttribute(name).addOnChange(). Useful for testing handler logic without re-typing the value."
             >
               fire
             </Button>
@@ -265,16 +291,27 @@ export function FormPanel(): JSX.Element {
       <Divider />
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>Controls ({snap.controls.length})</div>
+        <div
+          className={styles.sectionTitle}
+          title="Controls — the UI widgets bound to attributes. The same attribute can have multiple controls (e.g. a quick-view form). Controls expose visibility, disabled state, and notification banners that the bound control can react to or trigger."
+        >
+          Controls ({snap.controls.length})
+        </div>
         {snap.controls.map(c => (
           <div key={c.name} className={styles.controlRow} data-test-id={`fp-ctrl-${c.name}`}>
-            <span className={styles.attrName} title={c.name}>{c.name}</span>
+            <span
+              className={styles.attrName}
+              title={`Control name: ${c.name}. The control element on the form (formContext.getControl(name)). Toggle visibility/disabled to test how your PCF reacts to host-driven state changes.`}
+            >
+              {c.name}
+            </span>
             <Switch
               size="small"
               checked={c.visible}
               onChange={(_, d) => setControlVisible(c.name, d.checked)}
               label="visible"
               data-test-id={`fp-ctrl-${c.name}-visible`}
+              title="Visibility — calls formContext.getControl(name).setVisible(...). Off hides the control's container. Tests how a PCF behaves when the host shows/hides its host element."
             />
             <Switch
               size="small"
@@ -282,6 +319,7 @@ export function FormPanel(): JSX.Element {
               onChange={(_, d) => setControlDisabled(c.name, d.checked)}
               label="disabled"
               data-test-id={`fp-ctrl-${c.name}-disabled`}
+              title="Disabled — calls formContext.getControl(name).setDisabled(...). Disabled controls receive disabled=true via context. Tests read-only rendering."
             />
             <Button
               size="small"
@@ -298,7 +336,9 @@ export function FormPanel(): JSX.Element {
                 }
               }}
               data-test-id={`fp-ctrl-${c.name}-notify`}
-              title={c.notifications.size > 0 ? 'Clear notification' : 'Raise notification'}
+              title={c.notifications.size > 0
+                ? 'Clear all notifications on this control (formContext.getControl(name).clearNotification(...)).'
+                : 'Raise a test ERROR notification on this control (formContext.getControl(name).setNotification(...)). Useful for verifying that the field-level error indicator appears.'}
             >
               {c.notifications.size > 0 ? `clr (${c.notifications.size})` : 'notify'}
             </Button>
@@ -309,10 +349,18 @@ export function FormPanel(): JSX.Element {
       <Divider />
 
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>Tabs ({snap.tabs.length})</div>
+        <div
+          className={styles.sectionTitle}
+          title="Tabs — the top-level form sections (General, Details, Related, etc.). A real form is organised into tabs containing sections containing controls. Toggle visibility and expand/collapse to test PCFs that change layout based on which tab is active."
+        >
+          Tabs ({snap.tabs.length})
+        </div>
         {snap.tabs.map(t => (
           <div key={t.name} className={styles.tabRow} data-test-id={`fp-tab-${t.name}`}>
-            <span className={styles.attrName}>
+            <span
+              className={styles.attrName}
+              title={`Tab: ${t.label ?? t.name} (${t.name}). Access at formContext.ui.tabs.get(name).`}
+            >
               {t.label ?? t.name} <Text size={100}>({t.name})</Text>
             </span>
             <Switch
@@ -321,12 +369,14 @@ export function FormPanel(): JSX.Element {
               onChange={(_, d) => setTabVisible(t.name, d.checked)}
               label="visible"
               data-test-id={`fp-tab-${t.name}-visible`}
+              title="Tab visibility — calls formContext.ui.tabs.get(name).setVisible(...). Hidden tabs disappear from the chrome strip."
             />
             <Button
               size="small"
               appearance="subtle"
               onClick={() => setTabDisplayState(t.name, t.displayState === 'expanded' ? 'collapsed' : 'expanded')}
               data-test-id={`fp-tab-${t.name}-toggle`}
+              title="Display state — expanded shows the tab's sections, collapsed hides them. Equivalent to formContext.ui.tabs.get(name).setDisplayState('expanded'|'collapsed')."
             >
               {t.displayState}
             </Button>

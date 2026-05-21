@@ -39,16 +39,21 @@ export function NetworkPanel() {
 
   return (
     <div className={styles.root}>
-      <div className={styles.header}>Network Conditioning</div>
+      <div
+        className={styles.header}
+        title="Network Conditioning — simulate poor connectivity. Adds a per-call latency to context.webAPI requests, or forces offline mode so context.client.isOffline() returns true and webAPI.online calls reject. Tests how the control behaves on slow / disconnected networks."
+      >
+        Network Conditioning
+      </div>
       <RadioGroup
         value={networkMode}
         onChange={(_, data) => setNetworkMode(data.value as NetworkMode)}
       >
-        <Radio value="online" label="Online (unrestricted)" />
-        <Radio value="offline" label="Offline (disconnected)" />
-        <Radio value="slow3g" label="Slow 3G (2000ms)" />
-        <Radio value="fast3g" label="Fast 3G (500ms)" />
-        <Radio value="custom" label="Custom" />
+        <Radio value="online" label="Online (unrestricted)" title="Online — no throttling. WebAPI calls resolve as fast as the in-memory store can serve them. context.client.isOffline() = false." />
+        <Radio value="offline" label="Offline (disconnected)" title="Offline — context.client.isOffline() = true. context.webAPI serves from the local data store (data.json). webAPI.online calls reject as if the user lost connectivity." />
+        <Radio value="slow3g" label="Slow 3G (2000ms)" title="Slow 3G — adds 2000ms latency to every context.webAPI call. Tests loading states and timeout handling on poor connections." />
+        <Radio value="fast3g" label="Fast 3G (500ms)" title="Fast 3G — adds 500ms latency to every context.webAPI call. Tests perceptible-but-not-broken slow-network behaviour." />
+        <Radio value="custom" label="Custom" title="Custom — pick your own latency in milliseconds. Useful for reproducing specific perceived-perf issues a user reported." />
       </RadioGroup>
       <div className={styles.desc}>{NETWORK_DESCRIPTIONS[networkMode]}</div>
 
@@ -68,7 +73,12 @@ export function NetworkPanel() {
 
       <Divider style={{ margin: '12px 0' }} />
 
-      <div className={styles.header}>WebAPI Routing</div>
+      <div
+        className={styles.header}
+        title="WebAPI Routing — the harness mirrors how real Dynamics 365 routes WebAPI calls between online (server) and offline (local cache) stores. Use these three surfaces to test offline-aware controls."
+      >
+        WebAPI Routing
+      </div>
       <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3, lineHeight: '18px' }}>
         <div style={{ marginBottom: 6 }}>Mirrors Dynamics 365 behavior:</div>
         <table style={{ fontSize: 11, borderCollapse: 'collapse', width: '100%' }}>

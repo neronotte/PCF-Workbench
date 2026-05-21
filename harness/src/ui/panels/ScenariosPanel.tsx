@@ -459,7 +459,12 @@ export function ScenariosPanel({ controlId, onScenarioLoaded }: ScenariosPanelPr
     <div className={styles.root}>
       {/* Fixed top: header, save, generate */}
       <div className={styles.topSection}>
-        <div className={styles.header}>Test Scenarios</div>
+        <div
+          className={styles.header}
+          title="Test Scenarios — named snapshots of property values, page context, network mode, and device preset. Save a scenario, change something, run another scenario, replay the first to verify cleanup. Persists to localStorage and exports to test-scenarios.json."
+        >
+          Test Scenarios
+        </div>
         <div className={styles.desc}>
           Save and restore property values, page context, network mode, and device preset.
         </div>

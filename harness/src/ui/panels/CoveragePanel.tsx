@@ -154,23 +154,26 @@ export function CoveragePanel() {
 
   return (
     <div className={styles.root} data-test-id="coverage-panel">
-      <div className={styles.header}>
+      <div
+        className={styles.header}
+        title="Shim coverage — tracks which Context / Xrm / formContext APIs the control has called and classifies each by behavioural fidelity. Implemented = behaves like real UCI. Stub = returns a placeholder. Unimplemented = throws or no-op. Use to spot API gaps that may cause production drift."
+      >
         <span className={styles.title}>Shim coverage</span>
-        <Button appearance="subtle" size="small" icon={<Delete24Regular />} onClick={clearLog} title="Clear log">
+        <Button appearance="subtle" size="small" icon={<Delete24Regular />} onClick={clearLog} title="Clear log — empties the coverage history. The control keeps running.">
           Clear
         </Button>
       </div>
 
       <div className={styles.summary}>
-        <div className={styles.statBox} data-test-id="coverage-stat-implemented">
+        <div className={styles.statBox} data-test-id="coverage-stat-implemented" title="Implemented — the shim returns realistic data and behaves the same way the live UCI host would. Safe to rely on for testing.">
           <span className={styles.statLabel}>Implemented</span>
           <span className={styles.statValue} style={{ color: tokens.colorPaletteGreenForeground2 }}>{implemented}</span>
         </div>
-        <div className={styles.statBox} data-test-id="coverage-stat-stub">
+        <div className={styles.statBox} data-test-id="coverage-stat-stub" title="Stubs — the shim returns a placeholder (empty array, default object, no-op) instead of real data. The control will run, but production behaviour may differ.">
           <span className={styles.statLabel}>Stubs</span>
           <span className={styles.statValue} style={{ color: tokens.colorPaletteYellowForeground2 }}>{stub}</span>
         </div>
-        <div className={styles.statBox} data-test-id="coverage-stat-unimplemented">
+        <div className={styles.statBox} data-test-id="coverage-stat-unimplemented" title="Unimplemented — the API hasn't been shimmed yet. Calls reach a Proxy fallback that logs a warning. Flag in the coverage report if your control depends on the result.">
           <span className={styles.statLabel}>Unimplemented</span>
           <span className={styles.statValue} style={{ color: tokens.colorPaletteRedForeground1 }}>{unimplemented}</span>
         </div>

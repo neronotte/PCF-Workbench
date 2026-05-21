@@ -71,7 +71,12 @@ export function DevicePanel() {
 
   return (
     <div className={styles.root}>
-      <div className={styles.header}>Device Emulation</div>
+      <div
+        className={styles.header}
+        title="Device Emulation — set viewport dimensions and form factor to match common phones, tablets, and desktops. The harness rewrites the control's @media queries into @container queries so it responds to the emulated viewport, not the browser window."
+      >
+        Device Emulation
+      </div>
       <RadioGroup
         value={devicePreset}
         onChange={(_, data) => setDevicePreset(data.value)}
@@ -89,7 +94,12 @@ export function DevicePanel() {
       </div>
 
       <div className={styles.section}>
-        <div className={styles.header}>Host</div>
+        <div
+          className={styles.header}
+          title="Host — which Power Platform host the control thinks it's running inside. Returned by context.client.getClient(). Some controls render differently for Mobile (Field Service) vs Outlook (mail-app) vs Teams (in-meeting tab)."
+        >
+          Host
+        </div>
         <Dropdown
           size="small"
           selectedOptions={[host]}
@@ -106,7 +116,12 @@ export function DevicePanel() {
       </div>
 
       <div className={styles.section}>
-        <div className={styles.header}>Component Container Size</div>
+        <div
+          className={styles.header}
+          title="Component Container Size — override the dimensions of the control's host element independently of the viewport. Useful for testing how a PCF behaves when the form section it sits in is much smaller (or larger) than the screen."
+        >
+          Component Container Size
+        </div>
         <Switch
           checked={customSizeEnabled}
           onChange={(_, data) => toggleCustomSize(data.checked)}

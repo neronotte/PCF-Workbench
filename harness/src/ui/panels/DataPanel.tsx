@@ -161,7 +161,12 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
   return (
     <div className={styles.pageCtxBlock} data-test-id="page-context-block">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span className={styles.header}>Page context</span>
+        <span
+          className={styles.header}
+          title="Page context — what the harness tells the control about the record/form it is hosted on. Drives context.page.entityTypeName / entityId and context.mode.contextInfo. Change these to test the control against different entity types and records."
+        >
+          Page context
+        </span>
         <span className={styles.info} style={{ marginLeft: 'auto' }}>
           context.page / context.mode.contextInfo
         </span>
@@ -437,7 +442,12 @@ export function DataPanel() {
     <div className={styles.root}>
       <div className={styles.modeBlock}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className={styles.header}>Data source</span>
+          <span
+            className={styles.header}
+            title="Data source — choose where context.webAPI gets its records. Mock = the local data.json file (default; deterministic, offline-safe). Live = a real Dataverse environment via PAC CLI auth (read-only by default, writes require confirmation)."
+          >
+            Data source
+          </span>
           {dataSource === 'live' && (
             <span className={styles.liveOnline}>
               <Globe16Regular />
@@ -474,7 +484,12 @@ export function DataPanel() {
       {dataSource === 'mock' && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className={styles.header}>Mock Data</span>
+            <span
+              className={styles.header}
+              title="Mock Data — in-memory entity records loaded from the control's data.json file. Edit JSON below to add/modify records; changes flow into context.webAPI immediately. Use 'Rebase dates to today' so seeded timestamps stay relative to now."
+            >
+              Mock Data
+            </span>
             <Button
               appearance="subtle"
               icon={<ArrowClockwise24Regular />}

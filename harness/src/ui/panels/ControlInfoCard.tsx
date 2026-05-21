@@ -79,10 +79,16 @@ export function ControlInfoCard({ manifest }: Props) {
 
   return (
     <div className={styles.root}>
-      <div className={styles.title}>
+      <div
+        className={styles.title}
+        title={`Control class name — the <control constructor=...> attribute from ControlManifest.Input.xml. The harness loads bundle.js and reads this class off the window namespace.`}
+      >
         {manifest.constructor}
       </div>
-      <div className={styles.subtitle}>
+      <div
+        className={styles.subtitle}
+        title={`Namespace (publisher / solution prefix) and manifest version. Increment the version in ControlManifest.Input.xml each time you ship a behavioural change so the host invalidates its cache.`}
+      >
         {manifest.namespace} &middot; v{manifest.version}
       </div>
 
@@ -134,7 +140,12 @@ export function ControlInfoCard({ manifest }: Props) {
       {/* Platform Libraries */}
       {platformLibs.length > 0 && (
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Platform Libraries</div>
+          <div
+            className={styles.sectionTitle}
+            title="Platform Libraries — declared in the manifest via <platform-library>. The harness loads the requested major version of React / Fluent on-demand from CDN and exposes it as a versioned global so the control's bundle can import it without shipping its own copy."
+          >
+            Platform Libraries
+          </div>
           {platformLibs.map(lib => (
             <div key={lib.name} className={styles.libItem}>
               <span title={
@@ -164,7 +175,12 @@ export function ControlInfoCard({ manifest }: Props) {
 
       {platformLibs.length === 0 && (
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Framework</div>
+          <div
+            className={styles.sectionTitle}
+            title="Framework — the control declared no <platform-library> entries in its manifest, so it renders directly to its container with whatever framework (if any) it bundles itself. Common for legacy 'standard' (DOM) PCFs."
+          >
+            Framework
+          </div>
           <div className={styles.libItem}>
             <Badge appearance="tint" size="small">Pure DOM</Badge>
             <span style={{ fontSize: 11, opacity: 0.6 }}>No platform libraries — renders directly to container</span>
@@ -175,7 +191,12 @@ export function ControlInfoCard({ manifest }: Props) {
       {/* Features */}
       {manifest.featureUsage.length > 0 && (
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Features</div>
+          <div
+            className={styles.sectionTitle}
+            title="Features — Power Platform capabilities the manifest requests via <feature-usage>. WebAPI, Utility, Navigation, and various Device features. 'required' means the control will not load if the capability is unavailable; 'optional' means it degrades gracefully."
+          >
+            Features
+          </div>
           {manifest.featureUsage.map(f => (
             <div key={f.name} className={styles.libItem}>
               <span className={styles.value}>{f.name}</span>
@@ -189,7 +210,10 @@ export function ControlInfoCard({ manifest }: Props) {
 
       {/* Property count summary */}
       <div className={styles.section}>
-        <div className={styles.sectionTitle}>
+        <div
+          className={styles.sectionTitle}
+          title="Properties — manifest-declared inputs and outputs (bound to record columns or static input config). Datasets are collections of records the control iterates over (used by view/grid PCFs). Edit values in the Properties side-panel tab."
+        >
           Properties ({manifest.properties.length})
           {manifest.dataSets.length > 0 && ` · ${manifest.dataSets.length} dataset${manifest.dataSets.length > 1 ? 's' : ''}`}
         </div>
