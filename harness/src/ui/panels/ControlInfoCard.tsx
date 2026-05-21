@@ -88,23 +88,47 @@ export function ControlInfoCard({ manifest }: Props) {
 
       {/* Badges */}
       <div className={styles.badgeRow}>
-        <Badge
-          appearance="filled"
-          color={isVirtual ? 'important' : 'informative'}
-          size="small"
-        >
-          {isVirtual ? 'virtual' : 'standard'}
-        </Badge>
-        {hasWebAPI && <Badge appearance="outline" size="small" color="success">WebAPI</Badge>}
-        {hasDevice && <Badge appearance="outline" size="small" color="warning">Device</Badge>}
-        {hasUtility && <Badge appearance="outline" size="small" color="subtle">Utility</Badge>}
-        <Badge appearance="outline" size="small">
-          {boundProps.length} bound
-        </Badge>
-        <Badge appearance="outline" size="small">
-          {inputProps.length} input
-        </Badge>
-        {cssCount > 0 && <Badge appearance="outline" size="small">{cssCount} CSS</Badge>}
+        <span title={isVirtual
+          ? 'Virtual control — returns React elements from updateView(). Needs platform-libraries React + Fluent declared in the manifest.'
+          : 'Standard (DOM) control — manages its own root DOM element. The harness gives it a container and the control mutates it directly.'}>
+          <Badge
+            appearance="filled"
+            color={isVirtual ? 'important' : 'informative'}
+            size="small"
+          >
+            {isVirtual ? 'virtual' : 'standard'}
+          </Badge>
+        </span>
+        {hasWebAPI && (
+          <span title="Manifest declares the WebAPI feature — the control can call context.webAPI.retrieveRecord / retrieveMultipleRecords / createRecord / updateRecord / deleteRecord against the bound Dataverse environment.">
+            <Badge appearance="outline" size="small" color="success">WebAPI</Badge>
+          </span>
+        )}
+        {hasDevice && (
+          <span title="Manifest declares the Device feature — the control can call context.device APIs like pickFile, captureImage, captureAudio, captureVideo, getBarcodeValue, or getCurrentPosition.">
+            <Badge appearance="outline" size="small" color="warning">Device</Badge>
+          </span>
+        )}
+        {hasUtility && (
+          <span title="Manifest declares the Utility feature — the control can call context.utils helpers like getEntityMetadata, lookupObjects, and openLookupObjects.">
+            <Badge appearance="outline" size="small" color="brand">Utility</Badge>
+          </span>
+        )}
+        <span title={`Bound properties (${boundProps.length}) — properties that read/write a single column on the form's record. On a field PCF this is the field the control is attached to; on a dataset PCF these are columns inside the view.`}>
+          <Badge appearance="outline" size="small">
+            {boundProps.length} bound
+          </Badge>
+        </span>
+        <span title={`Input properties (${inputProps.length}) — read-only configuration values the maker sets at design time (e.g. labels, colours, behaviour flags). The control sees them via context.parameters.<name>.raw.`}>
+          <Badge appearance="outline" size="small">
+            {inputProps.length} input
+          </Badge>
+        </span>
+        {cssCount > 0 && (
+          <span title={`${cssCount} stylesheet${cssCount === 1 ? '' : 's'} declared in the manifest. The harness injects these into a CSS @layer so the host's own Fluent styles win on conflict.`}>
+            <Badge appearance="outline" size="small">{cssCount} CSS</Badge>
+          </span>
+        )}
       </div>
 
       {/* Platform Libraries */}
@@ -113,13 +137,21 @@ export function ControlInfoCard({ manifest }: Props) {
           <div className={styles.sectionTitle}>Platform Libraries</div>
           {platformLibs.map(lib => (
             <div key={lib.name} className={styles.libItem}>
-              <Badge
-                appearance="filled"
-                color={lib.name === 'React' ? 'brand' : lib.name === 'Fluent' ? 'important' : 'subtle'}
-                size="small"
-              >
-                {lib.name}
-              </Badge>
+              <span title={
+                lib.name === 'React'
+                  ? `React ${lib.version} requested via <platform-library>. The harness loads it from CDN and exposes it as a versioned global so the bundle can import React without bundling its own copy.`
+                  : lib.name === 'Fluent'
+                  ? `Fluent UI ${lib.version} requested via <platform-library>. The harness loads the real Fluent UMD on-demand. For unknown majors the harness falls back to a Proxy stub.`
+                  : `${lib.name} ${lib.version} requested via <platform-library>.`
+              }>
+                <Badge
+                  appearance="filled"
+                  color={lib.name === 'React' ? 'brand' : lib.name === 'Fluent' ? 'important' : 'subtle'}
+                  size="small"
+                >
+                  {lib.name}
+                </Badge>
+              </span>
               <span className={styles.value}>v{lib.version}</span>
               <span style={{ opacity: 0.5, fontSize: 10 }}>
                 {lib.name === 'React' && `→ window.Reactv${lib.version.split('.')[0]}`}

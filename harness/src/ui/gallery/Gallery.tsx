@@ -168,6 +168,27 @@ interface GalleryControl {
   isPrivate: boolean;
 }
 
+function featureTooltip(name: string): string {
+  switch (name) {
+    case 'WebAPI':
+      return 'Manifest declares the WebAPI feature — the control can call context.webAPI.retrieveRecord / retrieveMultipleRecords / createRecord / updateRecord / deleteRecord against the bound Dataverse environment.';
+    case 'Utility':
+      return 'Manifest declares the Utility feature — the control can call context.utils helpers like getEntityMetadata, lookupObjects, and openLookupObjects.';
+    case 'Device':
+    case 'Device.captureImage':
+    case 'Device.captureAudio':
+    case 'Device.captureVideo':
+    case 'Device.pickFile':
+    case 'Device.getBarcodeValue':
+    case 'Device.getCurrentPosition':
+      return `Manifest declares the ${name} feature — the control can call the matching context.device API to access the host device.`;
+    case 'Navigation':
+      return 'Manifest declares the Navigation feature — the control can call context.navigation.openForm / openUrl / openAlertDialog / openConfirmDialog.';
+    default:
+      return `Manifest declares the ${name} feature.`;
+  }
+}
+
 export function Gallery() {
   const styles = useStyles();
   const [tab, setTab] = useState<'workspace' | 'deployed'>(() => {
@@ -496,28 +517,56 @@ export function Gallery() {
 
                 {/* Badges */}
                 <div className={styles.cardBadges}>
-                  {c.isPrivate && <Badge appearance="filled" color="warning" size="small">private</Badge>}
-                  <Badge
-                    appearance="filled"
-                    color={c.controlType === 'virtual' ? 'important' : 'informative'}
-                    size="small"
-                  >
-                    {c.controlType}
-                  </Badge>
+                  {c.isPrivate && (
+                    <span title="Marked private (.pcf-private file present in the control directory). Hidden from the gallery by default; show via the 'Show private' toggle.">
+                      <Badge appearance="filled" color="warning" size="small">private</Badge>
+                    </span>
+                  )}
+                  <span title={c.controlType === 'virtual'
+                    ? 'Virtual control — returns React elements from updateView(). Requires platform-libraries React + Fluent.'
+                    : 'Standard (DOM) control — manages its own root DOM element.'}>
+                    <Badge
+                      appearance="filled"
+                      color={c.controlType === 'virtual' ? 'important' : 'informative'}
+                      size="small"
+                    >
+                      {c.controlType}
+                    </Badge>
+                  </span>
                   {c.hasBuild
-                    ? <Badge appearance="filled" color="success" size="small">built</Badge>
-                    : <Badge appearance="outline" color="danger" size="small">not built</Badge>
+                    ? (
+                      <span title="out/controls/<Name>/bundle.js exists. Run npm run build in the control project to refresh after source changes.">
+                        <Badge appearance="filled" color="success" size="small">built</Badge>
+                      </span>
+                    )
+                    : (
+                      <span title="No bundle.js found under out/controls/. Run npm run build in the control project before launching.">
+                        <Badge appearance="outline" color="danger" size="small">not built</Badge>
+                      </span>
+                    )
                   }
                   {c.featureUsage.map(f => (
-                    <Badge key={f.name} appearance="outline" size="small">{f.name}</Badge>
+                    <span key={f.name} title={featureTooltip(f.name)}>
+                      <Badge appearance="outline" size="small">{f.name}</Badge>
+                    </span>
                   ))}
                   {c.platformLibraries.map(l => (
-                    <Badge key={l.name} appearance="tint" size="small" color="brand">
-                      {l.name} {l.version}
-                    </Badge>
+                    <span key={l.name} title={`${l.name} ${l.version} requested via <platform-library>. The harness loads the matching UMD on-demand.`}>
+                      <Badge appearance="tint" size="small" color="brand">
+                        {l.name} {l.version}
+                      </Badge>
+                    </span>
                   ))}
-                  {c.hasDataJson && <Badge appearance="outline" color="success" size="small">data.json</Badge>}
-                  {c.hasTestScenarios && <Badge appearance="outline" color="brand" size="small">test scenarios</Badge>}
+                  {c.hasDataJson && (
+                    <span title="data.json present — seeded mock records the harness loads into context.webAPI on startup.">
+                      <Badge appearance="outline" color="success" size="small">data.json</Badge>
+                    </span>
+                  )}
+                  {c.hasTestScenarios && (
+                    <span title="test-scenarios.json present — saved property/state snapshots the harness can replay from the Scenarios panel.">
+                      <Badge appearance="outline" color="brand" size="small">test scenarios</Badge>
+                    </span>
+                  )}
                 </div>
 
                 {/* Properties summary */}
