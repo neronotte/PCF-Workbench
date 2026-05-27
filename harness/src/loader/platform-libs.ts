@@ -62,6 +62,22 @@ export async function loadPlatformLibraries(resources: ManifestResources): Promi
   for (const r of results) {
     if (r.ok) {
       console.log(`[pcf-workbench] Fluent ${r.major} ${r.version} loaded from /__pcf/fluent-cdn`);
+      // Real D365 calls `initializeIcons()` at host startup to register the
+      // Fluent v8 icon font subset (Search, Cancel, ChevronDown, …). Without
+      // that call, lookup chrome from BasePicker (clear-X / search-glass) and
+      // many other controls render as empty rectangles. Trigger it here once
+      // the real UMD is on `window.FluentUIReact`.
+      if (r.major === 'v8') {
+        try {
+          const fluentV8 = w.FluentUIReact;
+          if (typeof fluentV8?.initializeIcons === 'function') {
+            fluentV8.initializeIcons();
+            console.log('[pcf-workbench] Fluent v8 icons initialized');
+          }
+        } catch (e) {
+          console.warn('[pcf-workbench] Fluent v8 initializeIcons failed:', e);
+        }
+      }
       continue;
     }
     // CDN unavailable for this major (offline, npm install failed, etc.) —

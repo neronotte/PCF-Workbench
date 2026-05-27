@@ -7,6 +7,7 @@ import {
 } from '@fluentui/react-icons';
 import { useHarnessStore, DEVICE_PRESETS } from '../../store/harness-store';
 import { getEntityData } from '../../store/data-store';
+import { reseedForPageEntity } from '../../store/form-store';
 import type { ManifestProperty, ManifestDataSet } from '../../types/manifest';
 
 const useStyles = makeStyles({
@@ -376,6 +377,14 @@ export function ScenariosPanel({ controlId, onScenarioLoaded }: ScenariosPanelPr
     setDevicePreset(scenario.devicePreset);
     setControlDisabled(scenario.isControlDisabled);
     setNewName(scenario.name);
+    // Re-seed form state for the new page entity so getAttribute/getControl
+    // reflect the loaded record's columns (and metadata-driven attribute set)
+    // without remounting the control.
+    reseedForPageEntity(
+      scenario.pageEntityTypeName,
+      scenario.pageEntityId,
+      (scenario as any).pageEntityRecordName ?? '',
+    );
     setMessage({ text: `Loaded "${scenario.name}"`, intent: 'success' });
     addLogEntry({ category: 'scenario', method: 'load', args: { name: scenario.name } });
     setTimeout(() => setMessage(null), 3000);

@@ -43,6 +43,14 @@ function dirSize(dir: string): number {
 
 /**
  * Find the compiled bundle path for a control directory.
+ *
+ * Two layouts supported:
+ *  1. Source projects (pcf-scripts build) — bundle lives at
+ *     <projectRoot>/out/controls/<Name>/bundle.js, where projectRoot is up to
+ *     4 levels above controlDir.
+ *  2. Deployed-style folders (ControlManifest.xml + bundle.js shipped together,
+ *     e.g. extracted from Dataverse or copied out of a solution zip) — bundle
+ *     lives directly next to the manifest in controlDir.
  */
 function findBundle(controlDir: string): string | null {
   let searchDir = controlDir;
@@ -59,6 +67,9 @@ function findBundle(controlDir: string): string | null {
     }
     searchDir = path.dirname(searchDir);
   }
+  // Deployed layout: bundle.js sits next to the manifest.
+  const inlineBundle = path.join(controlDir, 'bundle.js');
+  if (fs.existsSync(inlineBundle)) return inlineBundle;
   return null;
 }
 
@@ -75,11 +86,24 @@ function findProjectRoot(controlDir: string): string {
 }
 
 /**
- * Recursively find all ControlManifest.Input.xml files under a root directory.
+ * Recursively find all PCF control manifests under a root directory.
+ *
+ * Two filenames are accepted:
+ *  - ControlManifest.Input.xml — source projects (pcf-scripts authoring)
+ *  - ControlManifest.xml       — deployed / extracted controls
+ *
+ * If both exist in the same directory (rare — happens when a source project
+ * has also been built into a deployed-style folder), the source manifest wins
+ * because it's the authoritative version-of-record for the developer.
  */
 function findManifests(rootDir: string, maxDepth = 5): string[] {
   const results: string[] = [];
-  const skipDirs = new Set(['node_modules', 'out', '.git', '.vs', 'dist', 'build']);
+  // NOTE: `out` is deliberately NOT skipped here. Deployed/extracted controls
+  // routinely sit under <project>/out/Control/<Name>/ or <project>/out/controls/<Name>/
+  // and we want to surface them in the gallery. Source-project manifests at a
+  // higher level take precedence via the dedup-by-namespace.constructor pass in
+  // scanWorkspace below (and we prefer .Input.xml over .xml within a single dir).
+  const skipDirs = new Set(['node_modules', '.git', '.vs', 'dist', 'build']);
 
   function walk(dir: string, depth: number) {
     if (depth > maxDepth) return;
@@ -89,10 +113,17 @@ function findManifests(rootDir: string, maxDepth = 5): string[] {
     } catch {
       return;
     }
+    const files = new Set<string>();
     for (const entry of entries) {
-      if (entry.isFile() && entry.name === 'ControlManifest.Input.xml') {
-        results.push(path.join(dir, entry.name));
-      } else if (entry.isDirectory() && !skipDirs.has(entry.name)) {
+      if (entry.isFile()) files.add(entry.name);
+    }
+    if (files.has('ControlManifest.Input.xml')) {
+      results.push(path.join(dir, 'ControlManifest.Input.xml'));
+    } else if (files.has('ControlManifest.xml')) {
+      results.push(path.join(dir, 'ControlManifest.xml'));
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && !skipDirs.has(entry.name)) {
         walk(path.join(dir, entry.name), depth + 1);
       }
     }
@@ -106,7 +137,16 @@ function findManifests(rootDir: string, maxDepth = 5): string[] {
  * Scan a workspace root directory for all PCF controls.
  */
 export function scanWorkspace(workspaceRoot: string): ControlEntry[] {
-  const manifests = findManifests(workspaceRoot);
+  // Sort so that ControlManifest.Input.xml (source projects) are processed
+  // before ControlManifest.xml (deployed copies). When the dedup pass below
+  // sees the same namespace.constructor twice, the source manifest wins —
+  // which is what the developer wants: HMR and source-of-truth metadata
+  // come from the authoring project, not the copy in out/.
+  const manifests = findManifests(workspaceRoot).sort((a, b) => {
+    const aInput = a.endsWith('Input.xml') ? 0 : 1;
+    const bInput = b.endsWith('Input.xml') ? 0 : 1;
+    return aInput - bInput;
+  });
   const controls: ControlEntry[] = [];
   const seen = new Set<string>(); // deduplicate by namespace.constructor
 

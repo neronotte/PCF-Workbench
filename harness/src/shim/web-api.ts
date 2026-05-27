@@ -2,6 +2,7 @@ import type { HarnessStore } from '../store/harness-store';
 import { addEntityRecord, updateEntityRecord, deleteEntityRecord } from '../store/data-store';
 import { getExecuteMock } from '../store/execute-mock-store';
 import { liveRetrieveMultiple, liveRetrieveSingle, DvProxyError } from '../api/dv-client';
+import { seedAdditionalEntity } from '../store/form-store';
 
 const NETWORK_DELAYS: Record<string, number> = {
   online: 0,
@@ -450,6 +451,17 @@ export function createWebApiShim(
           method: `${prefix}retrieveRecord`, entityType, durationMs: duration,
           responseSize: size, recordCount: 1, options,
         });
+        // When a systemform record is loaded, auto-seed the form-store with
+        // the metadata columns of its target entity so getAttribute/getControl
+        // resolve fields for forms that target a different entity than the
+        // page record (e.g. a control hosted on a parent record rendering a
+        // quick-create form for a related entity).
+        if (entityType === 'systemform') {
+          const otc = (record as Record<string, any>).objecttypecode;
+          if (typeof otc === 'string' && otc.length > 0) {
+            seedAdditionalEntity(otc);
+          }
+        }
         return result;
       },
 

@@ -54,6 +54,11 @@ function resolveOutDir(controlDir: string, manifest: ManifestConfig): string {
     }
     projectRoot = path.dirname(projectRoot);
   }
+  // Deployed layout: bundle.js sits next to ControlManifest.xml — the
+  // control directory IS the out directory.
+  if (fs.existsSync(path.join(controlDir, 'bundle.js'))) {
+    return controlDir;
+  }
   throw new Error(
     `Could not find compiled bundle. Run 'npm run build' in the PCF project first.\n` +
     `Searched from: ${controlDir}`
@@ -168,9 +173,17 @@ function resolveReactVersion(
 function loadControl(state: PcfPluginState): void {
   if (!state.controlDir) return;
 
-  const manifestPath = path.join(state.controlDir, 'ControlManifest.Input.xml');
-  if (!fs.existsSync(manifestPath)) {
-    throw new Error(`ControlManifest.Input.xml not found at: ${manifestPath}`);
+  const inputManifest = path.join(state.controlDir, 'ControlManifest.Input.xml');
+  const deployedManifest = path.join(state.controlDir, 'ControlManifest.xml');
+  const manifestPath = fs.existsSync(inputManifest)
+    ? inputManifest
+    : fs.existsSync(deployedManifest)
+      ? deployedManifest
+      : null;
+  if (!manifestPath) {
+    throw new Error(
+      `Manifest not found. Looked for:\n  ${inputManifest}\n  ${deployedManifest}`,
+    );
   }
   const xmlContent = fs.readFileSync(manifestPath, 'utf-8');
   state.manifest = parseManifest(xmlContent);
@@ -254,6 +267,111 @@ function loadControl(state: PcfPluginState): void {
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// EntityDefinitions / metadata.json helpers (used by the /api/data middleware)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Collect raw Dataverse EntityDefinitions from metadata.json files on disk. */
+function collectEntityDefinitions(state: PcfPluginState): any[] {
+  const out: any[] = [];
+  const searchDirs = [state.controlDir, state.projectRoot];
+  const seen = new Set<string>();
+  for (const dir of searchDirs) {
+    if (!dir || !fs.existsSync(dir)) continue;
+    const files: string[] = [];
+    const metaPath = path.join(dir, 'metadata.json');
+    if (fs.existsSync(metaPath)) files.push(metaPath);
+    try {
+      for (const file of fs.readdirSync(dir)) {
+        if (file.startsWith('EntityDefinitions_') && file.endsWith('.json')) {
+          files.push(path.join(dir, file));
+        }
+      }
+    } catch { /* skip */ }
+    for (const filePath of files) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        for (const ent of extractEntities(raw)) {
+          if (!ent?.LogicalName || seen.has(ent.LogicalName)) continue;
+          seen.add(ent.LogicalName);
+          out.push(ent);
+        }
+      } catch { /* skip invalid */ }
+    }
+  }
+  return out;
+}
+
+/**
+ * Pull raw EntityDefinitions out of any metadata.json shape we accept:
+ *  - { value: [entity, …] }              Dataverse API response
+ *  - [{ value: […] }, …]                 array of such responses
+ *  - { LogicalName, Attributes, … }      a bare entity
+ *  - { entityName: { displayName, columns } }   simple format (synthesised)
+ */
+function extractEntities(raw: any): any[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.flatMap(extractEntities);
+  if (Array.isArray(raw.value)) return raw.value;
+  if (raw.LogicalName && Array.isArray(raw.Attributes)) return [raw];
+  // Simple format → synthesise minimal Dataverse-shaped entities
+  if (typeof raw === 'object') {
+    const synth: any[] = [];
+    for (const [logicalName, val] of Object.entries(raw)) {
+      const v = val as any;
+      if (!v || typeof v !== 'object' || !v.columns) continue;
+      synth.push({
+        LogicalName: logicalName,
+        DisplayName: { UserLocalizedLabel: { Label: v.displayName ?? logicalName, LanguageCode: 1033 } },
+        Attributes: Object.entries(v.columns).map(([col, c]) => {
+          const cc = c as any;
+          return {
+            LogicalName: col,
+            AttributeType: cc.type ?? 'String',
+            DisplayName: { UserLocalizedLabel: { Label: cc.displayName ?? col, LanguageCode: 1033 } },
+            RequiredLevel: { Value: 'None' },
+            AttributeOf: null,
+          };
+        }),
+      });
+    }
+    return synth;
+  }
+  return [];
+}
+
+/** Project a Dataverse record to a $select subset. Drops Attributes by default
+ *  for entity-level reads unless `keepAttributes` is true. */
+function projectColumns(
+  record: any,
+  selectCols: string[] | null,
+  opts: { keepAttributes?: boolean } = {},
+): Record<string, any> {
+  if (!record) return record;
+  if (!selectCols) {
+    if (opts.keepAttributes === false) {
+      const { Attributes, ...rest } = record;
+      return rest;
+    }
+    return record;
+  }
+  const result: Record<string, any> = {};
+  for (const col of selectCols) {
+    if (col in record) result[col] = record[col];
+  }
+  // Always include MetadataId / LogicalName / @odata.type as Dataverse does
+  if ('LogicalName' in record && !('LogicalName' in result)) result.LogicalName = record.LogicalName;
+  if ('MetadataId' in record && !('MetadataId' in result)) result.MetadataId = record.MetadataId;
+  if ('@odata.type' in record && !('@odata.type' in result)) result['@odata.type'] = record['@odata.type'];
+  return result;
+}
+
+function write404(res: import('node:http').ServerResponse, message: string): void {
+  res.statusCode = 404;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify({ error: { code: '0x80060888', message } }));
+}
+
 export function pcfPlugin(): Plugin {
   const state: PcfPluginState = {
     manifest: null,
@@ -300,7 +418,7 @@ export function pcfPlugin(): Plugin {
                   if (depth > 3) return false;
                   const entries = fs.readdirSync(dir, { withFileTypes: true });
                   for (const e of entries) {
-                    if (e.isFile() && e.name === 'ControlManifest.Input.xml') return true;
+                    if (e.isFile() && (e.name === 'ControlManifest.Input.xml' || e.name === 'ControlManifest.xml')) return true;
                     if (e.isDirectory() && !['node_modules', 'out', '.git'].includes(e.name)) {
                       if (walk(path.join(dir, e.name), depth + 1)) return true;
                     }
@@ -396,6 +514,138 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
 
     configureServer(server: ViteDevServer) {
       serverRef = server;
+
+      // API: Dataverse EntityDefinitions proxy backed by metadata.json
+      // ────────────────────────────────────────────────────────────────────
+      // Deployed PCFs frequently call the Dataverse Web API directly via
+      // fetch (not via context.webAPI) to resolve entity/attribute metadata
+      // at form-load time. The harness has metadata.json with the same
+      // information; serve those reads here so controls render their bodies
+      // instead of stalling on a 404.
+      //
+      // Supports:
+      //   GET /api/data/v9.2/EntityDefinitions(LogicalName='X')
+      //       (+ ?$select=… / ?$expand=Attributes(…))
+      //   GET /api/data/v9.2/EntityDefinitions(LogicalName='X')/Attributes
+      //       (+ ?$select=…)
+      //   GET /api/data/v9.2/EntityDefinitions
+      //       (+ ?$filter=LogicalName eq 'X' / ?$select=…)
+      // Other Web API endpoints fall through to the next middleware (404).
+      server.middlewares.use('/api/data', (req, res, next) => {
+        if (!req.url || req.method !== 'GET') return next();
+        const [pathOnly, search = ''] = req.url.split('?');
+        // Supported shapes (vX.X = any version):
+        //   /vX.X/EntityDefinitions
+        //   /vX.X/EntityDefinitions(LogicalName='X')
+        //   /vX.X/EntityDefinitions(LogicalName='X')/Attributes
+        //   /vX.X/EntityDefinitions(LogicalName='X')/Attributes(LogicalName='Y')
+        //   /vX.X/EntityDefinitions(LogicalName='X')/Attributes/Microsoft.Dynamics.CRM.<Type>AttributeMetadata
+        //   /vX.X/EntityDefinitions(LogicalName='X')/Attributes(LogicalName='Y')/Microsoft.Dynamics.CRM.<Type>AttributeMetadata
+        const entDefRe = /^\/v\d+\.\d+\/EntityDefinitions(\(LogicalName='([^']+)'\))?(\/Attributes(\(LogicalName='([^']+)'\))?(\/Microsoft\.Dynamics\.CRM\.(\w+))?)?\/?$/;
+        const m = pathOnly.match(entDefRe);
+        if (!m) return next();
+        const requestedLogicalName = m[2] ?? null;
+        const attributesPath = !!m[3];
+        const requestedAttrLogicalName = m[5] ?? null;
+        const typedAttrCast = m[7] ?? null; // e.g. "PicklistAttributeMetadata" / "LookupAttributeMetadata"
+
+        const entities = collectEntityDefinitions(state);
+        const params = new URLSearchParams(search);
+
+        // Filter: /EntityDefinitions?$filter=LogicalName eq 'X'
+        let filtered = entities;
+        if (requestedLogicalName) {
+          filtered = entities.filter(e => e.LogicalName === requestedLogicalName);
+        } else {
+          const filterExpr = params.get('$filter');
+          const filterMatch = filterExpr?.match(/LogicalName\s+eq\s+'([^']+)'/i);
+          if (filterMatch) filtered = entities.filter(e => e.LogicalName === filterMatch[1]);
+        }
+
+        const selectCols = params.get('$select')?.split(',').map(s => s.trim()).filter(Boolean) ?? null;
+        const expandClause = params.get('$expand') ?? '';
+        const expandAttrs = expandClause.toLowerCase().includes('attributes');
+        const expandOptionSet = /\boptionset\b/i.test(expandClause);
+        const expandGlobalOptionSet = /\bglobaloptionset\b/i.test(expandClause);
+        const expandTargets = /\btargets\b/i.test(expandClause);
+
+        const baseUrl = `${req.headers.host ? `http://${req.headers.host}` : ''}/api/data${pathOnly.split('/').slice(0, 2).join('/')}`;
+
+        if (attributesPath) {
+          const ent = filtered[0];
+          if (!ent) {
+            return write404(res, `Entity '${requestedLogicalName}' not found in metadata.json`);
+          }
+          let attrs: any[] = ent.Attributes ?? [];
+          // Filter by single-attr selector
+          if (requestedAttrLogicalName) {
+            attrs = attrs.filter(a => a.LogicalName === requestedAttrLogicalName);
+          }
+          // Filter by typed cast (e.g. only Picklist attrs)
+          if (typedAttrCast) {
+            attrs = attrs.filter(a => typeof a['@odata.type'] === 'string'
+              && a['@odata.type'].endsWith(`.${typedAttrCast}`));
+          }
+
+          if ((requestedAttrLogicalName || typedAttrCast) && attrs.length === 0) {
+            return write404(res, `Attribute not found for ${requestedLogicalName}`);
+          }
+
+          // Project & optionally drop heavy nested objects that weren't asked for
+          const projected = attrs.map(a => {
+            const p = projectColumns(a, selectCols, { keepAttributes: true }) as Record<string, any>;
+            // When $expand is used, ensure expanded shapes survive $select projection
+            if (expandOptionSet && a.OptionSet !== undefined && !('OptionSet' in p)) p.OptionSet = a.OptionSet;
+            if (expandGlobalOptionSet && a.GlobalOptionSet !== undefined && !('GlobalOptionSet' in p)) p.GlobalOptionSet = a.GlobalOptionSet;
+            if (expandTargets && a.Targets !== undefined && !('Targets' in p)) p.Targets = a.Targets;
+            return p;
+          });
+
+          // Single-attribute path returns the single record, not a collection
+          if (requestedAttrLogicalName) {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.end(JSON.stringify({
+              '@odata.context': `${baseUrl}/$metadata#EntityDefinitions(LogicalName='${ent.LogicalName}')/Attributes${typedAttrCast ? `/Microsoft.Dynamics.CRM.${typedAttrCast}` : ''}/$entity`,
+              ...projected[0],
+            }));
+            return;
+          }
+
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.end(JSON.stringify({
+            '@odata.context': `${baseUrl}/$metadata#EntityDefinitions(LogicalName='${ent.LogicalName}')/Attributes${typedAttrCast ? `/Microsoft.Dynamics.CRM.${typedAttrCast}` : ''}`,
+            value: projected,
+          }));
+          return;
+        }
+
+        if (requestedLogicalName) {
+          // /EntityDefinitions(LogicalName='X')
+          const ent = filtered[0];
+          if (!ent) {
+            return write404(res, `Entity '${requestedLogicalName}' not found in metadata.json`);
+          }
+          const projected = projectColumns(ent, selectCols, { keepAttributes: expandAttrs });
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.end(JSON.stringify({
+            '@odata.context': `${baseUrl}/$metadata#EntityDefinitions/$entity`,
+            ...projected,
+          }));
+          return;
+        }
+
+        // /EntityDefinitions (collection)
+        const out = filtered.map(e => projectColumns(e, selectCols, { keepAttributes: expandAttrs }));
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.end(JSON.stringify({
+          '@odata.context': `${baseUrl}/$metadata#EntityDefinitions`,
+          value: out,
+        }));
+      });
 
       // API: switch to a control or back to gallery
       server.middlewares.use('/api/switch-control', (req, res) => {

@@ -12,6 +12,7 @@
 
 import type { ManifestConfig } from '../types/manifest';
 import { getEntityData } from './data-store';
+import { getEntityMetadata, getAllEntityTypes, getColumnDisplayName } from './metadata-store';
 
 export type RequiredLevel = 'none' | 'recommended' | 'required';
 export type DisplayState = 'expanded' | 'collapsed';
@@ -98,6 +99,34 @@ const state: FormStateInternal = {
   sharedVariables: new Map(),
 };
 
+interface LastSeed {
+  manifest: ManifestConfig;
+  pageEntityTypeName: string;
+  pageEntityId: string;
+  pageEntityRecordName: string;
+}
+let lastSeed: LastSeed | null = null;
+
+/**
+ * Re-run the previous seed with updated page-entity context. No-op if
+ * seedFormState has never been called. Called by scenario loads + page-entity
+ * edits so getAttribute/getControl reflect the new record without requiring
+ * the host to re-mount the control.
+ */
+export function reseedForPageEntity(
+  pageEntityTypeName: string,
+  pageEntityId: string,
+  pageEntityRecordName: string,
+): void {
+  if (!lastSeed) return;
+  if (
+    lastSeed.pageEntityTypeName === pageEntityTypeName
+    && lastSeed.pageEntityId === pageEntityId
+    && lastSeed.pageEntityRecordName === pageEntityRecordName
+  ) return;
+  seedFormState(lastSeed.manifest, pageEntityTypeName, pageEntityId, pageEntityRecordName);
+}
+
 const listeners = new Set<() => void>();
 let storeVersion = 0;
 
@@ -120,6 +149,36 @@ export function getFormStateVersion(): number {
 // ──────────────────────────────────────────────────────────────────────────
 // Seeding
 // ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Map a Dataverse `AttributeType` string (as returned by EntityDefinitions ->
+ * Attributes) to the form-store's attributeType vocabulary. Used when seeding
+ * attributes from entity-metadata for columns the active record doesn't set.
+ */
+function mapMetadataAttrType(dvType?: string): string {
+  if (!dvType) return 'string';
+  switch (dvType) {
+    case 'Boolean': return 'boolean';
+    case 'DateTime': return 'datetime';
+    case 'Decimal': return 'decimal';
+    case 'Double': return 'decimal';
+    case 'Integer':
+    case 'BigInt': return 'integer';
+    case 'Money': return 'money';
+    case 'Lookup':
+    case 'Customer':
+    case 'Owner': return 'lookup';
+    case 'Picklist':
+    case 'State':
+    case 'Status': return 'optionset';
+    case 'MultiSelectPicklist': return 'multiselectoptionset';
+    case 'Memo': return 'memo';
+    case 'String':
+    case 'Uniqueidentifier':
+    case 'EntityName':
+    default: return 'string';
+  }
+}
 
 function inferAttrType(value: any, ofType?: string): string {
   if (ofType) {
@@ -151,6 +210,7 @@ export function seedFormState(
   pageEntityId: string,
   pageEntityRecordName: string,
 ): void {
+  lastSeed = { manifest, pageEntityTypeName, pageEntityId, pageEntityRecordName };
   state.attributes.clear();
   state.controls.clear();
   state.tabs.clear();
@@ -171,6 +231,12 @@ export function seedFormState(
       )
     : records[0];
 
+  // Pre-resolve entity metadata once so we can prefer metadata-declared
+  // attribute types over value-inferred ones (e.g. an optionset value of
+  // 690970001 is an integer to inferAttrType but really a 'optionset', and
+  // a money value rounded to 1875 is integer-shaped but really 'money').
+  const entityMeta = pageEntityTypeName ? getEntityMetadata(pageEntityTypeName) : null;
+
   if (active) {
     for (const [key, raw] of Object.entries(active)) {
       // Skip OData annotation keys (foo@OData.Community.Display.V1.FormattedValue)
@@ -178,14 +244,64 @@ export function seedFormState(
       const attrName = key.startsWith('_') && key.endsWith('_value')
         ? key.slice(1, -'_value'.length)
         : key;
+      const metaCol = entityMeta?.columns[attrName];
+      const metaType = metaCol?.type;
       addAttributeInternal({
         name: attrName,
         value: raw,
         initialValue: raw,
         requiredLevel: 'none',
-        attributeType: inferAttrType(raw),
+        attributeType: metaType ? mapMetadataAttrType(metaType) : inferAttrType(raw),
         isDirty: false,
         submitMode: 'dirty',
+        options: metaCol?.options,
+      });
+    }
+  }
+
+  // Seed every column declared in entity metadata that wasn't already
+  // populated from the active record. This gives controls a complete picture
+  // of the form's attributes — getAttribute('msdyn_quantity') returns a real
+  // attribute with the correct type from metadata even when the record has
+  // no value for that column yet (Create form, sparse record, etc).
+  if (entityMeta) {
+    for (const [colName, col] of Object.entries(entityMeta.columns)) {
+      if (state.attributes.has(colName)) continue;
+      const def = col.defaultValue ?? null;
+      addAttributeInternal({
+        name: colName,
+        value: def,
+        initialValue: def,
+        requiredLevel: 'none',
+        attributeType: mapMetadataAttrType(col.type),
+        isDirty: false,
+        submitMode: 'dirty',
+        options: col.options,
+      });
+    }
+  }
+
+  // Seed every OTHER entity's metadata columns too. Many controls (child
+  // grids, bulk-add, custom form renderers) host a form for a different
+  // entity than the page record. Without these extras, getAttribute on a
+  // related-entity field would return null and labels would fall back to
+  // logical names.
+  for (const typeName of getAllEntityTypes()) {
+    if (typeName === pageEntityTypeName) continue;
+    const meta = getEntityMetadata(typeName);
+    if (!meta) continue;
+    for (const [colName, col] of Object.entries(meta.columns)) {
+      if (state.attributes.has(colName)) continue;
+      const def = col.defaultValue ?? null;
+      addAttributeInternal({
+        name: colName,
+        value: def,
+        initialValue: def,
+        requiredLevel: 'none',
+        attributeType: mapMetadataAttrType(col.type),
+        isDirty: false,
+        submitMode: 'dirty',
+        options: col.options,
       });
     }
   }
@@ -221,16 +337,22 @@ export function seedFormState(
     ?? allAttrs.find(a => a.attributeType === 'string')?.name
     ?? allAttrs[0]?.name;
 
-  // For every attribute, register a default control of the same name
+  // For every attribute, register a default control of the same name.
+  // Pull the human-readable label from metadata DisplayName when available
+  // so controls show "Estimate Quantity" instead of "msdyn_estimatequantity".
   for (const attr of state.attributes.values()) {
     if (state.controls.has(attr.name)) continue;
+    const metaLabel =
+      (pageEntityTypeName ? getColumnDisplayName(pageEntityTypeName, attr.name) : null)
+      ?? findColumnLabelAcrossEntities(attr.name)
+      ?? attr.name;
     state.controls.set(attr.name, {
       name: attr.name,
       attributeName: attr.name,
       controlType: 'standard',
       visible: true,
       disabled: false,
-      label: attr.name,
+      label: metaLabel,
       notifications: new Map(),
     });
   }
@@ -260,6 +382,57 @@ function addAttributeInternal(attr: AttributeState): void {
   if (!state.attrChangeHandlers.has(attr.name)) {
     state.attrChangeHandlers.set(attr.name, new Set());
   }
+}
+
+/**
+ * Look up the display label for a column across every entity in metadata.
+ * Used when the active page entity doesn't own this column (e.g. a child
+ * grid hosts attributes from a different entity).
+ */
+function findColumnLabelAcrossEntities(colName: string): string | null {
+  for (const typeName of getAllEntityTypes()) {
+    const label = getColumnDisplayName(typeName, colName);
+    if (label) return label;
+  }
+  return null;
+}
+
+/**
+ * Augment the existing form-store with metadata-backed attributes and controls
+ * for `entityType` without resetting handlers, values, or other entity seeds.
+ * Called by web-api.ts when the control loads a `systemform` record so its
+ * target entity's columns become available via getAttribute/getControl.
+ */
+export function seedAdditionalEntity(entityType: string): void {
+  if (!entityType) return;
+  const meta = getEntityMetadata(entityType);
+  if (!meta) return;
+  let added = 0;
+  for (const [colName, col] of Object.entries(meta.columns)) {
+    if (state.attributes.has(colName)) continue;
+    const def = col.defaultValue ?? null;
+    addAttributeInternal({
+      name: colName,
+      value: def,
+      initialValue: def,
+      requiredLevel: 'none',
+      attributeType: mapMetadataAttrType(col.type),
+      isDirty: false,
+      submitMode: 'dirty',
+      options: col.options,
+    });
+    state.controls.set(colName, {
+      name: colName,
+      attributeName: colName,
+      controlType: 'standard',
+      visible: true,
+      disabled: false,
+      label: col.displayName ?? colName,
+      notifications: new Map(),
+    });
+    added += 1;
+  }
+  if (added > 0) notify();
 }
 
 // ──────────────────────────────────────────────────────────────────────────
