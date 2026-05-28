@@ -206,6 +206,14 @@ export class ResourceTracker {
       // the control's responsibility to clean up.
       if (l.target === document) continue;
       if (l.target === window && PLAYWRIGHT_NOISE.has(l.type)) continue;
+      // React 18's createRoot() attaches ~130 delegated event listeners
+      // (the full DOM event vocabulary, several in both bubble + capture)
+      // directly to the root container, and unmount() does NOT remove them
+      // — React keeps them container-lifetime by design. The harness owns
+      // the container, the control just renders into it, so these aren't
+      // a control-level leak. Controls that attach their own listeners
+      // should attach to their rendered children, which still get tracked.
+      if (this.container && l.target === this.container) continue;
       const targetName = l.target === window ? 'window'
         : l.target === document ? 'document'
         : (l.target as HTMLElement).tagName?.toLowerCase() || 'element';
