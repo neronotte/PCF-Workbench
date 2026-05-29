@@ -5,7 +5,7 @@ import {
 import {
   PlugConnected24Regular, Phone24Regular, TopSpeed24Regular,
   Settings24Regular, WeatherMoon24Regular, WeatherSunny24Regular,
-  Database24Regular, Beaker24Regular, Play24Regular, Person24Regular,
+  Database24Regular, Play24Regular, Person24Regular,
   Form24Regular, Shield24Regular, ArrowClockwise20Regular, Globe16Regular,
   ChevronRight20Regular, ChevronLeft20Regular,
   ChevronUp20Regular, ChevronDown20Regular,
@@ -18,7 +18,7 @@ import { NetworkPanel } from './panels/NetworkPanel';
 import { DevicePanel } from './panels/DevicePanel';
 import { PerformancePanel } from './panels/PerformancePanel';
 import { DataPanel } from './panels/DataPanel';
-import { ScenariosPanel } from './panels/ScenariosPanel';
+import { ScenarioHeader } from './panels/ScenarioHeader';
 import { LifecyclePanel } from './panels/LifecyclePanel';
 import { UserSettingsPanel } from './panels/UserSettingsPanel';
 import { FormPanel } from './panels/FormPanel';
@@ -170,7 +170,7 @@ interface Props {
   launchedAsGallery: boolean;
 }
 
-type SidePanelTab = 'properties' | 'form' | 'data' | 'scenarios' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance' | 'coverage';
+type SidePanelTab = 'properties' | 'form' | 'data' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance' | 'coverage';
 
 export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launchedAsGallery }: Props) {
   const styles = useStyles();
@@ -420,6 +420,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
               <div className={styles.collapsedRail}>Workbench panels</div>
             ) : (
               <>
+                <ScenarioHeader controlId={`${manifest.namespace}.${manifest.constructor}`} />
                 <div className={styles.sidePanelTabs}>
                   <TabList
                     selectedValue={activeTab}
@@ -429,7 +430,6 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
                     <Tab value="properties" icon={<Settings24Regular />} title="Properties — edit the values bound to each manifest property and watch the control re-render on change" />
                     <Tab value="form" icon={<Form24Regular />} title="Form — inspect form-level state (attributes, controls, tabs, sections) and trigger onLoad / onChange handlers. Wires up formContext and the legacy Xrm.Page alias." />
                     <Tab value="data" icon={<Database24Regular />} title="Data — browse and edit the in-memory entity records served to context.webAPI. Switch between mock (data.json) and live (real Dataverse) modes." />
-                    <Tab value="scenarios" icon={<Beaker24Regular />} title="Scenarios — save named snapshots of property values + form state and replay them. Useful for QA test cases and regression baselines." />
                     <Tab value="network" icon={<PlugConnected24Regular />} title="Network — throttle or fail WebAPI calls to simulate offline, slow 3G, or custom latency. Tests how the control behaves under poor connectivity." />
                     <Tab value="device" icon={<Phone24Regular />} title="Device — emulate phone / tablet / desktop viewports with touch input and orientation. Verifies responsive layout without resizing the browser." />
                     <Tab value="user" icon={<Person24Regular />} title="User — change language (LCID), time-zone, RTL direction, and security roles passed to context.userSettings. Tests localisation and permission handling." />
@@ -442,7 +442,6 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
                   <div style={{ display: activeTab === 'properties' ? 'contents' : 'none' }}><PropertyEditor manifest={manifest} /></div>
                   {activeTab === 'form' && <FormPanel />}
                   <div style={{ display: activeTab === 'data' ? 'contents' : 'none' }}><DataPanel /></div>
-                  <div style={{ display: activeTab === 'scenarios' ? 'contents' : 'none' }}><ScenariosPanel controlId={`${manifest.namespace}.${manifest.constructor}`} onScenarioLoaded={() => setActiveTab('properties')} /></div>
                   {activeTab === 'network' && <NetworkPanel />}
                   {activeTab === 'device' && <DevicePanel />}
                   {activeTab === 'user' && <UserSettingsPanel />}

@@ -6,7 +6,7 @@ import { Gallery } from './ui/gallery/Gallery';
 import { DialogHost } from './ui/DialogHost';
 import { PopupHost } from './ui/PopupHost';
 import { useHarnessStore } from './store/harness-store';
-import { loadEntityData, subscribeData } from './store/data-store';
+import { loadEntityData, subscribeData, getEntityStoreKeys } from './store/data-store';
 import { loadExecuteMocks } from './store/execute-mock-store';
 import { loadMetadata } from './store/metadata-store';
 import { rebaseDatesToToday } from './store/date-rebase';
@@ -65,12 +65,20 @@ export function App() {
       fetch('/pcf-data/execute-mocks.json').then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(async ([data, metadata, executeMocks]) => {
       if (data && Object.keys(data).length > 0) {
-        const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
-        const finalData = shouldRebase ? rebaseDatesToToday(data) : data;
-        loadEntityData(finalData);
-        const tableCount = Object.keys(finalData).length;
-        const recordCount = Object.values(finalData as Record<string, any[]>).reduce((sum, arr) => sum + arr.length, 0);
-        console.log(`[pcf-workbench] Loaded data.json: ${tableCount} tables, ${recordCount} records${shouldRebase ? ' (dates rebased to today)' : ''}`);
+        // If an active scenario has already populated the entity store (its
+        // first-load effect runs synchronously inside ScenarioHeader before
+        // this fetch resolves), don't clobber it with the project's
+        // data.json — the scenario is the more specific source of truth.
+        if (getEntityStoreKeys().length > 0) {
+          console.log('[pcf-workbench] Skipping data.json load — active scenario has already populated the entity store.');
+        } else {
+          const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
+          const finalData = shouldRebase ? rebaseDatesToToday(data) : data;
+          loadEntityData(finalData);
+          const tableCount = Object.keys(finalData).length;
+          const recordCount = Object.values(finalData as Record<string, any[]>).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
+          console.log(`[pcf-workbench] Loaded data.json: ${tableCount} tables, ${recordCount} records${shouldRebase ? ' (dates rebased to today)' : ''}`);
+        }
       } else {
         console.log('[pcf-workbench] No data.json found. WebAPI calls will return empty results.');
       }

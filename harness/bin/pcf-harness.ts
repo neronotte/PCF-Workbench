@@ -283,6 +283,15 @@ async function runLoop(opts: LoopOpts): Promise<number> {
   const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   const page = await context.newPage();
 
+  // Suppress the first-load auto-generate scenarios dialog — its backdrop
+  // intercepts clicks and the dialog confounds the headless loop. Setting the
+  // global flag is sufficient for any control the harness loads.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('pcf-workbench-suppress-autogen-all', '1');
+    } catch { /* localStorage may be unavailable — silent */ }
+  });
+
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   const pageErrorStacks: (string | undefined)[] = [];

@@ -4,7 +4,7 @@ import {
   Button, Input, Label, Field, Textarea, Dropdown, Option,
   Table, TableHeader, TableRow, TableHeaderCell, TableBody, TableCell, Checkbox,
 } from '@fluentui/react-components';
-import { subscribeDialogs, resolveDialog, type DialogRequest, type OpenFormDialogRequest, type LookupDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest } from '../shim/dialog-bus';
+import { subscribeDialogs, resolveDialog, type DialogRequest, type OpenFormDialogRequest, type LookupDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest, type ErrorDialogRequest } from '../shim/dialog-bus';
 import { getEntityData, getEntityStoreKeys } from '../store/data-store';
 
 /**
@@ -24,6 +24,7 @@ export function DialogHost() {
   if (current.kind === 'lookup') return <LookupDialog request={current} />;
   if (current.kind === 'confirm') return <ConfirmDialog request={current} />;
   if (current.kind === 'alert') return <AlertDialog request={current} />;
+  if (current.kind === 'error') return <ErrorDialog request={current} />;
   return null;
 }
 
@@ -122,7 +123,52 @@ function AlertDialog({ request }: { request: AlertDialogRequest }) {
       </DialogSurface>
     </Dialog>
   );
-}function LookupDialog({ request }: { request: LookupDialogRequest }) {
+}
+
+function ErrorDialog({ request }: { request: ErrorDialogRequest }) {
+  const { options } = request;
+  const [showDetails, setShowDetails] = useState(false);
+  const message = options.message || 'An error occurred.';
+  const details = typeof options.details === 'string'
+    ? options.details
+    : options.details != null
+      ? (() => { try { return JSON.stringify(options.details, null, 2); } catch { return String(options.details); } })()
+      : '';
+  return (
+    <Dialog open modalType="alert">
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>
+            {options.errorCode ? `Error ${options.errorCode}` : 'Error'}
+          </DialogTitle>
+          <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 420, maxWidth: 640 }}>
+            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{message}</div>
+            {details && (
+              <>
+                <Button size="small" appearance="subtle" onClick={() => setShowDetails(v => !v)} style={{ alignSelf: 'flex-start' }}>
+                  {showDetails ? 'Hide details' : 'Show details'}
+                </Button>
+                {showDetails && (
+                  <Textarea readOnly rows={8} value={details} style={{ fontFamily: 'monospace', fontSize: 11 }} />
+                )}
+              </>
+            )}
+            <div style={{ fontSize: 11, opacity: 0.6 }}>
+              Raised via Xrm.Navigation.openErrorDialog · captured in the Logs panel
+            </div>
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="primary" onClick={() => resolveDialog(request.id, undefined)}>
+              Close
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  );
+}
+
+function LookupDialog({ request }: { request: LookupDialogRequest }) {
   const allowedTypes: string[] = Array.isArray(request.options?.entityTypes) && request.options.entityTypes.length > 0
     ? request.options.entityTypes
     : getEntityStoreKeys();

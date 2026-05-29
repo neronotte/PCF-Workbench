@@ -139,6 +139,9 @@ export interface HarnessStore {
   propertyValues: Record<string, any>;
   setPropertyValue: (name: string, value: any) => void;
   setPropertyValues: (values: Record<string, any>) => void;
+  /** Wipe-then-set. Used by scenario Load + + New to avoid stale props
+   *  surviving from the previous scenario (rubber-duck #2). */
+  replacePropertyValues: (values: Record<string, any>) => void;
 
   // Property types (for of-type-group properties — tracks the maker's Type dropdown selection)
   propertyTypes: Record<string, string>;
@@ -166,6 +169,25 @@ export interface HarnessStore {
   // Control mode
   isControlDisabled: boolean;
   setControlDisabled: (disabled: boolean) => void;
+
+  // -------------------------------------------------------------------------
+  // Scenario tracking (P2). Scenarios are the unit of work in the harness
+  // (browser-tab pattern). Every scoped change marks the active scenario
+  // dirty so the side-panel header can render a dirty dot and prompt on
+  // switch. `_suppressDirty` is set internally during scenario apply / reset
+  // so the wave of scoped setters those operations trigger doesn't self-dirty.
+  // -------------------------------------------------------------------------
+  activeScenarioName: string | null;
+  isDirty: boolean;
+  _suppressDirty: boolean;
+  setActiveScenarioName: (name: string | null) => void;
+  markDirty: () => void;
+  clearDirty: () => void;
+  /** Run `fn` with dirty-suppression on. Used by scenario apply / reset to
+   *  perform many scoped writes as one logical operation that does NOT mark
+   *  the active scenario dirty. Restores the prior flag on exit (safe under
+   *  nesting). */
+  withDirtySuppression: <T>(fn: () => T) => T;
 
   // Authoring mode (designer preview). When true, context.mode.isAuthoringMode
   // returns true so InfoCard-style controls render their designer preview UI.
@@ -210,6 +232,13 @@ export interface HarnessStore {
   // Fullscreen state (toggled via context.mode.setFullScreen)
   isFullscreen: boolean;
   setFullscreen: (value: boolean) => void;
+
+  /** Full-bleed mode — drops the device-frame chrome and lets the control
+   *  expand to the viewport area (matching UCI-style form-region rendering).
+   *  Default off so existing scenarios that rely on the device-emulation
+   *  frame keep working. Persisted to localStorage. */
+  isFullBleed: boolean;
+  setFullBleed: (value: boolean) => void;
 
   // Host (drives context.client.getClient())
   host: 'Web' | 'Mobile' | 'Outlook' | 'Teams';
@@ -359,6 +388,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   setPropertyValues: (values) => set(s => ({
     propertyValues: { ...s.propertyValues, ...values },
   })),
+  replacePropertyValues: (values) => set({ propertyValues: { ...values } }),
 
   // Property types
   propertyTypes: {},
@@ -486,6 +516,15 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   // Fullscreen
   isFullscreen: false,
   setFullscreen: (value) => set({ isFullscreen: value }),
+
+  // Full-bleed (UCI-style chrome-less rendering)
+  isFullBleed: (() => {
+    try { return localStorage.getItem('pcf.isFullBleed') === '1'; } catch { return false; }
+  })(),
+  setFullBleed: (value) => set(() => {
+    try { localStorage.setItem('pcf.isFullBleed', value ? '1' : '0'); } catch { /* ignore */ }
+    return { isFullBleed: value };
+  }),
 
   // Host
   host: 'Web',
@@ -681,4 +720,63 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   })),
   setPacReauthRequired: (state) => set({ pacReauthRequired: state }),
   setLivePageRecordError: (msg) => set({ livePageRecordError: msg }),
+
+  // Scenario tracking (P2). Initial state: no active scenario, not dirty.
+  // App.tsx / ScenarioHeader will hydrate `activeScenarioName` from
+  // `loadActiveScenarioName(controlId)` once the control is known.
+  activeScenarioName: null,
+  isDirty: false,
+  _suppressDirty: false,
+  setActiveScenarioName: (name) => set({ activeScenarioName: name, isDirty: false }),
+  markDirty: () => set(s => (s.isDirty || s._suppressDirty || !s.activeScenarioName ? {} : { isDirty: true })),
+  clearDirty: () => set({ isDirty: false }),
+  withDirtySuppression: (fn) => {
+    const prev = get()._suppressDirty;
+    set({ _suppressDirty: true });
+    try { return fn(); }
+    finally { set({ _suppressDirty: prev }); }
+  },
 }));
+
+/* -------------------------------------------------------------------------- */
+/* Scenario dirty tracker                                                     */
+/* -------------------------------------------------------------------------- */
+//
+// Subscribe once at module load to diff scoped state across every set().
+// Any change to a scenario-scoped field marks the active scenario dirty
+// unless `_suppressDirty` is on (apply / reset) or there is no active
+// scenario. This avoids touching ~20 individual setters and keeps the
+// dirty signal in lock-step with capture/apply semantics — the set of
+// keys watched here matches `captureScenarioFromStore` exactly.
+const SCENARIO_SCOPED_KEYS: (keyof HarnessStore)[] = [
+  'propertyValues',
+  'propertyTypes',
+  'networkMode',
+  'customLatencyMs',
+  'devicePreset',
+  'containerWidth',
+  'containerHeight',
+  'isControlDisabled',
+  'pageEntityId',
+  'pageEntityTypeName',
+  'pageEntityRecordName',
+  'userLanguageId',
+  'userIsRTL',
+  'userTimeZoneOffsetMinutes',
+  'userId',
+  'userName',
+  'userSecurityRoles',
+  'host',
+  'isFullBleed',
+];
+
+useHarnessStore.subscribe((state, prev) => {
+  if (state._suppressDirty || !state.activeScenarioName || state.isDirty) return;
+  for (const k of SCENARIO_SCOPED_KEYS) {
+    if (state[k] !== prev[k]) {
+      // Defer to next microtask so we don't re-enter set() inside a notify pass.
+      Promise.resolve().then(() => useHarnessStore.getState().markDirty());
+      return;
+    }
+  }
+});

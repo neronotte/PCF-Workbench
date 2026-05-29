@@ -9,7 +9,8 @@ export type DialogRequest =
   | OpenFormDialogRequest
   | LookupDialogRequest
   | ConfirmDialogRequest
-  | AlertDialogRequest;
+  | AlertDialogRequest
+  | ErrorDialogRequest;
 
 export interface OpenFormDialogRequest {
   kind: 'openForm';
@@ -39,6 +40,20 @@ export interface AlertDialogRequest {
   id: number;
   alertStrings: { title?: string; text?: string; confirmButtonLabel?: string };
   options?: any;
+  resolve: () => void;
+}
+
+export interface ErrorDialogRequest {
+  kind: 'error';
+  id: number;
+  /** Mirrors Xrm.Navigation.openErrorDialog options. */
+  options: {
+    message?: string;
+    details?: string;
+    errorCode?: number;
+    /** When true, the host shows a "Download log file" affordance. Cosmetic in the harness. */
+    [k: string]: any;
+  };
   resolve: () => void;
 }
 
