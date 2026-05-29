@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
-  makeStyles, tokens, Input, Switch, Button, Badge, Divider, Text, Dropdown, Option,
+  makeStyles, mergeClasses, tokens, Input, Switch, Button, Badge, Divider, Text, Dropdown, Option,
 } from '@fluentui/react-components';
 import {
   subscribeFormState,
@@ -31,15 +31,20 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
-    // No height / overflow here — the parent `sidePanelContent` in
-    // HarnessShell already provides the scroll container. Setting overflow
-    // here produced nested scrollbars at the default side-panel width.
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    // Defense-in-depth — the parent sidePanelContent owns scrolling, but
+    // if any row miscalculates we'd rather clip than spawn an inner
+    // horizontal scrollbar inside the side panel.
+    overflowX: 'hidden',
   },
   section: {
     display: 'flex',
     flexDirection: 'column',
     gap: '6px',
     minWidth: 0,
+    width: '100%',
   },
   sectionTitle: {
     fontWeight: 600,
@@ -48,18 +53,29 @@ const useStyles = makeStyles({
     letterSpacing: '0.5px',
     color: tokens.colorNeutralForeground2,
   },
+  // All three row types share a flex-wrap layout so that when the side
+  // panel is narrow, action chips drop to the next line instead of
+  // overflowing horizontally (which previously forced a scrollbar /
+  // clipped the right-most action button at 280px widths).
   row: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr) auto auto',
+    display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: '6px',
     padding: '4px 6px',
     borderRadius: '4px',
     backgroundColor: tokens.colorNeutralBackground2,
     minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box',
   },
   rowDirty: {
     borderLeft: `3px solid ${tokens.colorPaletteYellowBorderActive}`,
+  },
+  attrCell: {
+    flex: '1 1 110px',
+    minWidth: 0,
+    overflow: 'hidden',
   },
   attrName: {
     fontFamily: 'Consolas, monospace',
@@ -69,32 +85,51 @@ const useStyles = makeStyles({
     whiteSpace: 'nowrap',
     minWidth: 0,
   },
-  attrCell: {
-    minWidth: 0,
-    overflow: 'hidden',
-  },
   attrType: {
     fontSize: '10px',
     color: tokens.colorNeutralForeground3,
   },
+  attrInput: {
+    flex: '1 1 140px',
+    minWidth: 0,
+  },
+  attrRequired: {
+    flex: '0 0 auto',
+    minWidth: '88px',
+  },
+  attrFire: {
+    flex: '0 0 auto',
+  },
   controlRow: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) auto auto auto',
+    display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: '8px',
     padding: '4px 6px',
     borderRadius: '4px',
     backgroundColor: tokens.colorNeutralBackground2,
     minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  controlName: {
+    flex: '1 1 100%',
+    minWidth: 0,
   },
   tabRow: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+    display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: '8px',
     padding: '4px 6px',
     borderRadius: '4px',
     backgroundColor: tokens.colorNeutralBackground2,
+    minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  tabName: {
+    flex: '1 1 100%',
     minWidth: 0,
   },
   emptyMsg: {
@@ -259,7 +294,7 @@ export function FormPanel(): JSX.Element {
                 setAttributeValue(a.name, parsed);
               }}
               data-test-id={`fp-attr-${a.name}-input`}
-              style={{ minWidth: 0 }}
+              className={styles.attrInput}
               title="Attribute value — calls formContext.getAttribute(name).setValue(...) on blur. Empty string is treated as null. Booleans accept true/false/1/0. Numbers are parsed; non-numeric input becomes null."
             />
             <Dropdown
@@ -269,7 +304,7 @@ export function FormPanel(): JSX.Element {
               onOptionSelect={(_, d) => {
                 if (d.optionValue) setAttributeRequiredLevel(a.name, d.optionValue as RequiredLevel);
               }}
-              style={{ minWidth: '92px', width: '92px' }}
+              className={styles.attrRequired}
               data-test-id={`fp-attr-${a.name}-required`}
               title="Required level — none / recommended / required. Equivalent to formContext.getAttribute(name).setRequiredLevel(...). Tests how the control behaves when the field is marked mandatory."
             >
@@ -280,6 +315,7 @@ export function FormPanel(): JSX.Element {
               appearance="subtle"
               onClick={() => fireOnChange(a.name)}
               data-test-id={`fp-attr-${a.name}-fire`}
+              className={styles.attrFire}
               title="Fire onChange handlers — manually triggers every callback registered with formContext.getAttribute(name).addOnChange(). Useful for testing handler logic without re-typing the value."
             >
               fire
@@ -300,7 +336,7 @@ export function FormPanel(): JSX.Element {
         {snap.controls.map(c => (
           <div key={c.name} className={styles.controlRow} data-test-id={`fp-ctrl-${c.name}`}>
             <span
-              className={styles.attrName}
+              className={mergeClasses(styles.attrName, styles.controlName)}
               title={`Control name: ${c.name}. The control element on the form (formContext.getControl(name)). Toggle visibility/disabled to test how your PCF reacts to host-driven state changes.`}
             >
               {c.name}
@@ -358,7 +394,7 @@ export function FormPanel(): JSX.Element {
         {snap.tabs.map(t => (
           <div key={t.name} className={styles.tabRow} data-test-id={`fp-tab-${t.name}`}>
             <span
-              className={styles.attrName}
+              className={mergeClasses(styles.attrName, styles.tabName)}
               title={`Tab: ${t.label ?? t.name} (${t.name}). Access at formContext.ui.tabs.get(name).`}
             >
               {t.label ?? t.name} <Text size={100}>({t.name})</Text>
