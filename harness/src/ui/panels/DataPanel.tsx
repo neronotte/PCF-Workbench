@@ -5,7 +5,7 @@ import {
 } from '@fluentui/react-components';
 import { ArrowClockwise24Regular, Save24Regular, Globe16Regular } from '@fluentui/react-icons';
 import { useHarnessStore, type DataSource, type PublicProfile } from '../../store/harness-store';
-import { loadEntityData } from '../../store/data-store';
+import { loadEntityData, getEntityStoreKeys, getEntityData } from '../../store/data-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
 import { listProfiles, DvProxyError } from '../../api/dv-client';
 
@@ -379,8 +379,22 @@ export function DataPanel() {
   const [editError, setEditError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback((force = false) => {
     const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
+    // First-mount fast path: if the entity store has already been populated
+    // (by App.tsx's data.json load, or by an active scenario's dataRecords),
+    // hydrate the panel's local `tables` list from it instead of re-fetching
+    // data.json — re-fetching would clobber the scenario's mock records.
+    // The user-driven Reload button passes force=true to bypass this.
+    if (!force) {
+      const keys = getEntityStoreKeys();
+      if (keys.length > 0) {
+        const tableList = keys.map(name => ({ name, records: getEntityData(name) }));
+        setTables(tableList);
+        setLoaded(true);
+        return;
+      }
+    }
     fetch('/pcf-data/data.json')
       .then(r => r.json())
       .then((raw: Record<string, any[]>) => {
@@ -494,7 +508,7 @@ export function DataPanel() {
               appearance="subtle"
               icon={<ArrowClockwise24Regular />}
               size="small"
-              onClick={loadData}
+              onClick={() => loadData(true)}
               title="Reload data.json"
             />
           </div>
