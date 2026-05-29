@@ -145,6 +145,31 @@ export function saveScenariosToStorage(controlId: string, scenarios: TestScenari
   } catch { /* quota / disabled localStorage — silent */ }
 }
 
+/**
+ * Persist scenarios to the control's on-disk `test-scenarios.json` via the
+ * Vite plugin's POST endpoint. Best-effort: failures fall through so the
+ * localStorage copy remains the source of truth for the session. Returns the
+ * server's reported path on success, or null on failure.
+ *
+ * `controlId` is unused server-side (the plugin already knows which control
+ * it's serving) but kept in the signature to mirror the localStorage helper
+ * and make multi-control gallery futures explicit.
+ */
+export async function saveScenariosToDisk(_controlId: string, scenarios: TestScenario[]): Promise<string | null> {
+  try {
+    const r = await fetch('/pcf-data/test-scenarios.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(scenarios, null, 2),
+    });
+    if (!r.ok) return null;
+    const body = await r.json().catch(() => ({}));
+    return body?.path ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function loadActiveScenarioName(controlId: string): string | null {
   try {
     if (typeof localStorage === 'undefined') return null;

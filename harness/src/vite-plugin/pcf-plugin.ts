@@ -983,6 +983,73 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
       server.middlewares.use('/pcf-data', (req, res, next) => {
         if (!req.url) return next();
         const urlPath = req.url.split('?')[0];
+
+        // POST/PUT /test-scenarios.json — write the canonical on-disk fixture
+        // so localStorage edits round-trip back into the control's repo and
+        // become part of the committed test corpus. Writes to the existing
+        // file path if found; otherwise creates one at controlDir.
+        //
+        // SAFETY: refuses to overwrite an existing file that doesn't look like
+        // a TestScenario v2 array. This protects unrelated `test-scenarios.json`
+        // files (e.g. Playwright spec configs) that happen to live at the same
+        // path and would otherwise be silently destroyed by a boot-time
+        // auto-Default save.
+        if (urlPath === '/test-scenarios.json' && (req.method === 'POST' || req.method === 'PUT')) {
+          const chunks: Buffer[] = [];
+          req.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+          req.on('end', () => {
+            try {
+              const body = Buffer.concat(chunks).toString('utf-8');
+              const parsed = JSON.parse(body);
+              if (!Array.isArray(parsed)) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ ok: false, error: 'body must be a JSON array of TestScenario objects' }));
+                return;
+              }
+              const candidates = [
+                path.join(state.controlDir, 'test-scenarios.json'),
+                path.join(state.projectRoot, 'test-scenarios.json'),
+              ];
+              const existing = candidates.find(p => fs.existsSync(p));
+              if (existing) {
+                // Refuse to overwrite if the file on disk isn't a recognizable
+                // TestScenario array. Empty array is fine (legit reset).
+                try {
+                  const onDisk = JSON.parse(fs.readFileSync(existing, 'utf-8'));
+                  const looksLikeScenarios = Array.isArray(onDisk) && (onDisk.length === 0 || onDisk.every((s: any) =>
+                    s && typeof s === 'object' && typeof s.name === 'string' && (
+                      'schemaVersion' in s || 'propertyValues' in s || 'savedAt' in s
+                    )
+                  ));
+                  if (!looksLikeScenarios) {
+                    res.statusCode = 409;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ ok: false, error: `existing file at ${existing} is not a TestScenario array — refusing to overwrite`, path: existing }));
+                    return;
+                  }
+                } catch {
+                  // Existing file is non-JSON — treat as foreign, refuse.
+                  res.statusCode = 409;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ ok: false, error: `existing file at ${existing} is not parseable JSON — refusing to overwrite`, path: existing }));
+                  return;
+                }
+              }
+              const target = existing ?? candidates[0];
+              fs.writeFileSync(target, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ ok: true, path: target }));
+            } catch (err: any) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ ok: false, error: String(err?.message ?? err) }));
+            }
+          });
+          return;
+        }
+
         if (urlPath === '/data.json' || urlPath === '/') {
           // Search control dir first, then project root
           const candidates = [

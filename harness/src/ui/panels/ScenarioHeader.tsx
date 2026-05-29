@@ -38,6 +38,7 @@ import {
   loadAllScenarios,
   loadScenariosFromStorage,
   saveScenariosToStorage,
+  saveScenariosToDisk,
   loadActiveScenarioName,
   applyScenarioAsActive,
   resetScenarioDefaults,
@@ -226,6 +227,10 @@ export function ScenarioHeader({ controlId }: ScenarioHeaderProps) {
   const persistList = useCallback((next: TestScenario[]) => {
     setScenarios(next);
     saveScenariosToStorage(controlId, next);
+    // Best-effort round-trip to on-disk test-scenarios.json so changes
+    // persist across origins / browsers / coworkers. Failures are silent —
+    // localStorage remains the working source of truth for the session.
+    void saveScenariosToDisk(controlId, next);
   }, [controlId]);
 
   /** Replace the current scenario on disk with whatever the store holds now. */
