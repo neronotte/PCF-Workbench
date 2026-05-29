@@ -4,6 +4,9 @@ import * as React from "react";
 
 export class ConformanceTester implements ComponentFramework.ReactControl<IInputs, IOutputs> {
     private notifyOutputChanged: () => void;
+    // Held across the getOutputs cycle so conformance writeback rows can mutate
+    // the harness's bound/input values and observe the glow animation.
+    private pendingOutputs: Partial<IOutputs> = {};
 
     constructor() {
         // Empty
@@ -18,11 +21,21 @@ export class ConformanceTester implements ComponentFramework.ReactControl<IInput
     }
 
     public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
-        return React.createElement(ConformanceGrid, { context: context as ComponentFramework.Context<unknown> });
+        return React.createElement(ConformanceGrid, {
+            context: context as ComponentFramework.Context<unknown>,
+            writeOutput: (name, value) => {
+                (this.pendingOutputs as Record<string, unknown>)[name] = value;
+            },
+            notifyOutputChanged: () => this.notifyOutputChanged(),
+        });
     }
 
     public getOutputs(): IOutputs {
-        return {};
+        const out = this.pendingOutputs as IOutputs;
+        // Clear after the harness has read them — match real UCI semantics where
+        // notifyOutputChanged → getOutputs is a one-shot drain.
+        this.pendingOutputs = {};
+        return out;
     }
 
     public destroy(): void {

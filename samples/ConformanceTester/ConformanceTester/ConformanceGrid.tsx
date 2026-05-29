@@ -15,15 +15,22 @@ import {
 
 export interface IConformanceGridProps {
     context: ComponentFramework.Context<unknown>;
+    writeOutput: (name: string, value: unknown) => void;
+    notifyOutputChanged: () => void;
 }
 
 type Status = "idle" | "pass" | "fail" | "na";
 
+interface WritebackHelpers {
+    writeOutput: (name: string, value: unknown) => void;
+    notifyOutputChanged: () => void;
+}
+
 interface TestRow {
     id: string;
-    category: "Context" | "Xrm" | "formContext" | "executionContext";
+    category: "Context" | "Xrm" | "formContext" | "executionContext" | "writeback";
     name: string;
-    run: (ctx: ComponentFramework.Context<unknown>) => Promise<string> | string;
+    run: (ctx: ComponentFramework.Context<unknown>, wb: WritebackHelpers) => Promise<string> | string;
 }
 
 interface RowState {
@@ -680,6 +687,71 @@ const TESTS: TestRow[] = [
             return "ok";
         },
     },
+
+    // ─── Writeback (notifyOutputChanged → getOutputs → applyOutputs) ──
+    // These exercise the harness path that drives the bound-value glow.
+    {
+        id: "wb-textinput-set",
+        category: "writeback",
+        name: "writeback: textInput via notifyOutputChanged",
+        run: async (ctx, wb) => {
+            const before = (ctx as any).parameters?.textInput?.raw ?? "";
+            const target = `wb-${Date.now()}`;
+            wb.writeOutput("textInput", target);
+            wb.notifyOutputChanged();
+            // Allow the harness's setTimeout(0) drain + React commit to flush.
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            const after = (ctx as any).parameters?.textInput?.raw ?? "";
+            expect(after === target, `expected '${target}', got '${after}' (before='${before}')`);
+            return `wrote '${target}'`;
+        },
+    },
+    {
+        id: "wb-numberinput-set",
+        category: "writeback",
+        name: "writeback: numberInput via notifyOutputChanged",
+        run: async (ctx, wb) => {
+            const before = (ctx as any).parameters?.numberInput?.raw ?? null;
+            const target = Math.floor(Math.random() * 1000) + 100;
+            wb.writeOutput("numberInput", target);
+            wb.notifyOutputChanged();
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            const after = (ctx as any).parameters?.numberInput?.raw ?? null;
+            expect(after === target, `expected ${target}, got ${after} (before=${before})`);
+            return `wrote ${target}`;
+        },
+    },
+    {
+        id: "wb-record-set",
+        category: "writeback",
+        name: "writeback: bound `record` via notifyOutputChanged",
+        run: async (ctx, wb) => {
+            const target = `Glow Test ${Date.now()}`;
+            wb.writeOutput("record", target);
+            wb.notifyOutputChanged();
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            const after = (ctx as any).parameters?.record?.raw ?? "";
+            expect(after === target, `expected '${target}', got '${after}'`);
+            return `wrote '${target}'`;
+        },
+    },
+    {
+        id: "wb-same-value-skip",
+        category: "writeback",
+        name: "writeback: same value is a no-op (skip optimisation)",
+        run: async (ctx, wb) => {
+            const pinned = `pin-${Date.now()}`;
+            wb.writeOutput("textInput", pinned);
+            wb.notifyOutputChanged();
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            wb.writeOutput("textInput", pinned);
+            wb.notifyOutputChanged();
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            const after = (ctx as any).parameters?.textInput?.raw ?? "";
+            expect(after === pinned, `expected '${pinned}', got '${after}'`);
+            return `stable at '${pinned}'`;
+        },
+    },
 ];
 
 function statusBadge(status: Status): React.ReactElement {
@@ -761,7 +833,7 @@ const NotificationTester: React.FC = () => {
     );
 };
 
-export const ConformanceGrid: React.FC<IConformanceGridProps> = ({ context }) => {
+export const ConformanceGrid: React.FC<IConformanceGridProps> = ({ context, writeOutput, notifyOutputChanged }) => {
     const styles = useStyles();
     const [rows, setRows] = React.useState<Record<string, RowState>>(() => {
         const init: Record<string, RowState> = {};
@@ -771,7 +843,7 @@ export const ConformanceGrid: React.FC<IConformanceGridProps> = ({ context }) =>
 
     const runOne = React.useCallback(async (test: TestRow) => {
         try {
-            const out = await Promise.resolve(test.run(context));
+            const out = await Promise.resolve(test.run(context, { writeOutput, notifyOutputChanged }));
             const isNa = typeof out === "string" && out.startsWith("N/A");
             setRows((prev) => ({
                 ...prev,
@@ -783,7 +855,7 @@ export const ConformanceGrid: React.FC<IConformanceGridProps> = ({ context }) =>
                 [test.id]: { status: "fail", detail: err?.message ?? String(err) },
             }));
         }
-    }, [context]);
+    }, [context, writeOutput, notifyOutputChanged]);
 
     const runAll = React.useCallback(async () => {
         for (const t of TESTS) {

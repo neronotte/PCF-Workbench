@@ -1,6 +1,6 @@
 {
   "summary": {
-    "passText": "50 pass",
+    "passText": "54 pass",
     "failText": "0 fail",
     "naText": "0 n/a",
     "idleText": "0 idle"
@@ -84,7 +84,7 @@
     {
       "id": "context-page-getClientUrl",
       "status": "pass",
-      "detail": "http://127.0.0.1:8181"
+      "detail": "http://127.0.0.1:8192"
     },
     {
       "id": "context-accessibility-getState",
@@ -255,6 +255,26 @@
       "id": "ec-shared-variable",
       "status": "pass",
       "detail": "ok"
+    },
+    {
+      "id": "wb-textinput-set",
+      "status": "pass",
+      "detail": "wrote 'wb-1780063878605'"
+    },
+    {
+      "id": "wb-numberinput-set",
+      "status": "pass",
+      "detail": "wrote 1048"
+    },
+    {
+      "id": "wb-record-set",
+      "status": "pass",
+      "detail": "wrote 'Glow Test 1780063878716'"
+    },
+    {
+      "id": "wb-same-value-skip",
+      "status": "pass",
+      "detail": "stable at 'pin-1780063878801'"
     }
   ],
   "consoleErrors": []
