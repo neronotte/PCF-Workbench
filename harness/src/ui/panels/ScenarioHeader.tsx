@@ -30,7 +30,7 @@ import {
 } from '@fluentui/react-components';
 import {
   Add20Regular, Copy20Regular, Rename20Regular, Wand24Regular,
-  Save20Regular, Delete20Regular, Beaker24Regular,
+  Save20Regular, Delete20Regular, Beaker24Regular, ArrowReset20Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore } from '../../store/harness-store';
 import {
@@ -63,6 +63,7 @@ type DialogMode =
   | 'rename'
   | 'generate-count'
   | 'dirty-switch'
+  | 'discard-confirm'
   | 'delete-confirm';
 
 const DEFAULT_GENERATE_COUNT = 5;
@@ -419,6 +420,21 @@ export function ScenarioHeader({ controlId }: ScenarioHeaderProps) {
   }, [activeScenarioName, captureAndUpsertActive, flash, addLogEntry]);
 
   // -------------------------------------------------------------------------
+  // Discard / Restore — reload the saved scenario, wiping uncommitted edits
+  // -------------------------------------------------------------------------
+  const openDiscardConfirm = useCallback(() => setDialogMode('discard-confirm'), []);
+
+  const confirmDiscard = useCallback(() => {
+    if (!activeScenarioName) { closeDialog(); return; }
+    const saved = scenarios.find(s => s.name === activeScenarioName);
+    if (!saved) { closeDialog(); return; }
+    applyScenarioAsActive(controlId, saved);
+    flash(`Restored "${saved.name}" — unsaved edits discarded`);
+    addLogEntry({ category: 'scenario', method: 'discard', args: { name: saved.name } });
+    closeDialog();
+  }, [activeScenarioName, scenarios, controlId, flash, addLogEntry, closeDialog]);
+
+  // -------------------------------------------------------------------------
   // Delete
   // -------------------------------------------------------------------------
   const openDeleteConfirm = useCallback(() => setDialogMode('delete-confirm'), []);
@@ -511,6 +527,9 @@ export function ScenarioHeader({ controlId }: ScenarioHeaderProps) {
         <div className={styles.spacer} />
         <Tooltip content={isDirty ? 'Save edits into the active scenario' : 'No changes to save'} relationship="label">
           <span><Button size="small" appearance={isDirty ? 'primary' : 'subtle'} icon={<Save20Regular />} onClick={onSaveClick} disabled={!isDirty || !activeScenarioName} aria-label="Save" /></span>
+        </Tooltip>
+        <Tooltip content={isDirty ? 'Discard unsaved edits and restore the saved scenario' : 'No unsaved edits to discard'} relationship="label">
+          <span><Button size="small" appearance="subtle" icon={<ArrowReset20Regular />} onClick={openDiscardConfirm} disabled={!isDirty || !activeScenarioName} aria-label="Discard changes" /></span>
         </Tooltip>
         <Tooltip content={deleteDisabled ? "Can't delete the only scenario — rename or modify it instead" : 'Delete current scenario'} relationship="label">
           <span><Button size="small" appearance="subtle" icon={<Delete20Regular />} onClick={openDeleteConfirm} disabled={deleteDisabled || !activeScenarioName} aria-label="Delete" /></span>
@@ -708,6 +727,22 @@ export function ScenarioHeader({ controlId }: ScenarioHeaderProps) {
               <Button appearance="secondary" onClick={closeDialog}>Cancel</Button>
               <Button onClick={() => resolvePendingSwitch('discard')}>Discard</Button>
               <Button appearance="primary" onClick={() => resolvePendingSwitch('save')}>Save &amp; switch</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      {/* Discard / Restore confirm */}
+      <Dialog open={dialogMode === 'discard-confirm'} modalType="alert" onOpenChange={(_, d) => { if (!d.open) closeDialog(); }}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Discard unsaved changes?</DialogTitle>
+            <DialogContent>
+              This restores <strong>{activeScenarioName}</strong> from its last saved state. Any uncommitted edits to property values, page context, network, device, data, or user settings will be lost.
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="secondary" onClick={closeDialog}>Cancel</Button>
+              <Button appearance="primary" icon={<ArrowReset20Regular />} onClick={confirmDiscard}>Discard &amp; restore</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>
