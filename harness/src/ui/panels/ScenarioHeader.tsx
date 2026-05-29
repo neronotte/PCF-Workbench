@@ -525,8 +525,8 @@ export function ScenarioHeader({ controlId }: ScenarioHeaderProps) {
           <span><Button size="small" appearance="subtle" icon={<Wand24Regular />} onClick={() => setDialogMode('generate-count')} disabled={!manifest} aria-label="Generate" /></span>
         </Tooltip>
         <div className={styles.spacer} />
-        <Tooltip content={isDirty ? 'Save edits into the active scenario' : 'No changes to save'} relationship="label">
-          <span><Button size="small" appearance={isDirty ? 'primary' : 'subtle'} icon={<Save20Regular />} onClick={onSaveClick} disabled={!isDirty || !activeScenarioName} aria-label="Save" /></span>
+        <Tooltip content={isDirty ? 'Save edits into the active scenario' : 'Re-save the active scenario (no unsaved edits detected)'} relationship="label">
+          <span><Button size="small" appearance={isDirty ? 'primary' : 'subtle'} icon={<Save20Regular />} onClick={onSaveClick} disabled={!activeScenarioName} aria-label="Save" /></span>
         </Tooltip>
         <Tooltip content={isDirty ? 'Discard unsaved edits and restore the saved scenario' : 'No unsaved edits to discard'} relationship="label">
           <span><Button size="small" appearance="subtle" icon={<ArrowReset20Regular />} onClick={openDiscardConfirm} disabled={!isDirty || !activeScenarioName} aria-label="Discard changes" /></span>
