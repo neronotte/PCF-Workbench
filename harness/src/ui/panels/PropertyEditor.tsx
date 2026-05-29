@@ -13,8 +13,14 @@ import { ControlInfoCard } from './ControlInfoCard';
 const useStyles = makeStyles({
   root: {
     padding: '12px',
-    overflowY: 'auto',
-    height: '100%',
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    boxSizing: 'border-box',
+    // No height / overflow here — the parent `sidePanelContent` in
+    // HarnessShell already provides the scroll container. Setting
+    // overflow + height here produced nested scrollbars (see FormPanel
+    // for the same lesson).
   },
   header: {
     fontSize: tokens.fontSizeBase400,
