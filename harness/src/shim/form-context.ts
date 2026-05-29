@@ -484,8 +484,18 @@ export function buildFormContext(hooks: FormContextHooks): any {
       },
     },
     ui: buildUi(),
-    // Convenience back-pointers — populated by createContext
-    context: hooks.getPcfContext?.() ?? null,
+    // Convenience back-pointer to the PCF context. Lazy getter (rather than
+    // eager assignment) because buildFormContext() runs BEFORE createContext()
+    // in control-host.ts — capturing `hooks.getPcfContext()` eagerly snapshots
+    // `undefined` and crashes any legacy `Xrm.Page.context.client.getClient()`
+    // path with "Cannot read properties of null (reading 'client')".
+    get context() {
+      const pcf = hooks.getPcfContext?.();
+      if (pcf) return pcf;
+      // Final fallback: legacy code that expected Xrm.Page.context to be the
+      // *global* Xrm context (with .client / .organizationSettings / .userSettings).
+      try { return (window as any).Xrm?.Utility?.getGlobalContext?.() ?? null; } catch { return null; }
+    },
   };
 
   // addOnLoad/Save/PostSave at the root level, mirroring real Xrm.Page semantics

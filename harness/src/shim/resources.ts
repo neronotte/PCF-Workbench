@@ -73,7 +73,30 @@ async function fetchAndCache(id: string): Promise<string | null> {
 }
 
 export function createResourcesShim(getState: () => HarnessStore) {
+  // Snapshot the strings bucket for the active locale (with the same fallback
+  // chain as getString). Recomputed on each access so a future setResxStrings()
+  // call surfaces immediately.
+  const buildStringsBag = (): Record<string, string> => {
+    const lcid = getState().userLanguageId;
+    return {
+      ...(resxByLcid[0] ?? {}),
+      ...(resxByLcid[1033] ?? {}),
+      ...(resxByLcid[lcid] ?? {}),
+    };
+  };
+
   return {
+    /**
+     * UNDOCUMENTED — internal field exposed by UCI's resources bag, NOT in
+     * @types/powerapps-component-framework. Several internal MscrmControls
+     * (e.g. Field Service InspectionControls.SurveyControl) read
+     * `context.resources._bagPropsResource.strings` directly to seed the
+     * SurveyJS localization dictionary. Exposing it here so those bundles
+     * can load in the harness; do NOT rely on this in partner/ISV controls.
+     */
+    get _bagPropsResource() {
+      return { strings: buildStringsBag() };
+    },
     getResource(id: string, success: (data: string) => void, failure: (err?: any) => void): void {
       // Return from cache SYNCHRONOUSLY — the callback fires immediately
       // so setState happens during componentDidMount before any re-render

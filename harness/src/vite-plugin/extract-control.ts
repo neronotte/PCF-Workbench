@@ -33,6 +33,8 @@ export interface ExtractMeta {
   bundleBytes: number;
   bundleWebresourceName: string;
   requiredFluentMajors: Array<'v8' | 'v9'>;
+  /** Per-resource extraction results for CSS/img webresources declared in the manifest. */
+  resources?: Array<{ kind: 'css' | 'img'; path: string; webresourceName: string; status: 'ok' | 'missing' | 'failed'; bytes?: number; error?: string }>;
 }
 
 export interface ExtractResult {
@@ -221,6 +223,37 @@ export async function extractDeployedControl(opts: ExtractOptions): Promise<Extr
   const bundlePath = path.join(bundleDir, 'bundle.js');
   fs.writeFileSync(bundlePath, decodedBundle, 'utf8');
 
+  // Fetch every CSS/img resource declared in the manifest. Webresource naming
+  // convention: cc_<ns>.<ctor>/<manifest-relative-path>. Tolerate missing
+  // resources (some manifests reference files that aren't uploaded).
+  const cssEntries = Array.from(row.manifest.matchAll(/<css\s+path="([^"]+)"/g)).map(m => ({ kind: 'css' as const, path: m[1] }));
+  const imgEntries = Array.from(row.manifest.matchAll(/<img\s+path="([^"]+)"/g)).map(m => ({ kind: 'img' as const, path: m[1] }));
+  const resourceResults: NonNullable<ExtractMeta['resources']> = [];
+  for (const entry of [...cssEntries, ...imgEntries]) {
+    const wrName = `cc_${ns}.${ctor}/${entry.path}`;
+    const target = path.join(bundleDir, entry.path);
+    try {
+      const q = `api/data/v9.2/webresourceset?$select=name,webresourcetype,content&$filter=` +
+        encodeURIComponent(`name eq '${wrName.replace(/'/g, "''")}'`);
+      const r = await odataGet(orgUrl, tokenInfo.token, q);
+      const hit = r.value?.[0] as { content: string; webresourcetype: number } | undefined;
+      if (!hit) {
+        resourceResults.push({ kind: entry.kind, path: entry.path, webresourceName: wrName, status: 'missing' });
+        continue;
+      }
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      const isText = hit.webresourcetype === 2 || hit.webresourcetype === 3 || hit.webresourcetype === 4;
+      if (isText) {
+        fs.writeFileSync(target, Buffer.from(hit.content, 'base64').toString('utf8'), 'utf8');
+      } else {
+        fs.writeFileSync(target, Buffer.from(hit.content, 'base64'));
+      }
+      resourceResults.push({ kind: entry.kind, path: entry.path, webresourceName: wrName, status: 'ok', bytes: Math.floor(hit.content.length * 3 / 4) });
+    } catch (e) {
+      resourceResults.push({ kind: entry.kind, path: entry.path, webresourceName: wrName, status: 'failed', error: (e as Error).message });
+    }
+  }
+
   const meta: ExtractMeta = {
     extractedAt: new Date().toISOString(),
     orgUrl,
@@ -235,11 +268,71 @@ export async function extractDeployedControl(opts: ExtractOptions): Promise<Extr
     bundleBytes: decodedBundle.length,
     bundleWebresourceName: wr.name,
     requiredFluentMajors: detectFluentMajors(decodedBundle),
+    resources: resourceResults,
   };
   const metaPath = path.join(projectRoot, '.extract-meta.json');
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
 
   return { controlDir, projectRoot, manifestPath, bundlePath, metaPath, meta };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Catalog (list all customcontrol rows in an org)                            */
+/* -------------------------------------------------------------------------- */
+
+export interface DeployedControlSummary {
+  customcontrolid: string;
+  name: string;
+  version: string | null;
+  /** Parsed from the manifest XML when available — purely for display in the picker. */
+  namespace: string | null;
+  constructor: string | null;
+}
+
+/** List every deployed PCF control (`customcontrol` row) in the org.
+ *  Used by the Deployed-tab picker so the user can search & multi-select
+ *  instead of typing the fully-qualified name by hand. */
+export async function listDeployedControlsCatalog(orgUrl: string): Promise<DeployedControlSummary[]> {
+  let tokenInfo: Awaited<ReturnType<typeof acquireDataverseToken>>;
+  try {
+    tokenInfo = await acquireDataverseToken(orgUrl);
+  } catch (e) {
+    throw new ExtractError(
+      `Failed to acquire token for ${orgUrl}: ${(e as Error).message}`,
+      'auth-failed',
+    );
+  }
+
+  // We pull manifest only so we can derive namespace/constructor for display.
+  // customcontrol rows are typically small in count (hundreds at most) so this
+  // is fine; if we ever see orgs with very large catalogs we can drop manifest.
+  const select = '$select=customcontrolid,name,version,manifest';
+  const query = `api/data/v9.2/customcontrols?${select}&$orderby=name`;
+  const result = await odataGet(orgUrl, tokenInfo.token, query);
+  const rows: Array<{
+    customcontrolid: string;
+    name: string;
+    version: string | null;
+    manifest: string | null;
+  }> = result.value ?? [];
+
+  return rows.map(r => {
+    let ns: string | null = null;
+    let ctor: string | null = null;
+    if (r.manifest) {
+      const nsMatch = r.manifest.match(/<control[^>]*\snamespace="([^"]+)"/);
+      const ctorMatch = r.manifest.match(/<control[^>]*\sconstructor="([^"]+)"/);
+      ns = nsMatch?.[1] ?? null;
+      ctor = ctorMatch?.[1] ?? null;
+    }
+    return {
+      customcontrolid: r.customcontrolid,
+      name: r.name,
+      version: r.version ?? null,
+      namespace: ns,
+      constructor: ctor,
+    };
+  });
 }
 
 /* -------------------------------------------------------------------------- */

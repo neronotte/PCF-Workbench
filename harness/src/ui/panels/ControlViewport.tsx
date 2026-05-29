@@ -23,6 +23,18 @@ const useStyles = makeStyles({
     overflow: 'auto',
     padding: '16px',
   },
+  viewportWrapperFullBleed: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    // Match the visual margin UCI form regions get around their content
+    // — the user explicitly asked for breathing room even in full-bleed mode.
+    backgroundColor: '#ffffff',
+    overflow: 'auto',
+    padding: '16px 24px',
+  },
   viewportFrame: {
     position: 'relative' as const,
     border: '2px solid #1a1a1a',
@@ -35,6 +47,18 @@ const useStyles = makeStyles({
     justifyContent: 'flex-start',
     flexShrink: 0,
     overflow: 'hidden',
+  },
+  viewportFrameFullBleed: {
+    position: 'relative' as const,
+    // No border / shadow / radius — UCI form regions are flush.
+    backgroundColor: '#ffffff',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
   },
   viewportNotifications: {
     flexShrink: 0,
@@ -124,6 +148,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
   const datasetState = useHarnessStore(s => s.datasetState);
   const dataVersion = useHarnessStore(s => s.dataVersion);
   const isAuthoringMode = useHarnessStore(s => s.isAuthoringMode);
+  const isFullBleed = useHarnessStore(s => s.isFullBleed);
 
   // Authoring mode is read on init() in real Dataverse and doesn't change at
   // runtime — but for harness UX we want toggling the switch to take effect
@@ -283,10 +308,10 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
 
   return (
     <div className={styles.root}>
-      <div className={styles.viewportWrapper}>
+      <div className={isFullBleed ? styles.viewportWrapperFullBleed : styles.viewportWrapper}>
         <div
-          className={styles.viewportFrame}
-          style={{
+          className={isFullBleed ? styles.viewportFrameFullBleed : styles.viewportFrame}
+          style={isFullBleed ? undefined : {
             width: viewportWidth,
             height: viewportHeight,
           }}
@@ -296,7 +321,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
           </div>
           <div
             className={styles.viewport}
-            style={{
+            style={isFullBleed ? { flex: 1, minHeight: 0, width: '100%' } : {
               width: containerWidth ?? viewportWidth,
               height: containerHeight ?? viewportHeight,
             }}
@@ -313,7 +338,11 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
                 <Spinner label="Loading control..." />
               </div>
             )}
-            <div ref={containerRef} className={styles.controlContainer} data-test-id="pcf-control-container" style={{
+            <div ref={containerRef} className={styles.controlContainer} data-test-id="pcf-control-container" style={isFullBleed ? {
+              width: '100%',
+              height: '100%',
+              display: hostState.error ? 'none' : undefined,
+            } : {
               width: containerWidth != null ? `${containerWidth}px` : '100%',
               height: containerHeight != null ? `${containerHeight}px` : '100%',
               display: hostState.error ? 'none' : undefined,

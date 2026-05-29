@@ -400,6 +400,31 @@ export async function deleteExtractedControl(safe: string, cacheBase?: string): 
   if (!res.ok) throw await parseError(res);
 }
 
+export interface DeployedControlSummary {
+  customcontrolid: string;
+  name: string;
+  version: string | null;
+  namespace: string | null;
+  constructor: string | null;
+}
+
+export interface ListDeployedControlsResponse {
+  orgUrl: string;
+  controls: DeployedControlSummary[];
+}
+
+export async function listDeployedControls(orgUrl: string): Promise<ListDeployedControlsResponse> {
+  const res = await fetch(`${EXTRACTED_BASE}/list-controls?orgUrl=${encodeURIComponent(orgUrl)}`, {
+    headers: buildHeaders(),
+  });
+  if (!res.ok) {
+    const err = await parseError(res);
+    maybeFlagReauth(err, orgUrl);
+    throw err;
+  }
+  return (await res.json()) as ListDeployedControlsResponse;
+}
+
 export const __test__ = {
   PROXY_BASE,
   adaptMultiResponse,

@@ -1,5 +1,5 @@
 import type { HarnessStore, CoverageStatus } from '../store/harness-store';
-import { pushDialog, type OpenFormDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest } from './dialog-bus';
+import { pushDialog, type OpenFormDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest, type ErrorDialogRequest } from './dialog-bus';
 
 export function createNavigationShim(getState: () => HarnessStore) {
   const log = (method: string, args?: any, coverage: CoverageStatus = 'implemented') =>
@@ -29,9 +29,14 @@ export function createNavigationShim(getState: () => HarnessStore) {
       });
     },
     openErrorDialog(options: any): Promise<void> {
-      log('openErrorDialog', options, 'stub');
-      window.alert(`Error: ${options.message || options.details || 'Unknown error'}`);
-      return Promise.resolve();
+      log('openErrorDialog', options);
+      return new Promise(resolve => {
+        pushDialog<ErrorDialogRequest>({
+          kind: 'error',
+          options: options ?? {},
+          resolve,
+        });
+      });
     },
     openForm(options: any, parameters?: any): Promise<{ savedEntityReference: any[] }> {
       log('openForm', { options, parameters });

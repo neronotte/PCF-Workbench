@@ -9,6 +9,7 @@ import {
   extractDeployedControl,
   listCachedExtracts,
   deleteCachedExtract,
+  listDeployedControlsCatalog,
   ExtractError,
   safeName as extractSafeName,
 } from './extract-control';
@@ -748,6 +749,40 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
             res.setHeader('Content-Type', 'application/json; charset=utf-8');
             res.end(JSON.stringify({ error: 'list-failed', message: err.message }));
           }
+          return;
+        }
+
+        // GET /api/extracted/list-controls?orgUrl=https://...
+        // Returns the catalog of customcontrol rows in the org so the UI can
+        // offer a searchable multi-select picker instead of free-text input.
+        if (method === 'GET' && urlPath === '/list-controls') {
+          (async () => {
+            try {
+              const qIndex = req.url!.indexOf('?');
+              const qs = qIndex >= 0 ? new URLSearchParams(req.url!.slice(qIndex + 1)) : new URLSearchParams();
+              const orgUrl = qs.get('orgUrl') ?? '';
+              if (!orgUrl) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(JSON.stringify({ error: 'bad-request', message: 'orgUrl query parameter is required.' }));
+                return;
+              }
+              const controls = await listDeployedControlsCatalog(orgUrl);
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.setHeader('Cache-Control', 'no-store');
+              res.end(JSON.stringify({ orgUrl, controls }));
+            } catch (err: any) {
+              if (err instanceof ExtractError) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(JSON.stringify({ error: err.code, message: err.message }));
+              } else {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                res.end(JSON.stringify({ error: 'list-controls-failed', message: err?.message ?? String(err) }));
+              }
+            }
+          })();
           return;
         }
 
