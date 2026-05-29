@@ -164,21 +164,43 @@ function filterColumnsByType(entityType: string, columns: string[], ofType: stri
   });
 }
 
-/** Get available columns from the first record of an entity in data.json */
+/**
+ * Get available columns from the first record of an entity in data.json.
+ *
+ * Normalizes OData lookup-format keys: a Dataverse contact record exposes
+ * `_parentcustomerid_value` (the GUID) plus `@OData...FormattedValue` and
+ * `@Microsoft.Dynamics.CRM.lookuplogicalname` annotations. The Maker UI shows
+ * the friendly logical name (`parentcustomerid`), not the OData-flattened
+ * form, so we surface `parentcustomerid` here and drop the raw `_X_value`
+ * variant. `resolveColumnValue` already understands the round-trip via the
+ * `_X_value` / FormattedValue annotation pair.
+ */
 function getEntityColumns(entityType: string): string[] {
   if (!entityType) return [];
   const records = getEntityData(entityType);
-  if (records.length === 0) {
-    // Try all entity keys to find one with data
+  let source: Record<string, any> | null = null;
+  if (records.length > 0) {
+    source = records[0];
+  } else {
     for (const key of getEntityStoreKeys()) {
       const data = getEntityData(key);
-      if (data.length > 0) {
-        return Object.keys(data[0]).filter(k => !k.includes('@'));
-      }
+      if (data.length > 0) { source = data[0]; break; }
     }
-    return [];
   }
-  return Object.keys(records[0]).filter(k => !k.includes('@'));
+  if (!source) return [];
+
+  const out = new Set<string>();
+  for (const k of Object.keys(source)) {
+    if (k.includes('@')) continue;
+    const lookupMatch = /^_(.+)_value$/.exec(k);
+    if (lookupMatch) {
+      // Surface the friendly logical name instead of the raw `_X_value` key.
+      out.add(lookupMatch[1]);
+    } else {
+      out.add(k);
+    }
+  }
+  return Array.from(out);
 }
 
 /** Resolve a column value from entity data */
