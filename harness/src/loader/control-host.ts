@@ -1,7 +1,7 @@
 import type { ManifestConfig } from '../types/manifest';
 import type { HarnessStore } from '../store/harness-store';
 import { createContext, rebuildParameters } from '../shim/context-factory';
-import { getEntityData } from '../store/data-store';
+import { getEntityData, updateEntityRecord } from '../store/data-store';
 import { loadBundle } from './bundle-loader';
 import { getReactDOMGlobal } from './platform-libs';
 import { ResourceTracker } from './resource-tracker';
@@ -108,6 +108,8 @@ export class ControlHost {
 
       // notifyOutputChanged callback — defer logging to avoid triggering
       // React re-renders during the control's synchronous render cycle.
+      // Also writes outputs back into the harness store / underlying record
+      // so the side panel reflects the control's mutation (matches UCI).
       const notifyOutputChanged = () => {
         setTimeout(() => {
           this.getState().addLogEntry({ category: 'lifecycle', method: 'notifyOutputChanged' });
@@ -122,6 +124,9 @@ export class ControlHost {
               result: outputs,
             });
             this.getState().addLifecycleEvent({ method: 'getOutputs', durationMs: outputMs });
+            if (outputs && typeof outputs === 'object') {
+              this.applyOutputs(outputs);
+            }
           }
         }, 0);
       };
@@ -333,6 +338,76 @@ export class ControlHost {
       this.getState().addHeapSnapshot(`updateView #${renderNum}`);
     }, 0);
   }
+
+  /**
+   * Write `getOutputs()` results back into the harness store and (for bound
+   * properties) the underlying record in the data store. Mirrors what the
+   * Unified Client does after `notifyOutputChanged`: the platform commits
+   * each output back to its bound attribute on the host record, then triggers
+   * the next `updateView`.
+   *
+   * Loop-safe — same-value outputs are skipped, and we only call
+   * `callUpdateView()` when at least one output actually changed (per
+   * rubber-duck #2). The existing `isUpdating` guard handles the recursive
+   * `updateView → notifyOutputChanged → applyOutputs → updateView` chain;
+   * combined with same-value skip we won't spin.
+   */
+  private applyOutputs(outputs: Record<string, any>): void {
+    const state = this.getState();
+    const props = this.manifest.properties;
+    let changed = false;
+
+    for (const [name, value] of Object.entries(outputs)) {
+      const prop = props.find(p => p.name === name);
+      if (!prop) continue;
+
+      const currentRaw = state.propertyValues[name];
+      const boundColumn = typeof currentRaw === 'string' && currentRaw.startsWith('$')
+        ? currentRaw.substring(1)
+        : null;
+
+      if (prop.usage === 'bound' && boundColumn) {
+        // Field-bound: write the value back into the record column so the
+        // next render's resolveFieldBinding pulls it out fresh. We keep
+        // propertyValues[name] as the "$col" sentinel — it's the binding,
+        // not the literal.
+        const entityType = state.pageEntityTypeName;
+        const entityId = state.pageEntityId;
+        if (!entityType || !entityId) continue;
+
+        const records = getEntityData(entityType);
+        const normalId = entityId.replace(/[{}]/g, '').toLowerCase();
+        const record = records.find(r => {
+          for (const key of Object.keys(r)) {
+            if ((key.toLowerCase().endsWith('id') || key === 'id') &&
+                String(r[key]).replace(/[{}]/g, '').toLowerCase() === normalId) {
+              return true;
+            }
+          }
+          return false;
+        });
+        if (!record) continue;
+
+        if (Object.is(record[boundColumn], value)) continue;
+        const ok = updateEntityRecord(entityType, entityId, { [boundColumn]: value });
+        if (ok) changed = true;
+      } else {
+        // Input prop or unbound bound prop — write the literal into the store.
+        if (Object.is(currentRaw, value)) continue;
+        state.setPropertyValue(name, value);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      // Re-render so the control sees its own write reflected in the next
+      // updateView, matching UCI's commit-then-rerender semantics. The
+      // isUpdating guard prevents true infinite recursion; same-value skip
+      // above prevents one-tick spins on idempotent writes.
+      this.callUpdateView();
+    }
+  }
+
 
   destroy(): void {
     if (this.container && this.manifest.controlType === 'virtual') {

@@ -18,6 +18,24 @@ function notify() {
   for (const l of listeners) l();
 }
 
+/**
+ * Mark the active scenario dirty after a mock-data mutation. Skipped when:
+ *   - we're inside `withDirtySuppression` (scenario apply / reset)
+ *   - there is no active scenario (initial boot, gallery mode)
+ *   - we're in live mode (live edits are NOT scenario-scoped — they hit
+ *     Dataverse directly and would be discarded by Save)
+ *
+ * Called by `addEntityRecord` / `updateEntityRecord` / `deleteEntityRecord`
+ * but NOT by `loadEntityData` / `replaceMockEntityData` (those are the
+ * scenario-apply path and the initial-load path, neither of which is a
+ * user edit).
+ */
+function markScenarioDirtyForData(): void {
+  const s = useHarnessStore.getState();
+  if (s.dataSource === 'live') return;
+  s.markDirty();
+}
+
 export function loadEntityData(data: Record<string, any[]>): void {
   entityStore = { ...data };
   notify();
@@ -49,6 +67,35 @@ export function clearEntityData(): void {
   notify();
 }
 
+/**
+ * Snapshot the in-memory MOCK entity table only. Bypasses the live cache
+ * regardless of `dataSource` so scenario Save never accidentally serializes
+ * live Dataverse records (rubber-duck #4).
+ */
+export function getMockEntityDataSnapshot(): Record<string, Record<string, any>[]> {
+  // Deep clone — scenarios are immutable once saved.
+  const out: Record<string, Record<string, any>[]> = {};
+  for (const [k, v] of Object.entries(entityStore)) {
+    out[k] = v.map(r => ({ ...r }));
+  }
+  return out;
+}
+
+/**
+ * Replace the entire mock entity table. Used by scenario Load when the
+ * loaded scenario carries a `dataRecords` snapshot. Notifies subscribers
+ * (DataPanel, WebAPI shim) so dependent UI re-renders.
+ */
+export function replaceMockEntityData(data: Record<string, Record<string, any>[]>): void {
+  // Defensive clone — caller may hold references to the source scenario.
+  const cloned: Record<string, Record<string, any>[]> = {};
+  for (const [k, v] of Object.entries(data)) {
+    cloned[k] = v.map(r => ({ ...r }));
+  }
+  entityStore = cloned;
+  notify();
+}
+
 /** Subscribe to data store mutations. Returns an unsubscribe function. */
 export function subscribeData(listener: () => void): () => void {
   listeners.add(listener);
@@ -71,6 +118,7 @@ export function addEntityRecord(entityType: string, record: Record<string, any>)
   list.push(record);
   entityStore = { ...entityStore, [entityType]: list };
   notify();
+  markScenarioDirtyForData();
   return record;
 }
 
@@ -85,6 +133,7 @@ export function updateEntityRecord(entityType: string, id: string, patch: Record
   updated[idx] = { ...updated[idx], ...patch };
   entityStore = { ...entityStore, [entityType]: updated };
   notify();
+  markScenarioDirtyForData();
   return true;
 }
 
@@ -97,5 +146,6 @@ export function deleteEntityRecord(entityType: string, id: string): boolean {
   if (filtered.length === list.length) return false;
   entityStore = { ...entityStore, [entityType]: filtered };
   notify();
+  markScenarioDirtyForData();
   return true;
 }

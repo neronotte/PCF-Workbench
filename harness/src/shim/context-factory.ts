@@ -15,6 +15,7 @@ import { createFluentDesignShim } from './fluent-design';
 import { createCopilotShim } from './copilot';
 import { createAccessibilityShim } from './accessibility';
 import { createThemingShim } from './theming';
+import { createReportingShim } from './reporting';
 import { addEntityRecord, deleteEntityRecord, getEntityStoreKeys } from '../store/data-store';
 import { getColumnDisplayName, getEntityMetadata } from '../store/metadata-store';
 import { defaultDatasetState } from '../store/harness-store';
@@ -552,6 +553,25 @@ export function createContext(
           (events as any)[name](payload);
         }
       },
+      /**
+       * UNDOCUMENTED — internal field NOT in @types/powerapps-component-framework.
+       * Microsoft's internal MscrmControls (e.g. Field Service
+       * InspectionControls.SurveyControl) branch on
+       * `context.factory._customControlProperties.configuration.Name` (and the
+       * sibling `.manifest.ConstructorName`) to detect which sub-variant of the
+       * bundle is hosting them. Both surfaces resolve to the control's
+       * constructor name from the manifest. Do NOT rely on this in
+       * partner/ISV controls — use `context.parameters` and explicit input
+       * properties instead.
+       */
+      _customControlProperties: {
+        configuration: { Name: manifest.constructor },
+        manifest: {
+          ConstructorName: manifest.constructor,
+          Namespace: manifest.namespace,
+          Version: manifest.version,
+        },
+      },
     },
     formatting: createFormattingShim(),
     mode: createModeShim(getState),
@@ -567,6 +587,7 @@ export function createContext(
     copilot: createCopilotShim(getState),
     accessibility: createAccessibilityShim(getState),
     theming: createThemingShim(getState),
+    reporting: createReportingShim(getState),
 
     // Non-standard context extensions used by some controls (e.g. InspectionControl)
     page: {

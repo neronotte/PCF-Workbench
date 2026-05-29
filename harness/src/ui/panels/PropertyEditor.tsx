@@ -1,8 +1,9 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  makeStyles, tokens, Input, Label, Switch, SpinButton, Textarea,
-  Divider, Badge, Dropdown, Option,
+  makeStyles, mergeClasses, tokens, Input, Label, Switch, SpinButton, Textarea,
+  Divider, Badge, Dropdown, Option, Button, MessageBar, MessageBarBody,
 } from '@fluentui/react-components';
+import { Add16Regular } from '@fluentui/react-icons';
 import type { ManifestConfig, ManifestProperty } from '../../types/manifest';
 import { useHarnessStore } from '../../store/harness-store';
 import { getEntityData, getEntityStoreKeys } from '../../store/data-store';
@@ -22,6 +23,17 @@ const useStyles = makeStyles({
   },
   field: {
     marginBottom: '12px',
+    width: '100%',
+    // Force Fluent inputs/dropdowns/spin-buttons/textareas inside a field
+    // to fill the available column width. Default Fluent sizing leaves
+    // them around 180px which looks cramped in the side panel.
+    '& .fui-Input, & .fui-Dropdown, & .fui-SpinButton, & .fui-Textarea': {
+      width: '100%',
+      maxWidth: '100%',
+    },
+  },
+  fullWidth: {
+    width: '100%',
   },
   label: {
     display: 'flex',
@@ -55,7 +67,43 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusSmall,
     marginTop: '2px',
     wordBreak: 'break-all' as const,
+    outlineWidth: '1px',
+    outlineStyle: 'solid',
+    outlineColor: 'transparent',
+    outlineOffset: '0',
+    transition: 'box-shadow 220ms ease-out, background-color 220ms ease-out, outline-color 220ms ease-out, color 220ms ease-out',
   },
+  // Applied for ~3s after the control writes back to a bound property so
+  // the user can SEE the control mutated the value. Uses a hard
+  // state-toggle (timer-driven) instead of a CSS keyframe so it works
+  // reliably regardless of remount/HMR/key churn and is easy to verify
+  // visually + via Playwright.
+  boundValueChanged: {
+    backgroundColor: '#fff4d6',
+    color: '#7a4f01',
+    outlineColor: '#f0a900',
+    boxShadow: '0 0 0 3px rgba(240, 169, 0, 0.35)',
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  boundChipRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginTop: '2px',
+  },
+  boundChipFlex: { flex: 1, minWidth: 0, marginTop: 0 },
+  updatedBadge: {
+    fontSize: '10px',
+    fontWeight: tokens.fontWeightSemibold,
+    color: '#7a4f01',
+    backgroundColor: '#ffd166',
+    padding: '2px 6px',
+    borderRadius: tokens.borderRadiusSmall,
+    whiteSpace: 'nowrap' as const,
+    opacity: 1,
+    transition: 'opacity 300ms ease-out',
+  },
+  updatedBadgeHidden: { opacity: 0, pointerEvents: 'none' as const },
 });
 
 /**
@@ -166,6 +214,80 @@ function formatTypeName(ofType: string): string {
   return ofType;
 }
 
+/** Candidate record shape for the Lookup picker. */
+interface LookupCandidate {
+  id: string;
+  name: string;
+  entityType: string;
+}
+
+const LOOKUP_PER_ENTITY_CAP = 50;
+
+function pickPrimaryNameKey(record: Record<string, any>): string | undefined {
+  const candidates = ['name', 'fullname', 'displayname', 'title', 'subject', 'description'];
+  for (const key of candidates) {
+    if (typeof record[key] === 'string' && record[key].trim().length > 0) return key;
+  }
+  for (const [k, v] of Object.entries(record)) {
+    if (k.includes('@') || k.toLowerCase().endsWith('id') || k === 'id') continue;
+    if (typeof v === 'string' && v.trim().length > 0) return k;
+  }
+  return undefined;
+}
+
+function pickRecordId(record: Record<string, any>): string | undefined {
+  for (const [k, v] of Object.entries(record)) {
+    if ((k.toLowerCase().endsWith('id') || k === 'id') && (typeof v === 'string' || typeof v === 'number')) {
+      return String(v);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Collect candidate lookup records from the in-memory entity table.
+ * Strategy:
+ *   1. If `preferredEntityType` resolves to a populated bucket, use only that.
+ *   2. Otherwise pool the first N records from every entity bucket so the user
+ *      can still pick something — most controls accept any entity type for
+ *      Lookup.Simple props that don't declare a target.
+ */
+function getLookupCandidates(preferredEntityType?: string): LookupCandidate[] {
+  const out: LookupCandidate[] = [];
+  const pushFromBucket = (entityType: string, records: Record<string, any>[]) => {
+    for (const r of records.slice(0, LOOKUP_PER_ENTITY_CAP)) {
+      const id = pickRecordId(r);
+      const nameKey = pickPrimaryNameKey(r);
+      const name = nameKey ? String(r[nameKey]) : (id ? `${entityType} ${id.slice(0, 8)}…` : entityType);
+      if (id) out.push({ id, name, entityType });
+    }
+  };
+
+  if (preferredEntityType) {
+    const records = getEntityData(preferredEntityType);
+    if (records.length > 0) {
+      pushFromBucket(preferredEntityType, records);
+      return out;
+    }
+  }
+  for (const key of getEntityStoreKeys()) {
+    const records = getEntityData(key);
+    if (records.length === 0) continue;
+    pushFromBucket(key, records);
+  }
+  return out;
+}
+
+function lookupOptionKey(c: LookupCandidate): string {
+  return `${c.entityType}::${c.id}`;
+}
+
+function parseLookupOptionKey(key: string): { entityType: string; id: string } | null {
+  const idx = key.indexOf('::');
+  if (idx < 0) return null;
+  return { entityType: key.slice(0, idx), id: key.slice(idx + 2) };
+}
+
 function PropertyField({ prop, manifest, entityColumns, pageEntityTypeName, pageEntityId }: {
   prop: ManifestProperty;
   manifest: ManifestConfig;
@@ -178,6 +300,11 @@ function PropertyField({ prop, manifest, entityColumns, pageEntityTypeName, page
   const setValue = useHarnessStore(s => s.setPropertyValue);
   const selectedType = useHarnessStore(s => s.propertyTypes[prop.name]);
   const setPropertyType = useHarnessStore(s => s.setPropertyType);
+  // Re-render bound rows whenever the underlying data store changes so the
+  // displayed resolved value reflects writes from the control via
+  // notifyOutputChanged → getOutputs. App.tsx bridges subscribeData() into
+  // dataVersion, so subscribing here is enough.
+  useHarnessStore(s => s.dataVersion);
   const typeGroupTypes = prop.ofTypeGroup ? manifest.typeGroups[prop.ofTypeGroup] : undefined;
 
   // Track which column this property is bound to (stored as $columnName in the value)
@@ -188,6 +315,37 @@ function PropertyField({ prop, manifest, entityColumns, pageEntityTypeName, page
   const displayValue = resolvedValue !== null && resolvedValue !== undefined
     ? (Array.isArray(resolvedValue) ? resolvedValue[0]?.name ?? String(resolvedValue[0]?.id) : String(resolvedValue))
     : '';
+
+  // Highlight the bound value chip whenever its resolved value changes
+  // (typically because the control wrote it back via notifyOutputChanged).
+  // Timer-driven on/off — robust against remounts, HMR, animation
+  // optimisations, and easy to verify via Playwright (class is present,
+  // not a transient keyframe state). The first render is skipped — we
+  // only want to highlight *changes*, not the initial display.
+  const prevDisplayRef = useRef<string | null>(null);
+  const [isFresh, setIsFresh] = useState(false);
+  const freshTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevDisplayRef.current === null) {
+      prevDisplayRef.current = displayValue;
+      return;
+    }
+    if (prevDisplayRef.current !== displayValue) {
+      prevDisplayRef.current = displayValue;
+      setIsFresh(true);
+      if (freshTimerRef.current !== null) window.clearTimeout(freshTimerRef.current);
+      freshTimerRef.current = window.setTimeout(() => {
+        setIsFresh(false);
+        freshTimerRef.current = null;
+      }, 3000);
+    }
+  }, [displayValue]);
+  useEffect(() => () => {
+    if (freshTimerRef.current !== null) window.clearTimeout(freshTimerRef.current);
+  }, []);
+  const boundValueClass = isFresh
+    ? mergeClasses(styles.boundValue, styles.boundValueChanged)
+    : styles.boundValue;
 
   const handleColumnSelect = useCallback((_: any, data: { optionValue?: string }) => {
     const col = data.optionValue;
@@ -240,8 +398,21 @@ function PropertyField({ prop, manifest, entityColumns, pageEntityTypeName, page
           })}
         </Dropdown>
         {boundColumn && displayValue && (
-          <div className={styles.boundValue}>
-            {displayValue}
+          <div className={styles.boundChipRow}>
+            <div
+              className={mergeClasses(boundValueClass, styles.boundChipFlex)}
+              data-test-id={`pe-bound-chip-${prop.name}`}
+              data-fresh={isFresh ? 'true' : 'false'}
+            >
+              {displayValue}
+            </div>
+            <span
+              className={mergeClasses(styles.updatedBadge, !isFresh && styles.updatedBadgeHidden)}
+              data-test-id={`pe-bound-updated-${prop.name}`}
+              aria-hidden={!isFresh}
+            >
+              ↻ updated
+            </span>
           </div>
         )}
       </div>
@@ -323,7 +494,22 @@ function PropertyField({ prop, manifest, entityColumns, pageEntityTypeName, page
               })}
             </Dropdown>
             {boundColumn && displayValue && (
-              <div className={styles.boundValue}>{displayValue}</div>
+              <div className={styles.boundChipRow}>
+                <div
+                  className={mergeClasses(boundValueClass, styles.boundChipFlex)}
+                  data-test-id={`pe-bound-chip-${prop.name}`}
+                  data-fresh={isFresh ? 'true' : 'false'}
+                >
+                  {displayValue}
+                </div>
+                <span
+                  className={mergeClasses(styles.updatedBadge, !isFresh && styles.updatedBadgeHidden)}
+                  data-test-id={`pe-bound-updated-${prop.name}`}
+                  aria-hidden={!isFresh}
+                >
+                  ↻ updated
+                </span>
+              </div>
             )}
           </>
         ) : (
@@ -384,56 +570,8 @@ function PropertyField({ prop, manifest, entityColumns, pageEntityTypeName, page
   }
 
   switch (prop.ofType) {
-    case 'Lookup.Simple': {
-      const lookup = value as any;
-      return (
-        <div className={styles.field}>
-          <div className={styles.label}>
-            {prop.displayNameKey} {usageBadge}
-            <span className={styles.typeHint}>{prop.ofType}</span>
-          </div>
-          <div className={styles.lookupGroup}>
-            <Input
-              size="small"
-              placeholder="ID (GUID)"
-              value={lookup?.[0]?.id ?? ''}
-              onChange={(_, d) => {
-                if (!d.value) {
-                  setValue(prop.name, null);
-                } else {
-                  setValue(prop.name, [{
-                    id: d.value,
-                    name: lookup?.[0]?.name ?? '',
-                    entityType: lookup?.[0]?.entityType ?? '',
-                  }]);
-                }
-              }}
-            />
-            <Input
-              size="small"
-              placeholder="Display Name"
-              value={lookup?.[0]?.name ?? ''}
-              onChange={(_, d) => {
-                if (lookup?.[0]) {
-                  setValue(prop.name, [{ ...lookup[0], name: d.value }]);
-                }
-              }}
-            />
-            <Input
-              size="small"
-              placeholder="Entity Type"
-              value={lookup?.[0]?.entityType ?? ''}
-              onChange={(_, d) => {
-                if (lookup?.[0]) {
-                  setValue(prop.name, [{ ...lookup[0], entityType: d.value }]);
-                }
-              }}
-            />
-          </div>
-        </div>
-      );
-    }
-
+    case 'Lookup.Simple':
+      return <LookupSimpleField value={value} onChange={(v) => setValue(prop.name, v)} prop={prop} usageBadge={usageBadge} styles={styles} />;
     case 'TwoOptions':
       return (
         <div className={styles.field}>
@@ -534,6 +672,144 @@ function PropertyField({ prop, manifest, entityColumns, pageEntityTypeName, page
         </div>
       );
   }
+}
+
+/**
+ * Lookup.Simple picker.
+ *
+ * Replaces the prior 3-stacked-text-input layout (raw GUID / Display Name /
+ * Entity Type) with a single dropdown over the in-memory entity table. The
+ * stored value shape is unchanged — `[{ id, name, entityType }]` — so the
+ * context-factory shim and any scenarios persisted under the old shape keep
+ * working.
+ *
+ * Falls back to the legacy manual inputs when the table is empty, with a
+ * MessageBar hint so the user knows why the dropdown is missing.
+ */
+function LookupSimpleField({
+  value, onChange, prop, usageBadge, styles,
+}: {
+  value: any;
+  onChange: (v: any) => void;
+  prop: ManifestProperty;
+  usageBadge: React.ReactNode;
+  styles: ReturnType<typeof useStyles>;
+}) {
+  // Re-fetch candidates whenever the data store changes — PropertyField
+  // already subscribes to dataVersion so this re-runs reactively.
+  const lookup = Array.isArray(value) && value[0] ? value[0] : null;
+  // Best-effort entityType hint: if the current value carries one, prefer it.
+  const preferredType = lookup?.entityType || undefined;
+  const candidates = useMemo(() => getLookupCandidates(preferredType), [preferredType]);
+  const [manualMode, setManualMode] = useState(false);
+
+  const selectedKey = lookup
+    ? (candidates.find(c => c.id === lookup.id && c.entityType === (lookup.entityType || c.entityType))
+        ?? { id: lookup.id, name: lookup.name || lookup.id, entityType: lookup.entityType || '' })
+    : null;
+  const displayValue = selectedKey
+    ? `${selectedKey.name}${selectedKey.entityType ? ` · ${selectedKey.entityType}` : ''}`
+    : '';
+
+  const handleSelect = useCallback((_: unknown, data: { optionValue?: string }) => {
+    if (!data.optionValue || data.optionValue === '__none__') {
+      onChange(null);
+      return;
+    }
+    if (data.optionValue === '__manual__') {
+      setManualMode(true);
+      return;
+    }
+    const parsed = parseLookupOptionKey(data.optionValue);
+    if (!parsed) return;
+    const cand = candidates.find(c => c.id === parsed.id && c.entityType === parsed.entityType);
+    if (cand) onChange([{ id: cand.id, name: cand.name, entityType: cand.entityType }]);
+  }, [candidates, onChange]);
+
+  // Manual entry (no candidates OR user toggled in) — keep the legacy 3-input
+  // layout so partner controls that depend on bare-id semantics still work.
+  if (manualMode || candidates.length === 0) {
+    return (
+      <div className={styles.field}>
+        <div className={styles.label}>
+          {prop.displayNameKey} {usageBadge}
+          <span className={styles.typeHint}>{prop.ofType}</span>
+        </div>
+        {candidates.length === 0 && (
+          <MessageBar intent="info" style={{ marginBottom: 6 }}>
+            <MessageBarBody style={{ fontSize: 11 }}>
+              No records in the in-memory data store — enter values manually or add records via the Data tab.
+            </MessageBarBody>
+          </MessageBar>
+        )}
+        <div className={styles.lookupGroup}>
+          <Input
+            size="small"
+            placeholder="ID (GUID)"
+            value={lookup?.id ?? ''}
+            onChange={(_, d) => {
+              if (!d.value) onChange(null);
+              else onChange([{ id: d.value, name: lookup?.name ?? '', entityType: lookup?.entityType ?? '' }]);
+            }}
+          />
+          <Input
+            size="small"
+            placeholder="Display Name"
+            value={lookup?.name ?? ''}
+            onChange={(_, d) => {
+              if (lookup) onChange([{ ...lookup, name: d.value }]);
+            }}
+          />
+          <Input
+            size="small"
+            placeholder="Entity Type"
+            value={lookup?.entityType ?? ''}
+            onChange={(_, d) => {
+              if (lookup) onChange([{ ...lookup, entityType: d.value }]);
+            }}
+          />
+          {candidates.length > 0 && (
+            <Button size="small" appearance="subtle" onClick={() => setManualMode(false)}>
+              Back to picker
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.field}>
+      <div className={styles.label}>
+        {prop.displayNameKey} {usageBadge}
+        <span className={styles.typeHint}>{prop.ofType}</span>
+      </div>
+      <Dropdown
+        size="small"
+        placeholder="Pick a record…"
+        selectedOptions={selectedKey ? [lookupOptionKey(selectedKey)] : []}
+        value={displayValue}
+        onOptionSelect={handleSelect}
+      >
+        <Option value="__none__" text="">— None —</Option>
+        {candidates.map(c => {
+          const key = lookupOptionKey(c);
+          const label = `${c.name} · ${c.entityType}`;
+          return <Option key={key} value={key} text={label}>{label}</Option>;
+        })}
+        <Option value="__manual__" text="Enter manually…">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Add16Regular /> Enter manually…
+          </span>
+        </Option>
+      </Dropdown>
+      {selectedKey && (
+        <div className={styles.boundValue}>
+          {selectedKey.id}
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface Props {
