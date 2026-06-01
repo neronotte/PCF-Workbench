@@ -107,6 +107,16 @@ export interface TestScenario {
   /** 'mock' (default) or 'live'. When 'live', `dataRecords` is omitted. */
   dataSource?: 'mock' | 'live';
 
+  /** Live PAC profile pin. Captured on Save when `dataSource === 'live'` so
+   *  the scenario remembers which environment it was authored against.
+   *  Apply matches by `orgUrl` first (durable), then `friendlyName` as a
+   *  fallback. If no profile on the current machine matches, the harness
+   *  surfaces a banner and the user picks manually — no silent fallback. */
+  liveProfile?: {
+    orgUrl: string;
+    friendlyName: string;
+  };
+
   isControlDisabled?: boolean;
 }
 
@@ -555,6 +565,9 @@ export function captureScenarioFromStore(name: string, savedAt = new Date().toIS
     isControlDisabled: s.isControlDisabled,
     dataSource,
     dataRecords: dataSource === 'mock' ? getMockEntityDataSnapshot() : undefined,
+    liveProfile: dataSource === 'live' && s.liveProfile
+      ? { orgUrl: s.liveProfile.orgUrl, friendlyName: s.liveProfile.friendlyName }
+      : undefined,
     metadata: (() => {
       const m = getAllMetadata();
       return Object.keys(m).length > 0 ? m : undefined;
@@ -651,6 +664,40 @@ export function applyScenarioToStore(scenario: TestScenario): void {
   // failing, and the LiveModeControls UI guides the user to pick one.
   if (scenario.dataSource !== undefined && scenario.dataSource !== s.dataSource) {
     s.setDataSource(scenario.dataSource);
+  }
+
+  // Live profile pin — match by orgUrl (durable) first, then friendlyName as
+  // a fallback for cross-machine portability. Auto-select only when the
+  // scenario is in live mode AND the profile is available on this machine.
+  // Mismatch sets a banner via setLivePageRecordError so the user knows to
+  // re-auth or pick a different env. We compare against `s.liveProfiles`,
+  // which is populated by DataPanel's listProfiles effect on first mount —
+  // if it's empty (e.g. apply runs before profiles load), the scenario's
+  // localStorage hint takes over via the existing pcf.liveOrgUrl restore.
+  if (scenario.dataSource === 'live' && scenario.liveProfile) {
+    const wanted = scenario.liveProfile;
+    // Write the wanted orgUrl to localStorage so DataPanel's listProfiles
+    // effect (which restores `pcf.liveOrgUrl` after fetching profiles)
+    // picks THIS scenario's profile, not whatever the previous session
+    // had selected. Apply path is the source of truth for "what to load".
+    try { localStorage.setItem('pcf.liveOrgUrl', wanted.orgUrl); } catch { /* ignore */ }
+    const available = s.liveProfiles ?? [];
+    const matchByUrl = available.find(p => p.orgUrl === wanted.orgUrl);
+    const matchByName = !matchByUrl
+      ? available.find(p => p.friendlyName === wanted.friendlyName)
+      : null;
+    const chosen = matchByUrl ?? matchByName ?? null;
+    if (chosen && chosen.orgUrl !== s.liveProfile?.orgUrl) {
+      s.setLiveProfile(chosen);
+    } else if (!chosen && available.length > 0) {
+      // Profiles loaded but none match — surface a banner.
+      s.setLivePageRecordError(
+        `Scenario "${scenario.name}" was authored against PAC profile "${wanted.friendlyName}" (${wanted.orgUrl}), which isn't available on this machine. Pick an available environment from the Live profile dropdown.`,
+      );
+    }
+    // If `available.length === 0`, profiles haven't loaded yet — the
+    // localStorage hint (pcf.liveOrgUrl) we just wrote will be picked up
+    // by DataPanel's listProfiles callback once they load.
   }
 
   // Data records — only when mock and present. Live mode is opted out at Save.
