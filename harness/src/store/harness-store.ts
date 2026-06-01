@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ManifestConfig } from '../types/manifest';
 import { replaceMockEntityData } from './data-store';
+import { isLiveBlocked } from '../lib/live-block';
 
 export type CoverageStatus = 'implemented' | 'stub' | 'unimplemented';
 
@@ -692,6 +693,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   // localStorage so the dev's last setup survives reloads. Profile metadata
   // is re-fetched from /__pcf/dv/profiles on each session.
   dataSource: (() => {
+    if (isLiveBlocked()) return 'mock' as DataSource;
     try {
       const v = typeof localStorage !== 'undefined' ? localStorage.getItem('pcf.dataSource') : null;
       if (v === 'live') return 'live' as DataSource;
@@ -707,6 +709,14 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   pacReauthRequired: null,
   livePageRecordError: null,
   setDataSource: (source) => {
+    // Safety guardrail (M2.P6): when live access is blocked (loop CLI sets
+    // window.__PCF_WORKBENCH_BLOCK_LIVE__, or the URL has ?live=block), any
+    // attempt to switch to live falls back to mock with a console warning.
+    // Mock writes still go through unmodified.
+    if (source === 'live' && isLiveBlocked()) {
+      console.warn('[pcf-workbench] Live data source is blocked in this session — staying in mock mode.');
+      source = 'mock';
+    }
     try { localStorage.setItem('pcf.dataSource', source); } catch { /* ignore */ }
     // Switching modes invalidates cached EntitySetNames and live records
     // (different org may have different schema / data) and any stale

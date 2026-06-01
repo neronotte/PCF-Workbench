@@ -9,6 +9,7 @@ import { loadEntityData, getEntityStoreKeys, getEntityData } from '../../store/d
 import { rebaseDatesToToday } from '../../store/date-rebase';
 import { listProfiles, DvProxyError } from '../../api/dv-client';
 import { loadAllScenarios, applyScenarioAsActive, captureAndSaveAsNewScenario } from '../../lib/scenario-store';
+import { isLiveBlocked, liveBlockReason } from '../../lib/live-block';
 
 const useStyles = makeStyles({
   root: {
@@ -570,8 +571,20 @@ export function DataPanel() {
           data-test-id="data-source-radio"
         >
           <Radio value="mock" label="Mock (scenario)" />
-          <Radio value="live" label="Live (PAC)" />
+          <Radio
+            value="live"
+            label="Live (PAC)"
+            disabled={isLiveBlocked()}
+            title={isLiveBlocked() ? liveBlockReason() : undefined}
+          />
         </RadioGroup>
+        {isLiveBlocked() && (
+          <MessageBar intent="warning" data-test-id="live-blocked-banner">
+            <MessageBarBody>
+              <strong>Live mode is blocked.</strong> {liveBlockReason()} Any scenario carrying <code>dataSource: 'live'</code> will fall back to mock.
+            </MessageBarBody>
+          </MessageBar>
+        )}
         {dataSource === 'live' && <LiveModeControls />}
       </div>
 

@@ -27,6 +27,7 @@ import { AppNotificationBanner } from './AppNotificationBanner';
 import { LiveReauthBanner } from './LiveReauthBanner';
 import { CoveragePanel } from './panels/CoveragePanel';
 import { useLivePageRecord } from '../loader/use-live-page-record';
+import { isLiveBlocked, liveBlockReason } from '../lib/live-block';
 import type { ManifestConfig } from '../types/manifest';
 
 const useStyles = makeStyles({
@@ -270,6 +271,27 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
           >
             <Globe16Regular style={{ width: 12, height: 12 }} />
             LIVE{liveProfile ? `: ${liveProfile.friendlyName}` : ''}
+          </span>
+        )}
+
+        {/* Live-blocked pill (M2.P6) — visible whenever the session has the
+            block flag set, regardless of dataSource. Confirms to the user
+            (and to anyone watching a CI screenshot) that no live calls can
+            slip through even if a scenario tries. */}
+        {isLiveBlocked() && (
+          <span
+            data-test-id="live-blocked-pill"
+            title={liveBlockReason()}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+              padding: '2px 8px', borderRadius: 10,
+              color: '#7fffd4',
+              backgroundColor: 'rgba(0, 180, 120, 0.25)',
+              border: '1px solid rgba(0, 180, 120, 0.5)',
+            }}
+          >
+            🛡 LIVE BLOCKED
           </span>
         )}
 

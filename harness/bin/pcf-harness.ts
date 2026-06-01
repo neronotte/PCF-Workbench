@@ -286,10 +286,16 @@ async function runLoop(opts: LoopOpts): Promise<number> {
   // Suppress the first-load auto-generate scenarios dialog — its backdrop
   // intercepts clicks and the dialog confounds the headless loop. Setting the
   // global flag is sufficient for any control the harness loads.
+  // Also block live Dataverse access (M2.P6 safety guardrail) — loop runs are
+  // CI/AI bound and must never accidentally hit a real org even when a
+  // scenario or persisted localStorage carries `dataSource: 'live'`.
   await page.addInitScript(() => {
     try {
       localStorage.setItem('pcf-workbench-suppress-autogen-all', '1');
     } catch { /* localStorage may be unavailable — silent */ }
+    try {
+      (window as unknown as { __PCF_WORKBENCH_BLOCK_LIVE__?: boolean }).__PCF_WORKBENCH_BLOCK_LIVE__ = true;
+    } catch { /* ignore */ }
   });
 
   const consoleErrors: string[] = [];
