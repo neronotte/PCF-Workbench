@@ -362,6 +362,34 @@ function SnapshotLiveToMockButton() {
   );
 }
 
+/**
+ * Shown in mock mode when the live-fetch buffer still has records (the user
+ * was just in live mode and switched back without snapshotting). Surfaces
+ * the Snapshot button so they can still capture retroactively. M2 follow-up
+ * — previously the buffer was wiped on every mode flip, silently losing data.
+ */
+function PendingLiveCaptureBanner() {
+  const liveFetchBuffer = useHarnessStore(s => s.liveFetchBuffer);
+  const liveRecordCache = useHarnessStore(s => s.liveRecordCache);
+  const totalRecords = Object.values(liveFetchBuffer).reduce(
+    (n, byId) => n + Object.keys(byId).length, 0,
+  );
+  const hasData = totalRecords > 0 || Object.keys(liveRecordCache).length > 0;
+  if (!hasData) return null;
+  return (
+    <div style={{ marginTop: 8 }} data-test-id="pending-live-capture-banner">
+      <MessageBar intent="info" style={{ marginBottom: 6 }}>
+        <MessageBarBody>
+          <strong>Live retrieves still buffered.</strong> You switched back
+          to Mock without snapshotting. Click <em>Snapshot live → mock</em>{' '}
+          to merge them in (existing entities are preserved).
+        </MessageBarBody>
+      </MessageBar>
+      <SnapshotLiveToMockButton />
+    </div>
+  );
+}
+
 function LiveModeControls() {
   const liveProfile = useHarnessStore(s => s.liveProfile);
   const liveProfiles = useHarnessStore(s => s.liveProfiles);
@@ -663,6 +691,7 @@ export function DataPanel() {
           </MessageBar>
         )}
         {dataSource === 'live' && <LiveModeControls />}
+        {dataSource === 'mock' && <PendingLiveCaptureBanner />}
       </div>
 
       <PageContextBlock mockTableNames={tables.map(t => t.name)} />

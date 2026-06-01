@@ -724,12 +724,18 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     // Switching modes invalidates cached EntitySetNames and live records
     // (different org may have different schema / data) and any stale
     // reauth flag. Bump dataVersion so bound properties re-resolve.
+    //
+    // IMPORTANT (M2 follow-up): we PRESERVE liveFetchBuffer across live→mock
+    // transitions so the user can still hit "Snapshot live → mock" after
+    // flipping back to Mock. Previously this was wiped, silently throwing
+    // away every retrieve the control made in Live. Going mock→live still
+    // wipes (stale buffer from a prior session would be misleading).
     __clearLiveAttributeMetadataCache();
     set(s => ({
       dataSource: source,
       entitySetCache: {},
       liveRecordCache: {},
-      liveFetchBuffer: {},
+      liveFetchBuffer: source === 'live' ? {} : s.liveFetchBuffer,
       pacReauthRequired: null,
       livePageRecordError: null,
       dataVersion: s.dataVersion + 1,
