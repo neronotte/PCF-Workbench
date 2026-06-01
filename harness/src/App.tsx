@@ -58,30 +58,18 @@ export function App() {
       console.log(`[pcf-workbench] RESX: ${total} strings across locales [${buckets.sort((a, b) => a - b).join(', ')}]`);
     }
 
-    // Load data.json, metadata.json, and execute-mocks.json from the PCF project directory
+    // Load metadata.json + execute-mocks.json from the PCF project directory.
+    //
+    // Note: legacy `data.json` is intentionally NOT loaded here anymore —
+    // scenarios (test-scenarios.json) are the source of truth for mock
+    // entity records. ScenarioHeader's first-load effect handles a one-shot
+    // migration from data.json into the auto-created Default scenario when
+    // no scenario carries dataRecords. See `bootstrapLegacyDataJson` in
+    // `lib/scenario-store.ts`.
     Promise.all([
-      fetch('/pcf-data/data.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/pcf-data/metadata.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/pcf-data/execute-mocks.json').then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(async ([data, metadata, executeMocks]) => {
-      if (data && Object.keys(data).length > 0) {
-        // If an active scenario has already populated the entity store (its
-        // first-load effect runs synchronously inside ScenarioHeader before
-        // this fetch resolves), don't clobber it with the project's
-        // data.json — the scenario is the more specific source of truth.
-        if (getEntityStoreKeys().length > 0) {
-          console.log('[pcf-workbench] Skipping data.json load — active scenario has already populated the entity store.');
-        } else {
-          const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
-          const finalData = shouldRebase ? rebaseDatesToToday(data) : data;
-          loadEntityData(finalData);
-          const tableCount = Object.keys(finalData).length;
-          const recordCount = Object.values(finalData as Record<string, any[]>).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
-          console.log(`[pcf-workbench] Loaded data.json: ${tableCount} tables, ${recordCount} records${shouldRebase ? ' (dates rebased to today)' : ''}`);
-        }
-      } else {
-        console.log('[pcf-workbench] No data.json found. WebAPI calls will return empty results.');
-      }
+    ]).then(async ([metadata, executeMocks]) => {
       if (metadata) {
         // metadata can be an array (multiple files merged) or a single object
         if (Array.isArray(metadata)) {

@@ -43,6 +43,7 @@ import {
   applyScenarioAsActive,
   resetScenarioDefaults,
   buildDefaultScenario,
+  bootstrapLegacyDataJson,
   captureScenarioFromStore,
   upsertScenario,
   renameScenario,
@@ -175,6 +176,19 @@ export function ScenarioHeader({ controlId }: ScenarioHeaderProps) {
 
     (async () => {
       const list = await loadAllScenarios(controlId);
+
+      // Legacy data.json migration (one-shot). If no scenario carries
+      // dataRecords, seed the mock store from data.json — buildDefaultScenario
+      // and the heuristic generator both snapshot the store, so the legacy
+      // data ends up captured in the resulting scenario on disk and
+      // data.json is never read again at runtime.
+      const anyHasData = list.some(
+        s => s.dataRecords && Object.keys(s.dataRecords).length > 0,
+      );
+      if (!anyHasData) {
+        await bootstrapLegacyDataJson();
+      }
+
       setScenarios(list);
       saveScenariosToStorage(controlId, list);
 

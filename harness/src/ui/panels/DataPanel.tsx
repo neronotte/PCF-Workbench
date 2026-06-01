@@ -8,6 +8,7 @@ import { useHarnessStore, type DataSource, type PublicProfile } from '../../stor
 import { loadEntityData, getEntityStoreKeys, getEntityData } from '../../store/data-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
 import { listProfiles, DvProxyError } from '../../api/dv-client';
+import { loadAllScenarios, applyScenarioAsActive } from '../../lib/scenario-store';
 
 const useStyles = makeStyles({
   root: {
@@ -373,53 +374,49 @@ export function DataPanel() {
   const dataSource = useHarnessStore(s => s.dataSource);
   const setDataSource = useHarnessStore(s => s.setDataSource);
   const reloadControl = useHarnessStore(s => s.reloadControl);
+  const activeScenarioName = useHarnessStore(s => s.activeScenarioName);
+  const manifest = useHarnessStore(s => s.manifest);
   const [tables, setTables] = useState<{ name: string; records: any[] }[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [editJson, setEditJson] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  const loadData = useCallback((force = false) => {
-    const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
-    // First-mount fast path: if the entity store has already been populated
-    // (by App.tsx's data.json load, or by an active scenario's dataRecords),
-    // hydrate the panel's local `tables` list from it instead of re-fetching
-    // data.json — re-fetching would clobber the scenario's mock records.
-    // The user-driven Reload button passes force=true to bypass this.
-    if (!force) {
-      const keys = getEntityStoreKeys();
-      if (keys.length > 0) {
-        const tableList = keys.map(name => ({ name, records: getEntityData(name) }));
-        setTables(tableList);
-        setLoaded(true);
-        return;
-      }
-    }
-    fetch('/pcf-data/data.json')
-      .then(r => r.json())
-      .then((raw: Record<string, any[]>) => {
-        if (raw && typeof raw === 'object') {
-          const data = shouldRebase ? rebaseDatesToToday(raw) : raw;
-          loadEntityData(data);
-          const tableList = Object.entries(data).map(([name, records]) => ({
-            name,
-            records: Array.isArray(records) ? records : [],
-          }));
-          setTables(tableList);
-          setLoaded(true);
-          addLogEntry({ category: 'data', method: 'reload', args: { tables: tableList.length, records: tableList.reduce((s, t) => s + t.records.length, 0), rebased: shouldRebase } });
-        }
-      })
-      .catch(() => {
-        setTables([]);
-        setLoaded(true);
-      });
-  }, [addLogEntry]);
+  // Hydrate the panel's local `tables` list from the in-memory entity store.
+  // The store is populated by ScenarioHeader on first load (via the active
+  // scenario's `dataRecords`, falling back to a one-shot legacy data.json
+  // migration). DataPanel never fetches data.json itself.
+  const hydrateFromStore = useCallback(() => {
+    const keys = getEntityStoreKeys();
+    const tableList = keys.map(name => ({ name, records: getEntityData(name) }));
+    setTables(tableList);
+    setLoaded(true);
+  }, []);
 
-  // Load on first render
+  // Reset the entity store back to whatever the active scenario carries.
+  // Replaces the previous "Reload data.json" affordance — scenarios are now
+  // the source of truth, so reverting means re-applying the active scenario.
+  const resetToActiveScenario = useCallback(async () => {
+    if (!activeScenarioName || !manifest) {
+      hydrateFromStore();
+      return;
+    }
+    const controlId = `${manifest.namespace}.${manifest.constructor}`;
+    const list = await loadAllScenarios(controlId);
+    const active = list.find(s => s.name === activeScenarioName);
+    if (active) {
+      applyScenarioAsActive(controlId, active);
+      addLogEntry({ category: 'data', method: 'reset-to-scenario', args: { scenario: active.name } });
+    }
+    hydrateFromStore();
+  }, [activeScenarioName, manifest, hydrateFromStore, addLogEntry]);
+
+  // Initial hydration + react to dataVersion bumps (scenario applied,
+  // user edits, snapshot live → mock, etc.).
+  const dataVersion = useHarnessStore(s => s.dataVersion);
   useEffect(() => {
-    if (!loaded) loadData();
-  }, [loaded, loadData]);
+    hydrateFromStore();
+  }, [hydrateFromStore, dataVersion, activeScenarioName]);
 
   const handleSelectTable = useCallback((name: string) => {
     setSelectedTable(name);
@@ -458,7 +455,7 @@ export function DataPanel() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span
             className={styles.header}
-            title="Data source — choose where context.webAPI gets its records. Mock = the local data.json file (default; deterministic, offline-safe). Live = a real Dataverse environment via PAC CLI auth (read-only by default, writes require confirmation)."
+            title="Data source — choose where context.webAPI gets its records. Mock = the active scenario's dataRecords (default; deterministic, offline-safe; persisted in test-scenarios.json). Live = a real Dataverse environment via PAC CLI auth (read-only by default, writes require confirmation)."
           >
             Data source
           </span>
@@ -487,7 +484,7 @@ export function DataPanel() {
           layout="horizontal"
           data-test-id="data-source-radio"
         >
-          <Radio value="mock" label="Mock (data.json)" />
+          <Radio value="mock" label="Mock (scenario)" />
           <Radio value="live" label="Live (PAC)" />
         </RadioGroup>
         {dataSource === 'live' && <LiveModeControls />}
@@ -500,7 +497,7 @@ export function DataPanel() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
               className={styles.header}
-              title="Mock Data — in-memory entity records loaded from the control's data.json file. Edit JSON below to add/modify records; changes flow into context.webAPI immediately. Use 'Rebase dates to today' so seeded timestamps stay relative to now."
+              title="Mock Data — in-memory entity records sourced from the active scenario's dataRecords. Edit JSON below to add/modify records; changes flow into context.webAPI immediately and mark the scenario as dirty. Save the scenario to persist edits to disk. Use 'Rebase dates to today' so seeded timestamps stay relative to now."
             >
               Mock Data
             </span>
@@ -508,8 +505,11 @@ export function DataPanel() {
               appearance="subtle"
               icon={<ArrowClockwise24Regular />}
               size="small"
-              onClick={() => loadData(true)}
-              title="Reload data.json"
+              onClick={() => { void resetToActiveScenario(); }}
+              disabled={!activeScenarioName}
+              title={activeScenarioName
+                ? `Reset mock data to "${activeScenarioName}" scenario's saved records (discards unsaved edits in this panel).`
+                : 'No active scenario to reset to.'}
             />
           </div>
 
@@ -522,7 +522,8 @@ export function DataPanel() {
 
           {tables.length === 0 && loaded && (
             <div className={styles.info}>
-              No data.json found. Create one in the control directory:
+              No mock records yet. Add a table by editing JSON in any other entity, or
+              create one in the active scenario by editing below:
               <pre style={{ fontSize: 10, marginTop: 4, whiteSpace: 'pre-wrap' }}>
 {`{
   "tableName": [

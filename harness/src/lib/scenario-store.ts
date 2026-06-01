@@ -27,6 +27,7 @@ import {
   replaceMockEntityData,
 } from '../store/data-store';
 import { reseedForPageEntity } from '../store/form-store';
+import { rebaseDatesToToday } from '../store/date-rebase';
 import { defaultValueFor } from './scenario-heuristic';
 
 /* -------------------------------------------------------------------------- */
@@ -443,6 +444,13 @@ export function buildDefaultScenario(
       }
     }
   }
+  // Capture a snapshot of the current mock entity store. On first launch
+  // ScenarioHeader seeds the store from any legacy data.json before calling
+  // this helper, so the resulting Default scenario is fully self-contained
+  // (data.json content is migrated into the scenario on disk and no longer
+  // re-read at runtime).
+  const dataRecords = getMockEntityDataSnapshot();
+  const hasData = Object.keys(dataRecords).length > 0;
   return {
     schemaVersion: SCENARIO_SCHEMA_VERSION,
     name,
@@ -450,7 +458,50 @@ export function buildDefaultScenario(
     savedAt: new Date().toISOString(),
     propertyValues,
     isControlDisabled: false,
+    dataSource: 'mock',
+    dataRecords: hasData ? dataRecords : undefined,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Legacy data.json bootstrap                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One-shot fetch of the control's legacy `data.json` and seed it into the
+ * mock entity store. Returns `true` if data was loaded.
+ *
+ * `data.json` is **deprecated** as a runtime source: scenarios are now the
+ * only on-disk source of truth for mock entity data. This helper exists
+ * solely to migrate first-launch / pre-v2 controls — it's invoked once at
+ * boot when no scenario carries `dataRecords`. After the next Save the
+ * scenario captures the data and `data.json` is never read again.
+ *
+ * Failures are silent (best-effort); the harness still works without it.
+ */
+export async function bootstrapLegacyDataJson(): Promise<boolean> {
+  try {
+    const r = await fetch('/pcf-data/data.json');
+    if (!r.ok) return false;
+    const json = await r.json();
+    if (!json || typeof json !== 'object' || Array.isArray(json)) return false;
+    const keys = Object.keys(json);
+    if (keys.length === 0) return false;
+    const shouldRebase = useHarnessStore.getState().rebaseDatesToToday;
+    const finalData = shouldRebase ? rebaseDatesToToday(json) : (json as Record<string, Record<string, any>[]>);
+    replaceMockEntityData(finalData);
+    const recordCount = Object.values(finalData).reduce(
+      (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+      0,
+    );
+    console.log(
+      `[pcf-workbench] Migrated legacy data.json into mock store: ${keys.length} tables, ${recordCount} records${shouldRebase ? ' (dates rebased)' : ''}. ` +
+      `On next Save these records become part of the active scenario; data.json will not be read again.`,
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
