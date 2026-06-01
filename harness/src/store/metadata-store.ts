@@ -36,6 +36,59 @@ export interface EntityMetadata {
 }
 
 let metadataStore: Record<string, EntityMetadata> = {};
+const metadataListeners = new Set<() => void>();
+let metadataVersion = 0;
+
+function notifyMetadata(): void {
+  metadataVersion++;
+  for (const fn of metadataListeners) fn();
+}
+
+/** Subscribe to metadata-store mutations. Returns an unsubscribe fn. */
+export function subscribeMetadata(listener: () => void): () => void {
+  metadataListeners.add(listener);
+  return () => metadataListeners.delete(listener);
+}
+
+/** Version counter for `useSyncExternalStore` snapshot keying. */
+export function getMetadataVersion(): number {
+  return metadataVersion;
+}
+
+/** Snapshot of the entire metadata store. Used by scenario serialization
+ *  and the DataPanel "Metadata" tab. */
+export function getAllMetadata(): Record<string, EntityMetadata> {
+  return { ...metadataStore };
+}
+
+/** Replace the metadata for a single entity. Used by the DataPanel JSON
+ *  editor when the user manually edits an entity's metadata. */
+export function setEntityMetadata(entityType: string, meta: EntityMetadata): void {
+  metadataStore = { ...metadataStore, [entityType]: meta };
+  notifyMetadata();
+}
+
+/** Drop a single entity from the metadata store. */
+export function deleteEntityMetadata(entityType: string): void {
+  if (!(entityType in metadataStore)) return;
+  const next = { ...metadataStore };
+  delete next[entityType];
+  metadataStore = next;
+  notifyMetadata();
+}
+
+/** Replace the entire metadata store atomically. Used when applying a
+ *  scenario that carries a serialized metadata snapshot. */
+export function replaceAllMetadata(data: Record<string, EntityMetadata>): void {
+  metadataStore = { ...data };
+  notifyMetadata();
+}
+
+/** Clear every entity from the metadata store. */
+export function clearMetadata(): void {
+  metadataStore = {};
+  notifyMetadata();
+}
 
 /**
  * Load metadata, auto-detecting Dataverse API format vs simple format.

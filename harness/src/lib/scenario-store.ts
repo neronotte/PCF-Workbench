@@ -26,6 +26,11 @@ import {
   getMockEntityDataSnapshot,
   replaceMockEntityData,
 } from '../store/data-store';
+import {
+  getAllMetadata,
+  replaceAllMetadata,
+  type EntityMetadata,
+} from '../store/metadata-store';
 import { reseedForPageEntity } from '../store/form-store';
 import { rebaseDatesToToday } from '../store/date-rebase';
 import { defaultValueFor } from './scenario-heuristic';
@@ -93,6 +98,11 @@ export interface TestScenario {
 
   /** Mock entity table snapshot. Mock-only — never populated in live mode. */
   dataRecords?: Record<string, Record<string, any>[]>;
+
+  /** Entity metadata snapshot (logical name → schema). Captured from
+   *  metadata-store on Save so a scenario can pin the schema it expects.
+   *  Applies in BOTH mock and live mode (acts as a cache primer). */
+  metadata?: Record<string, EntityMetadata>;
 
   /** 'mock' (default) or 'live'. When 'live', `dataRecords` is omitted. */
   dataSource?: 'mock' | 'live';
@@ -545,6 +555,10 @@ export function captureScenarioFromStore(name: string, savedAt = new Date().toIS
     isControlDisabled: s.isControlDisabled,
     dataSource,
     dataRecords: dataSource === 'mock' ? getMockEntityDataSnapshot() : undefined,
+    metadata: (() => {
+      const m = getAllMetadata();
+      return Object.keys(m).length > 0 ? m : undefined;
+    })(),
   };
 }
 
@@ -642,6 +656,13 @@ export function applyScenarioToStore(scenario: TestScenario): void {
   // Data records — only when mock and present. Live mode is opted out at Save.
   if (scenario.dataRecords && scenario.dataSource !== 'live') {
     replaceMockEntityData(scenario.dataRecords);
+  }
+
+  // Metadata snapshot — applies in both mock and live mode. In live mode it
+  // primes the cache so getEntityMetadata() resolves synchronously without
+  // a round-trip; live EntityDefinitions fetches will overwrite per-entity.
+  if (scenario.metadata && Object.keys(scenario.metadata).length > 0) {
+    replaceAllMetadata(scenario.metadata);
   }
 
   // Re-seed form state for the (new) page entity so getAttribute/getControl

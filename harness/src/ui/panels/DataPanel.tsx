@@ -1,11 +1,16 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
 import {
   makeStyles, tokens, Button, Badge, Textarea, MessageBar, MessageBarBody, Checkbox,
   Radio, RadioGroup, Dropdown, Option, Spinner, Label, Input,
 } from '@fluentui/react-components';
-import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular } from '@fluentui/react-icons';
+import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular, ChevronRight20Regular, ChevronDown20Regular } from '@fluentui/react-icons';
 import { useHarnessStore, type DataSource, type PublicProfile } from '../../store/harness-store';
 import { loadEntityData, getEntityStoreKeys, getEntityData } from '../../store/data-store';
+import {
+  getAllMetadata, setEntityMetadata, deleteEntityMetadata,
+  subscribeMetadata, getMetadataVersion,
+  type EntityMetadata,
+} from '../../store/metadata-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
 import { listProfiles, DvProxyError, getLiveLoadedEntities } from '../../api/dv-client';
 import { loadAllScenarios, applyScenarioAsActive, captureAndSaveAsNewScenario } from '../../lib/scenario-store';
@@ -131,6 +136,29 @@ const useStyles = makeStyles({
     fontSize: '10px',
     color: tokens.colorNeutralForeground4,
   },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '4px 6px',
+    cursor: 'pointer',
+    userSelect: 'none',
+    borderRadius: tokens.borderRadiusMedium,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+    '&:hover': { backgroundColor: tokens.colorNeutralBackground3 },
+  },
+  sectionCount: {
+    fontWeight: tokens.fontWeightRegular,
+    color: tokens.colorNeutralForeground3,
+  },
+  sectionList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    paddingLeft: '20px',
+    marginBottom: '4px',
+  },
 });
 
 interface DataSummary {
@@ -143,6 +171,27 @@ function getDataSummary(): DataSummary {
   // Since the data store doesn't expose all keys, we'll track them via a reload
   return { tables: [], totalRecords: 0 };
 }
+
+/**
+ * Version-keyed snapshot cache for the metadata-store subscription. Required
+ * because `useSyncExternalStore` bails if `getSnapshot` returns a fresh object
+ * every call — we cache by `getMetadataVersion()` so React sees a stable ref
+ * until the store actually mutates. Same pattern as form-store.
+ */
+const metadataSnapshotRef = (() => {
+  let cachedVersion = -1;
+  let cached: Record<string, EntityMetadata> = {};
+  return {
+    read(): Record<string, EntityMetadata> {
+      const v = getMetadataVersion();
+      if (v !== cachedVersion) {
+        cachedVersion = v;
+        cached = getAllMetadata();
+      }
+      return cached;
+    },
+  };
+})();
 
 /* -------------------------------------------------------------------------- */
 /* Page Context — identifies the record the harness is "sitting on".          */
@@ -571,10 +620,22 @@ export function DataPanel() {
   const activeScenarioName = useHarnessStore(s => s.activeScenarioName);
   const manifest = useHarnessStore(s => s.manifest);
   const [tables, setTables] = useState<{ name: string; records: any[] }[]>([]);
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  type Selection = { kind: 'data' | 'metadata'; name: string };
+  const [selection, setSelection] = useState<Selection | null>(null);
   const [editJson, setEditJson] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [dataExpanded, setDataExpanded] = useState(true);
+  const [metadataExpanded, setMetadataExpanded] = useState(false);
+
+  // Subscribe to metadata-store mutations (live fetches, scenario apply,
+  // user edits) via useSyncExternalStore. Snapshot is keyed by the version
+  // counter so React doesn't bail on object identity (see form-store).
+  const metadataSnapshot = useSyncExternalStore(
+    subscribeMetadata,
+    () => metadataSnapshotRef.read(),
+  );
+  const metadataEntries = Object.entries(metadataSnapshot);
 
   // Hydrate the panel's local `tables` list from the in-memory entity store.
   // The store is populated by ScenarioHeader on first load (via the active
@@ -612,36 +673,55 @@ export function DataPanel() {
     hydrateFromStore();
   }, [hydrateFromStore, dataVersion, activeScenarioName]);
 
-  const handleSelectTable = useCallback((name: string) => {
-    setSelectedTable(name);
-    const table = tables.find(t => t.name === name);
-    if (table) {
-      setEditJson(JSON.stringify(table.records, null, 2));
-      setEditError(null);
+  const handleSelectNode = useCallback((kind: 'data' | 'metadata', name: string) => {
+    setSelection({ kind, name });
+    setEditError(null);
+    if (kind === 'data') {
+      const table = tables.find(t => t.name === name);
+      setEditJson(JSON.stringify(table?.records ?? [], null, 2));
+    } else {
+      const meta = metadataSnapshot[name];
+      setEditJson(JSON.stringify(meta ?? {}, null, 2));
     }
-  }, [tables]);
+  }, [tables, metadataSnapshot]);
 
-  const handleSaveTable = useCallback(() => {
-    if (!selectedTable) return;
+  const handleApply = useCallback(() => {
+    if (!selection) return;
+    let parsed: any;
     try {
-      const parsed = JSON.parse(editJson);
+      parsed = JSON.parse(editJson);
+    } catch (err: any) {
+      setEditError(`Invalid JSON: ${err.message}`);
+      return;
+    }
+    if (selection.kind === 'data') {
       if (!Array.isArray(parsed)) {
         setEditError('Data must be a JSON array of records');
         return;
       }
-      // Update in-memory store
       const allData: Record<string, any[]> = {};
       for (const t of tables) {
-        allData[t.name] = t.name === selectedTable ? parsed : t.records;
+        allData[t.name] = t.name === selection.name ? parsed : t.records;
       }
       loadEntityData(allData);
-      setTables(tables.map(t => t.name === selectedTable ? { ...t, records: parsed } : t));
+      setTables(tables.map(t => t.name === selection.name ? { ...t, records: parsed } : t));
       setEditError(null);
-      addLogEntry({ category: 'data', method: 'updateTable', args: { table: selectedTable, records: parsed.length } });
-    } catch (err: any) {
-      setEditError(`Invalid JSON: ${err.message}`);
+      addLogEntry({ category: 'data', method: 'updateTable', args: { table: selection.name, records: parsed.length } });
+    } else {
+      // Metadata: must be an EntityMetadata-shaped object {displayName, columns}
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setEditError('Metadata must be an object with { displayName, columns, ... }');
+        return;
+      }
+      if (typeof parsed.displayName !== 'string' || !parsed.columns || typeof parsed.columns !== 'object') {
+        setEditError('Metadata must have a string `displayName` and an object `columns`');
+        return;
+      }
+      setEntityMetadata(selection.name, parsed as EntityMetadata);
+      setEditError(null);
+      addLogEntry({ category: 'data', method: 'updateMetadata', args: { entity: selection.name, columns: Object.keys(parsed.columns).length } });
     }
-  }, [selectedTable, editJson, tables, addLogEntry]);
+  }, [selection, editJson, tables, addLogEntry]);
 
   return (
     <div className={styles.root}>
@@ -727,7 +807,7 @@ export function DataPanel() {
             style={{ marginBottom: 4 }}
           />
 
-          {tables.length === 0 && loaded && (
+          {tables.length === 0 && metadataEntries.length === 0 && loaded && (
             <div className={styles.info}>
               No mock records yet. Add a table by editing JSON in any other entity, or
               create one in the active scenario by editing below:
@@ -741,32 +821,107 @@ export function DataPanel() {
             </div>
           )}
 
-          <div className={styles.tableList}>
-            {tables.map(t => (
-              <div
-                key={t.name}
-                className={`${styles.tableItem} ${selectedTable === t.name ? styles.tableItemActive : ''}`}
-                onClick={() => handleSelectTable(t.name)}
-              >
-                <span className={styles.tableName}>{t.name}</span>
-                <Badge appearance="filled" color={selectedTable === t.name ? 'subtle' : 'informative'} size="small">
-                  {t.records.length}
-                </Badge>
-              </div>
-            ))}
+          {/* Two collapsible sections (Data + Metadata) feed a single editor.
+              Selection is { kind, name } so the bottom editor knows which
+              store to read/write on Apply. Metadata starts collapsed because
+              most users only edit data. */}
+          <div className={styles.sectionHeader} onClick={() => setDataExpanded(v => !v)}>
+            {dataExpanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
+            <span>Data</span>
+            <span className={styles.sectionCount}>({tables.length})</span>
           </div>
+          {dataExpanded && (
+            <div className={styles.sectionList}>
+              {tables.map(t => {
+                const isSelected = selection?.kind === 'data' && selection.name === t.name;
+                return (
+                  <div
+                    key={`data-${t.name}`}
+                    className={`${styles.tableItem} ${isSelected ? styles.tableItemActive : ''}`}
+                    onClick={() => handleSelectNode('data', t.name)}
+                    data-test-id={`data-node-${t.name}`}
+                  >
+                    <span className={styles.tableName}>{t.name}</span>
+                    <Badge appearance="filled" color={isSelected ? 'subtle' : 'informative'} size="small">
+                      {t.records.length}
+                    </Badge>
+                  </div>
+                );
+              })}
+              {tables.length === 0 && (
+                <div className={styles.info} style={{ paddingLeft: 8 }}>No data tables.</div>
+              )}
+            </div>
+          )}
 
-          {selectedTable && (
+          <div
+            className={styles.sectionHeader}
+            onClick={() => setMetadataExpanded(v => !v)}
+            title="Entity metadata (logical name, attributes, primary id/name, option-set values). Auto-populated from data.json fixtures and from live EntityDefinitions fetches. Edit any node to override the cached schema for the active scenario."
+          >
+            {metadataExpanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
+            <span>Metadata</span>
+            <span className={styles.sectionCount}>({metadataEntries.length})</span>
+          </div>
+          {metadataExpanded && (
+            <div className={styles.sectionList}>
+              {metadataEntries.map(([name, meta]) => {
+                const isSelected = selection?.kind === 'metadata' && selection.name === name;
+                const colCount = Object.keys(meta.columns ?? {}).length;
+                return (
+                  <div
+                    key={`meta-${name}`}
+                    className={`${styles.tableItem} ${isSelected ? styles.tableItemActive : ''}`}
+                    onClick={() => handleSelectNode('metadata', name)}
+                    data-test-id={`metadata-node-${name}`}
+                    title={`${meta.displayName ?? name}${meta.primaryIdAttribute ? ` · pk: ${meta.primaryIdAttribute}` : ''}`}
+                  >
+                    <span className={styles.tableName}>{name}</span>
+                    <Badge appearance="filled" color={isSelected ? 'subtle' : 'subtle'} size="small">
+                      {colCount}
+                    </Badge>
+                  </div>
+                );
+              })}
+              {metadataEntries.length === 0 && (
+                <div className={styles.info} style={{ paddingLeft: 8 }}>
+                  No metadata loaded yet. Live mode auto-loads it via context.utils.getEntityMetadata,
+                  or drop a metadata.json into the control folder.
+                </div>
+              )}
+            </div>
+          )}
+
+          {selection && (
             <div className={styles.editorArea}>
               <div className={styles.editorHeader}>
-                <span style={{ fontWeight: 600 }}>{selectedTable}</span>
-                <span className={styles.info}>({tables.find(t => t.name === selectedTable)?.records.length} records)</span>
+                <Badge appearance="outline" size="small">{selection.kind}</Badge>
+                <span style={{ fontWeight: 600 }}>{selection.name}</span>
+                {selection.kind === 'data' ? (
+                  <span className={styles.info}>({tables.find(t => t.name === selection.name)?.records.length ?? 0} records)</span>
+                ) : (
+                  <span className={styles.info}>({Object.keys(metadataSnapshot[selection.name]?.columns ?? {}).length} columns)</span>
+                )}
                 <span style={{ flex: 1 }} />
+                {selection.kind === 'metadata' && (
+                  <Button
+                    appearance="subtle"
+                    size="small"
+                    onClick={() => {
+                      deleteEntityMetadata(selection.name);
+                      setSelection(null);
+                      setEditJson('');
+                    }}
+                    title="Drop this entity from the metadata cache for this session."
+                  >
+                    Remove
+                  </Button>
+                )}
                 <Button
                   appearance="primary"
                   icon={<Save24Regular />}
                   size="small"
-                  onClick={handleSaveTable}
+                  onClick={handleApply}
                 >
                   Apply
                 </Button>

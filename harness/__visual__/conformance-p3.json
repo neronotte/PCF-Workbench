@@ -84,7 +84,7 @@
     {
       "id": "context-page-getClientUrl",
       "status": "pass",
-      "detail": "http://127.0.0.1:8182"
+      "detail": "http://127.0.0.1:8183"
     },
     {
       "id": "context-accessibility-getState",
@@ -259,22 +259,22 @@
     {
       "id": "wb-textinput-set",
       "status": "pass",
-      "detail": "wrote 'wb-1780322397536'"
+      "detail": "wrote 'wb-1780323958990'"
     },
     {
       "id": "wb-numberinput-set",
       "status": "pass",
-      "detail": "wrote 401"
+      "detail": "wrote 537"
     },
     {
       "id": "wb-record-set",
       "status": "pass",
-      "detail": "wrote 'Glow Test 1780322397644'"
+      "detail": "wrote 'Glow Test 1780323959100'"
     },
     {
       "id": "wb-same-value-skip",
       "status": "pass",
-      "detail": "stable at 'pin-1780322397725'"
+      "detail": "stable at 'pin-1780323959184'"
     }
   ],
   "consoleErrors": []
