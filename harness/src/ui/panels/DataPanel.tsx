@@ -70,6 +70,27 @@ const useStyles = makeStyles({
   tableName: {
     flex: 1,
     fontFamily: "'Consolas', monospace",
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rowChips: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    flexShrink: 0,
+  },
+  rowCounts: {
+    display: 'grid',
+    gridTemplateColumns: '40px 64px',
+    alignItems: 'center',
+    justifyItems: 'end',
+    gap: '4px',
+    flexShrink: 0,
+  },
+  rowCountSlot: {
+    display: 'inline-flex',
+    justifyContent: 'flex-end',
   },
   editorArea: {
     flex: 1,
@@ -1015,18 +1036,26 @@ export function DataPanel() {
                   title={`${meta?.displayName ?? row.name}${meta?.primaryIdAttribute ? ` · pk: ${meta.primaryIdAttribute}` : ''}`}
                 >
                   <span className={styles.tableName}>{row.name}</span>
-                  <Badge appearance="filled" color={isSelected ? 'subtle' : 'informative'} size="small" title="records">
-                    {row.recordCount}
-                  </Badge>
-                  <Badge appearance="outline" color={isSelected ? 'subtle' : 'subtle'} size="small" title="schema columns">
-                    {row.columnCount} col
-                  </Badge>
-                  {!row.hasSchema && (
-                    <Badge appearance="tint" color="warning" size="small" title="No schema — primaryIdAttribute and dataset columns will fall back to heuristics. Click the entity then 'Generate schema from records'.">⚠ no schema</Badge>
-                  )}
-                  {!row.hasData && (
-                    <Badge appearance="tint" color="subtle" size="small" title="Schema exists but no records yet.">◌ no data</Badge>
-                  )}
+                  <div className={styles.rowChips}>
+                    {!row.hasSchema && (
+                      <Badge appearance="tint" color="warning" size="small" title="No schema — primaryIdAttribute and dataset columns will fall back to heuristics. Switch to the Schema tab and click 'Generate from records'.">⚠ no schema</Badge>
+                    )}
+                    {!row.hasData && (
+                      <Badge appearance="tint" color="subtle" size="small" title="Schema exists but no records yet.">◌ no data</Badge>
+                    )}
+                  </div>
+                  <div className={styles.rowCounts}>
+                    <span className={styles.rowCountSlot}>
+                      <Badge appearance="filled" color={isSelected ? 'subtle' : 'informative'} size="small" title={`${row.recordCount} records`}>
+                        {row.recordCount}
+                      </Badge>
+                    </span>
+                    <span className={styles.rowCountSlot}>
+                      <Badge appearance="outline" color="subtle" size="small" title={`${row.columnCount} schema columns`}>
+                        {row.columnCount} col
+                      </Badge>
+                    </span>
+                  </div>
                   <Button
                     className={`${styles.rowTrash} row-trash`}
                     appearance="subtle"
