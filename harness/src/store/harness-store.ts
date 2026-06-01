@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ManifestConfig } from '../types/manifest';
 import { replaceMockEntityData, mergeMockEntityData } from './data-store';
+import { getEntityMetadata } from './metadata-store';
 import { isLiveBlocked } from '../lib/live-block';
 import { __clearLiveAttributeMetadataCache } from '../api/dv-client';
 
@@ -362,8 +363,11 @@ export interface HarnessStore {
   clearEntitySetCache: () => void;
   cacheLiveRecord: (entityType: string, record: Record<string, any>) => void;
   clearLiveCache: () => void;
-  /** Push a single live-fetched record into the multi-record buffer. */
-  addLiveFetch: (entityType: string, record: Record<string, any>) => void;
+  /** Push a single live-fetched record into the multi-record buffer. The
+   *  optional `idOverride` lets callers (e.g. retrieveRecord, where the id
+   *  is in the request URL) bypass extractRecordId — necessary for entities
+   *  whose primary key column isn't in the response projection. */
+  addLiveFetch: (entityType: string, record: Record<string, any>, idOverride?: string) => void;
   /** Push N live-fetched records into the multi-record buffer. */
   addLiveFetches: (entityType: string, records: Record<string, any>[]) => void;
   /** Drop all buffered live-fetch records (e.g. on profile/dataSource flip). */
@@ -388,9 +392,32 @@ let nextLogId = 1;
  * Used by the live fetch buffer + snapshot-live-to-mock action to dedupe
  * records across multiple fetches.
  */
+/**
+ * Best-effort record-id extraction. Tries (in order):
+ *   1. The PrimaryIdAttribute from the metadata store (authoritative — works
+ *      for entities like systemform whose pk is `formid`, not `systemformid`).
+ *   2. The `<entityType>id` convention (most entities).
+ *   3. A generic `id` field (mock-only fixtures).
+ *
+ * Returns null if nothing matches; callers that know the id authoritatively
+ * (e.g. retrieveRecord, where the id was passed in the request) should call
+ * the buffer action with an explicit id override instead of relying on this.
+ */
 function extractRecordId(entityType: string, record: Record<string, any>): string | null {
+  // 1. Metadata-store PrimaryIdAttribute (populated by P5 EntityDefinitions
+  //    fetch in live mode, or by parseDataverseEntity in mock mode).
+  try {
+    const meta = getEntityMetadata(entityType);
+    const pk = meta?.primaryIdAttribute;
+    if (pk) {
+      const v = record[pk];
+      if (typeof v === 'string' && v.length > 0) return v;
+    }
+  } catch { /* metadata-store not initialised yet — fall through */ }
+  // 2. Convention.
   const primary = record[`${entityType}id`];
   if (typeof primary === 'string' && primary.length > 0) return primary;
+  // 3. Fixture fallback.
   if (typeof record.id === 'string' && record.id.length > 0) return record.id;
   return null;
 }
@@ -783,8 +810,8 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     liveFetchBuffer: {},
     dataVersion: s.dataVersion + 1,
   })),
-  addLiveFetch: (entityType, record) => set(s => {
-    const id = extractRecordId(entityType, record);
+  addLiveFetch: (entityType, record, idOverride) => set(s => {
+    const id = idOverride ?? extractRecordId(entityType, record);
     if (!id) return {};
     return {
       liveFetchBuffer: {

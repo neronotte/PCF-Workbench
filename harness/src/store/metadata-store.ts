@@ -26,6 +26,13 @@ export interface ColumnMetadata {
 export interface EntityMetadata {
   displayName: string;
   columns: Record<string, ColumnMetadata>;
+  /** Primary key column name (e.g. `formid` for `systemform`). Populated
+   *  in live mode from EntityDefinitions.PrimaryIdAttribute; may be absent
+   *  for hand-rolled mock metadata, in which case callers fall back to the
+   *  `<entityType>id` convention. */
+  primaryIdAttribute?: string;
+  /** Primary name column (e.g. `name` / `fullname`). Same source/fallback. */
+  primaryNameAttribute?: string;
 }
 
 let metadataStore: Record<string, EntityMetadata> = {};
@@ -116,7 +123,12 @@ function parseDataverseEntity(entity: any): void {
     columns[attrLogical] = col;
   }
 
-  metadataStore[logicalName] = { displayName, columns };
+  metadataStore[logicalName] = {
+    displayName,
+    columns,
+    primaryIdAttribute: entity.PrimaryIdAttribute,
+    primaryNameAttribute: entity.PrimaryNameAttribute,
+  };
 }
 
 export function getEntityMetadata(entityType: string): EntityMetadata | null {

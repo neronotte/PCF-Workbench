@@ -502,7 +502,10 @@ export function createWebApiShim(
               responseSize: size, recordCount: 1, options,
             });
             // Buffer for later "Snapshot live → mock" capture.
-            getState().addLiveFetch(entityType, record as Record<string, any>);
+            // Pass the request id explicitly so the buffer can key the
+            // record even when the response projection (`?$select=...`)
+            // omits the primary key column (e.g. systemform → formid).
+            getState().addLiveFetch(entityType, record as Record<string, any>, id);
             return record as Record<string, any>;
           } catch (e) {
             const err = e instanceof DvProxyError

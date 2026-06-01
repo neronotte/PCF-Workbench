@@ -182,7 +182,7 @@ export function ControlInfoCard({ manifest }: Props) {
             Framework
           </div>
           <div className={styles.libItem}>
-            <Badge appearance="tint" size="small">Pure DOM</Badge>
+            <Badge appearance="tint" size="small" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Pure DOM</Badge>
             <span style={{ fontSize: 11, opacity: 0.6 }}>No platform libraries — renders directly to container</span>
           </div>
         </div>
