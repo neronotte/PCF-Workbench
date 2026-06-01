@@ -10,7 +10,8 @@ export type DialogRequest =
   | LookupDialogRequest
   | ConfirmDialogRequest
   | AlertDialogRequest
-  | ErrorDialogRequest;
+  | ErrorDialogRequest
+  | LiveWriteConfirmRequest;
 
 export interface OpenFormDialogRequest {
   kind: 'openForm';
@@ -55,6 +56,23 @@ export interface ErrorDialogRequest {
     [k: string]: any;
   };
   resolve: () => void;
+}
+
+/**
+ * M2.P4 — Live-write confirmation. Raised by the WebAPI shim's live branch
+ * for create/update/delete before the proxy POST/PATCH/DELETE is sent.
+ * Separate from `confirm` because the dialog must show entity/id/payload
+ * details and offer "Always allow this session" persistence.
+ */
+export interface LiveWriteConfirmRequest {
+  kind: 'liveWriteConfirm';
+  id: number;
+  method: 'create' | 'update' | 'delete';
+  entityType: string;
+  recordId?: string;
+  payload?: Record<string, any>;
+  orgUrl: string;
+  resolve: (result: { confirmed: boolean; alwaysAllow?: boolean }) => void;
 }
 
 type Listener = (queue: DialogRequest[]) => void;

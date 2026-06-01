@@ -1,7 +1,8 @@
 import type { HarnessStore } from '../store/harness-store';
 import { addEntityRecord, updateEntityRecord, deleteEntityRecord } from '../store/data-store';
 import { getExecuteMock } from '../store/execute-mock-store';
-import { liveRetrieveMultiple, liveRetrieveSingle, DvProxyError } from '../api/dv-client';
+import { liveRetrieveMultiple, liveRetrieveSingle, liveCreateRecord, liveUpdateRecord, liveDeleteRecord, DvProxyError } from '../api/dv-client';
+import { confirmLiveWrite } from '../lib/live-write-gate';
 import { seedAdditionalEntity } from '../store/form-store';
 
 const NETWORK_DELAYS: Record<string, number> = {
@@ -225,9 +226,43 @@ export function createWebApiShim(
         const start = performance.now();
         log(`${prefix}createRecord`, { entityType, data });
         if (getState().dataSource === 'live') {
-          throw new Error(
-            'Live writes are not supported in M2.P1 (read-only). Writes unlock in M2.P3.',
-          );
+          const profile = getState().liveProfile;
+          if (!profile) {
+            const err = 'Live mode requires a selected PAC profile (Data panel → Live → pick org).';
+            getState().addWebApiCall({
+              method: `${prefix}createRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw new Error(err);
+          }
+          const ok = await confirmLiveWrite({
+            method: 'create', entityType, payload: data, orgUrl: profile.orgUrl,
+          });
+          if (!ok) {
+            const err = 'Live write cancelled by user';
+            getState().addWebApiCall({
+              method: `${prefix}createRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw new Error(err);
+          }
+          try {
+            const result = await liveCreateRecord(profile.orgUrl, entityType, data);
+            const duration = performance.now() - start;
+            log(`${prefix}createRecord.live`, { entityType, id: result.id, durationMs: Math.round(duration) });
+            getState().addWebApiCall({
+              method: `${prefix}createRecord`, entityType, durationMs: duration,
+              responseSize: estimateSize(result), recordCount: 1,
+            });
+            return { id: result.id, entityType };
+          } catch (e) {
+            const err = e instanceof DvProxyError ? `[live] ${e.body.error}: ${e.body.message}` : (e as Error).message;
+            getState().addWebApiCall({
+              method: `${prefix}createRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw e;
+          }
         }
         await applyNetworkConditions(mode);
         const record = addEntityRecord(entityType, { ...data });
@@ -245,9 +280,43 @@ export function createWebApiShim(
         const start = performance.now();
         log(`${prefix}deleteRecord`, { entityType, id });
         if (getState().dataSource === 'live') {
-          throw new Error(
-            'Live writes are not supported in M2.P1 (read-only). Writes unlock in M2.P3.',
-          );
+          const profile = getState().liveProfile;
+          if (!profile) {
+            const err = 'Live mode requires a selected PAC profile (Data panel → Live → pick org).';
+            getState().addWebApiCall({
+              method: `${prefix}deleteRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw new Error(err);
+          }
+          const ok = await confirmLiveWrite({
+            method: 'delete', entityType, recordId: id, orgUrl: profile.orgUrl,
+          });
+          if (!ok) {
+            const err = 'Live write cancelled by user';
+            getState().addWebApiCall({
+              method: `${prefix}deleteRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw new Error(err);
+          }
+          try {
+            await liveDeleteRecord(profile.orgUrl, entityType, id);
+            const duration = performance.now() - start;
+            log(`${prefix}deleteRecord.live`, { entityType, id, durationMs: Math.round(duration) });
+            getState().addWebApiCall({
+              method: `${prefix}deleteRecord`, entityType, durationMs: duration,
+              responseSize: 0, recordCount: 0,
+            });
+            return { entityType, id };
+          } catch (e) {
+            const err = e instanceof DvProxyError ? `[live] ${e.body.error}: ${e.body.message}` : (e as Error).message;
+            getState().addWebApiCall({
+              method: `${prefix}deleteRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw e;
+          }
         }
         await applyNetworkConditions(mode);
         deleteEntityRecord(entityType, id);
@@ -262,9 +331,43 @@ export function createWebApiShim(
         const start = performance.now();
         log(`${prefix}updateRecord`, { entityType, id, data });
         if (getState().dataSource === 'live') {
-          throw new Error(
-            'Live writes are not supported in M2.P1 (read-only). Writes unlock in M2.P3.',
-          );
+          const profile = getState().liveProfile;
+          if (!profile) {
+            const err = 'Live mode requires a selected PAC profile (Data panel → Live → pick org).';
+            getState().addWebApiCall({
+              method: `${prefix}updateRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw new Error(err);
+          }
+          const ok = await confirmLiveWrite({
+            method: 'update', entityType, recordId: id, payload: data, orgUrl: profile.orgUrl,
+          });
+          if (!ok) {
+            const err = 'Live write cancelled by user';
+            getState().addWebApiCall({
+              method: `${prefix}updateRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw new Error(err);
+          }
+          try {
+            await liveUpdateRecord(profile.orgUrl, entityType, id, data);
+            const duration = performance.now() - start;
+            log(`${prefix}updateRecord.live`, { entityType, id, durationMs: Math.round(duration) });
+            getState().addWebApiCall({
+              method: `${prefix}updateRecord`, entityType, durationMs: duration,
+              responseSize: estimateSize(data), recordCount: 1,
+            });
+            return { entityType, id };
+          } catch (e) {
+            const err = e instanceof DvProxyError ? `[live] ${e.body.error}: ${e.body.message}` : (e as Error).message;
+            getState().addWebApiCall({
+              method: `${prefix}updateRecord`, entityType, durationMs: performance.now() - start,
+              responseSize: 0, recordCount: 0, error: err,
+            });
+            throw e;
+          }
         }
         await applyNetworkConditions(mode);
         updateEntityRecord(entityType, id, data);

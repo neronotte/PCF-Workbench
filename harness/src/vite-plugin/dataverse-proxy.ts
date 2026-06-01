@@ -454,17 +454,19 @@ function logProxy(method: string, urlPath: string, status: number, bytes: number
   console.log(`[dv-proxy] ${method} ${urlPath} → ${status} ${bytes}b`);
 }
 
-/** Forwards a Dataverse request. P1: GET only — anything else is 405. */
+/** Forwards a Dataverse request. M2.P4: GET (reads) + POST/PATCH/DELETE
+ *  (writes) — the client wraps writes in a confirm dialog before sending. */
 async function forwardToDataverse(
   req: IncomingMessage,
   res: ServerResponse,
   orgUrl: string,
   upstreamPath: string,
 ): Promise<void> {
-  if (req.method !== 'GET') {
+  const method = (req.method ?? 'GET').toUpperCase();
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) {
     throw new ProxyError(
       'method-not-allowed',
-      `Method ${req.method} not allowed in M2.P1 (read-only). Writes unlock in M2.P3.`,
+      `Method ${method} not allowed by Dataverse proxy.`,
     );
   }
   const auth = await acquireDataverseToken(orgUrl);
@@ -483,11 +485,27 @@ async function forwardToDataverse(
   if (typeof callerPrefer === 'string' && callerPrefer.length > 0) {
     upstreamHeaders.Prefer = `${DEFAULT_PREFER}, ${callerPrefer}`;
   }
+  // Writes carry a JSON body and need Content-Type. Reads do not.
+  const hasBody = method === 'POST' || method === 'PATCH';
+  if (hasBody) {
+    upstreamHeaders['Content-Type'] = 'application/json';
+    // POST creating a record returns the new entity URL via OData-EntityId
+    // header by default. We also ask for return=representation so the client
+    // gets the created/updated row back without an extra GET.
+    upstreamHeaders.Prefer = `${upstreamHeaders.Prefer}, return=representation`;
+  }
+  // If-Match is required by Dataverse for unconditional update/delete; pass
+  // through whatever the client sent (defaults to '*' from dv-client).
+  const ifMatch = req.headers['if-match'];
+  if (typeof ifMatch === 'string') upstreamHeaders['If-Match'] = ifMatch;
+
+  // Buffer request body for POST/PATCH (small payloads expected).
+  const bodyBuf: Buffer | undefined = hasBody ? await readRequestBody(req) : undefined;
 
   await new Promise<void>((resolve, reject) => {
     const upstream = https.request(
       {
-        method: 'GET',
+        method,
         hostname: target.hostname,
         path: target.pathname + target.search,
         headers: upstreamHeaders,
@@ -500,13 +518,14 @@ async function forwardToDataverse(
           const body = Buffer.concat(bodyChunks);
           res.statusCode = status;
           // Pass through content-type / OData headers but never set-cookie.
-          for (const h of ['content-type', 'odata-version', 'preference-applied']) {
+          // OData-EntityId is critical for create — it carries the new id.
+          for (const h of ['content-type', 'odata-version', 'preference-applied', 'odata-entityid', 'location', 'etag']) {
             const v = upRes.headers[h];
             if (typeof v === 'string') res.setHeader(h, v);
           }
           res.setHeader('Cache-Control', 'no-store');
           res.end(body);
-          logProxy('GET', upstreamPath, status, body.byteLength);
+          logProxy(method, upstreamPath, status, body.byteLength);
           resolve();
         });
       },
@@ -514,7 +533,17 @@ async function forwardToDataverse(
     upstream.on('error', (e) => {
       reject(new ProxyError('upstream-error', `Upstream request failed: ${e.message}`));
     });
+    if (bodyBuf) upstream.write(bodyBuf);
     upstream.end();
+  });
+}
+
+function readRequestBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', (e) => reject(e));
   });
 }
 

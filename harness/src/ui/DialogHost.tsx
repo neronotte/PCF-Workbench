@@ -4,7 +4,7 @@ import {
   Button, Input, Label, Field, Textarea, Dropdown, Option,
   Table, TableHeader, TableRow, TableHeaderCell, TableBody, TableCell, Checkbox,
 } from '@fluentui/react-components';
-import { subscribeDialogs, resolveDialog, type DialogRequest, type OpenFormDialogRequest, type LookupDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest, type ErrorDialogRequest } from '../shim/dialog-bus';
+import { subscribeDialogs, resolveDialog, type DialogRequest, type OpenFormDialogRequest, type LookupDialogRequest, type ConfirmDialogRequest, type AlertDialogRequest, type ErrorDialogRequest, type LiveWriteConfirmRequest } from '../shim/dialog-bus';
 import { getEntityData, getEntityStoreKeys } from '../store/data-store';
 
 /**
@@ -25,6 +25,7 @@ export function DialogHost() {
   if (current.kind === 'confirm') return <ConfirmDialog request={current} />;
   if (current.kind === 'alert') return <AlertDialog request={current} />;
   if (current.kind === 'error') return <ErrorDialog request={current} />;
+  if (current.kind === 'liveWriteConfirm') return <LiveWriteConfirmDialog request={current} />;
   return null;
 }
 
@@ -246,6 +247,77 @@ function LookupDialog({ request }: { request: LookupDialogRequest }) {
           <DialogActions>
             <Button onClick={() => resolveDialog(request.id, [])}>Cancel</Button>
             <Button appearance="primary" onClick={submit}>Select</Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  );
+}
+
+
+function LiveWriteConfirmDialog({ request }: { request: LiveWriteConfirmRequest }) {
+  const [alwaysAllow, setAlwaysAllow] = useState(false);
+  const verb = request.method === 'create' ? 'CREATE'
+    : request.method === 'update' ? 'UPDATE'
+    : 'DELETE';
+  const verbColor = request.method === 'delete' ? '#c4314b'
+    : request.method === 'update' ? '#c19a26'
+    : '#107c10';
+  const payloadStr = request.payload ? JSON.stringify(request.payload, null, 2) : '';
+
+  const onCancel = () => resolveDialog(request.id, { confirmed: false });
+  const onConfirm = () => resolveDialog(request.id, { confirmed: true, alwaysAllow });
+
+  return (
+    <Dialog open modalType="alert">
+      <DialogSurface style={{ maxWidth: 640 }}>
+        <DialogBody>
+          <DialogTitle>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+                padding: '2px 8px', borderRadius: 4,
+                color: 'white', backgroundColor: verbColor,
+              }}>
+                LIVE {verb}
+              </span>
+              <span>Confirm Dataverse write</span>
+            </span>
+          </DialogTitle>
+          <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 13 }}>
+              The control is about to {request.method === 'delete' ? 'delete' : request.method === 'update' ? 'update' : 'create'} a record in your <strong>real Dataverse environment</strong>.
+            </div>
+            <div style={{ fontSize: 12, fontFamily: 'monospace', backgroundColor: '#f3f3f3', padding: 8, borderRadius: 4 }}>
+              <div><strong>Org:</strong> {request.orgUrl}</div>
+              <div><strong>Entity:</strong> {request.entityType}</div>
+              {request.recordId && <div><strong>Record id:</strong> {request.recordId}</div>}
+            </div>
+            {payloadStr && (
+              <Field label="Payload">
+                <Textarea readOnly rows={8} value={payloadStr} style={{ fontFamily: 'monospace', fontSize: 11 }} />
+              </Field>
+            )}
+            <Checkbox
+              checked={alwaysAllow}
+              onChange={(_, d) => setAlwaysAllow(!!d.checked)}
+              label="Always allow live writes for this session (until tab closes)"
+              data-test-id="live-write-always-allow"
+            />
+            <div style={{ fontSize: 11, opacity: 0.7 }}>
+              Cancel sends a "Live write cancelled by user" error back to the control, mirroring how a real user would dismiss the platform's optimistic-update conflict dialog.
+            </div>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={onCancel} data-test-id="live-write-cancel">Cancel</Button>
+            <Button
+              appearance="primary"
+              onClick={onConfirm}
+              data-test-id="live-write-confirm"
+              style={request.method === 'delete' ? { backgroundColor: verbColor, borderColor: verbColor } : undefined}
+            >
+              {verb}
+            </Button>
           </DialogActions>
         </DialogBody>
       </DialogSurface>

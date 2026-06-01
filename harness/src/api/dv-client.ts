@@ -259,6 +259,119 @@ export async function liveRetrievePageRecord(
 }
 
 /* -------------------------------------------------------------------------- */
+/* M2.P4 — Live writes (create / update / delete)                              */
+/*                                                                            */
+/* All three flow through the same proxy path with the appropriate verb. The  */
+/* proxy adds Authorization, return=representation Prefer, and (for           */
+/* update/delete) If-Match: * for unconditional writes.                        */
+/* -------------------------------------------------------------------------- */
+
+async function dvFetch<T>(
+  orgUrl: string,
+  path: string,
+  init: { method: string; body?: string; ifMatch?: string },
+): Promise<{ status: number; headers: Headers; body: T | null }> {
+  const sep = path.includes('?') ? '&' : '?';
+  const url = `${PROXY_BASE}${path}${sep}org=${encodeURIComponent(orgUrl)}`;
+  const extra: Record<string, string> = {};
+  if (init.body !== undefined) extra['Content-Type'] = 'application/json';
+  if (init.ifMatch) extra['If-Match'] = init.ifMatch;
+  const res = await fetch(url, { method: init.method, headers: buildHeaders(extra), body: init.body });
+  if (!res.ok) {
+    const err = await parseError(res);
+    maybeFlagReauth(err, orgUrl);
+    throw err;
+  }
+  useHarnessStore.getState().setPacReauthRequired(null);
+  // Empty body on 204 — Dataverse returns 204 for delete and (without
+  // return=representation) for update. With return=representation update
+  // returns 200 + body.
+  let body: T | null = null;
+  if (res.status !== 204) {
+    const text = await res.text();
+    if (text) {
+      try { body = JSON.parse(text) as T; } catch { body = null; }
+    }
+  }
+  return { status: res.status, headers: res.headers, body };
+}
+
+export interface LiveCreateResult {
+  id: string;
+  record?: Record<string, any>;
+}
+
+/**
+ * Create a record in the real Dataverse org. Resolves the entity-set name
+ * via metadata, POSTs the payload with `Prefer: return=representation`, and
+ * extracts the new id from either the `OData-EntityId` header or the
+ * returned record.
+ */
+export async function liveCreateRecord(
+  orgUrl: string,
+  logicalEntity: string,
+  data: Record<string, any>,
+): Promise<LiveCreateResult> {
+  const setName = await resolveEntitySetName(orgUrl, logicalEntity);
+  const path = `/api/data/v9.2/${setName}`;
+  const { headers, body } = await dvFetch<Record<string, any>>(orgUrl, path, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const idFromBody = body && typeof body === 'object' ? extractIdFromRecord(body, logicalEntity) : null;
+  const idFromHeader = extractIdFromODataEntityId(headers.get('OData-EntityId') || headers.get('Location'));
+  const id = idFromBody ?? idFromHeader ?? '';
+  return { id, record: body ?? undefined };
+}
+
+export async function liveUpdateRecord(
+  orgUrl: string,
+  logicalEntity: string,
+  id: string,
+  data: Record<string, any>,
+): Promise<{ record?: Record<string, any> }> {
+  const setName = await resolveEntitySetName(orgUrl, logicalEntity);
+  const normalId = id.replace(/[{}]/g, '');
+  const path = `/api/data/v9.2/${setName}(${normalId})`;
+  const { body } = await dvFetch<Record<string, any>>(orgUrl, path, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+    ifMatch: '*',
+  });
+  return { record: body ?? undefined };
+}
+
+export async function liveDeleteRecord(
+  orgUrl: string,
+  logicalEntity: string,
+  id: string,
+): Promise<void> {
+  const setName = await resolveEntitySetName(orgUrl, logicalEntity);
+  const normalId = id.replace(/[{}]/g, '');
+  const path = `/api/data/v9.2/${setName}(${normalId})`;
+  await dvFetch<unknown>(orgUrl, path, { method: 'DELETE', ifMatch: '*' });
+}
+
+function extractIdFromRecord(record: Record<string, any>, logicalEntity: string): string | null {
+  const candidates = [`${logicalEntity}id`, 'id'];
+  for (const k of candidates) {
+    if (typeof record[k] === 'string' && record[k]) return record[k];
+  }
+  // Fallback — first GUID-shaped field
+  for (const v of Object.values(record)) {
+    if (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return v;
+  }
+  return null;
+}
+
+function extractIdFromODataEntityId(header: string | null): string | null {
+  if (!header) return null;
+  // Shape: https://<org>.crm.dynamics.com/api/data/v9.2/contacts(1c1cc1cc-1111-...)
+  const m = header.match(/\(([0-9a-f-]+)\)\s*$/i);
+  return m ? m[1] : null;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Attribute-metadata fetcher (DisplayName + AttributeType)                    */
 /* -------------------------------------------------------------------------- */
 
