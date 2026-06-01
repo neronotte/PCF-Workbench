@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ManifestConfig } from '../types/manifest';
-import { replaceMockEntityData } from './data-store';
+import { replaceMockEntityData, mergeMockEntityData } from './data-store';
 import { isLiveBlocked } from '../lib/live-block';
 import { __clearLiveAttributeMetadataCache } from '../api/dv-client';
 
@@ -371,8 +371,10 @@ export interface HarnessStore {
   /** Promote every buffered live record into the mock entity store, switch
    *  to mock mode, mark the active scenario dirty. Returns counts so the UI
    *  can flash a confirmation. The page record (liveRecordCache) is
-   *  included alongside multi-record buffer contents (deduplicated by id). */
-  snapshotLiveToMock: () => { entityCount: number; recordCount: number };
+   *  included alongside multi-record buffer contents (deduplicated by id).
+   *  Existing mock entities not present in the live capture are preserved
+   *  (per-entity upsert, not full replace). */
+  snapshotLiveToMock: () => { entityCount: number; addedCount: number; updatedCount: number };
   bumpReloadEpoch: () => void;
   setPacReauthRequired: (state: PacReauthState | null) => void;
   setLivePageRecordError: (msg: string | null) => void;
@@ -812,7 +814,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
       const exists = id && arr.some(r => extractRecordId(entityType, r) === id);
       if (!exists) arr.push(record);
     }
-    replaceMockEntityData(merged);
+    const counts = mergeMockEntityData(merged);
     set(s => ({
       dataSource: 'mock' as DataSource,
       dataVersion: s.dataVersion + 1,
@@ -821,12 +823,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     // Dirty the active scenario so the user knows to Save (which will
     // serialize merged into scenario.dataRecords).
     state.markDirty();
-    const entityCount = Object.keys(merged).length;
-    const recordCount = Object.values(merged).reduce(
-      (n, arr) => n + arr.length,
-      0,
-    );
-    return { entityCount, recordCount };
+    return counts;
   },
   bumpReloadEpoch: () => set(s => ({
     reloadEpoch: s.reloadEpoch + 1,

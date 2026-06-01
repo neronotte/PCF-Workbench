@@ -96,6 +96,51 @@ export function replaceMockEntityData(data: Record<string, Record<string, any>[]
   notify();
 }
 
+/**
+ * Merge incoming records into the existing mock store. Per-entity upsert
+ * keyed by id; unrelated entities are left untouched. Used by the
+ * "Snapshot live → mock" capture so adding a live record set never wipes
+ * other mock entities the scenario already had loaded (M2 follow-up).
+ *
+ * Returns counts of net-new records added per entity (existing records
+ * that were updated count as 0 here — they're not "added").
+ */
+export function mergeMockEntityData(
+  data: Record<string, Record<string, any>[]>,
+): { entityCount: number; addedCount: number; updatedCount: number } {
+  let entityCount = 0;
+  let addedCount = 0;
+  let updatedCount = 0;
+  const next: Record<string, Record<string, any>[]> = { ...entityStore };
+  for (const [entityType, incoming] of Object.entries(data)) {
+    if (!incoming.length) continue;
+    entityCount++;
+    const existing = next[entityType] ? [...next[entityType]] : [];
+    const idField = findIdField(incoming[0]) ?? 'id';
+    const indexById = new Map<string, number>();
+    existing.forEach((r, i) => {
+      const id = r[idField];
+      if (id != null) indexById.set(String(id), i);
+    });
+    for (const rec of incoming) {
+      const id = rec[idField];
+      const key = id != null ? String(id) : null;
+      if (key && indexById.has(key)) {
+        existing[indexById.get(key)!] = { ...rec };
+        updatedCount++;
+      } else {
+        existing.push({ ...rec });
+        if (key) indexById.set(key, existing.length - 1);
+        addedCount++;
+      }
+    }
+    next[entityType] = existing;
+  }
+  entityStore = next;
+  notify();
+  return { entityCount, addedCount, updatedCount };
+}
+
 /** Subscribe to data store mutations. Returns an unsubscribe function. */
 export function subscribeData(listener: () => void): () => void {
   listeners.add(listener);

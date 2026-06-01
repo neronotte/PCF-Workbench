@@ -72,6 +72,13 @@ const useStyles = makeStyles({
     flex: 1,
     fontFamily: "'Consolas', monospace",
     fontSize: '11px',
+    width: '100%',
+    maxWidth: '100%',
+    '& textarea': {
+      width: '100% !important',
+      maxWidth: '100% !important',
+      boxSizing: 'border-box',
+    },
   },
   actions: {
     display: 'flex',
@@ -269,9 +276,13 @@ function SnapshotLiveToMockButton() {
   const onSnapshot = useCallback(() => {
     const result = snapshot();
     addLogEntry({ category: 'data', method: 'snapshotLiveToMock', args: result });
+    const written = result.addedCount + result.updatedCount;
+    const detail = result.updatedCount > 0
+      ? `${result.addedCount} added, ${result.updatedCount} updated`
+      : `${result.addedCount} added`;
     const msg = activeScenarioName
-      ? `Captured ${result.recordCount} record(s) across ${result.entityCount} entity type(s). Click Save in the scenario header to persist into "${activeScenarioName}".`
-      : `Captured ${result.recordCount} record(s) across ${result.entityCount} entity type(s). Switched to Mock mode.`;
+      ? `Merged ${written} record(s) (${detail}) across ${result.entityCount} entity type(s). Existing mock entities preserved. Click Save to persist into "${activeScenarioName}".`
+      : `Merged ${written} record(s) (${detail}) across ${result.entityCount} entity type(s). Existing mock entities preserved. Switched to Mock mode.`;
     setFlash(msg);
     window.setTimeout(() => setFlash(null), 6000);
   }, [snapshot, addLogEntry, activeScenarioName]);
@@ -286,8 +297,9 @@ function SnapshotLiveToMockButton() {
     const pad = (n: number) => String(n).padStart(2, '0');
     const baseName = `Live capture ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
     const saved = await captureAndSaveAsNewScenario(controlId, baseName);
+    const written = result.addedCount + result.updatedCount;
     addLogEntry({ category: 'data', method: 'captureAsNewScenario', args: { name: saved.name, ...result } });
-    setFlash(`Captured ${result.recordCount} record(s) across ${result.entityCount} entity type(s) into new scenario "${saved.name}". Saved to disk.`);
+    setFlash(`Captured ${written} record(s) across ${result.entityCount} entity type(s) into new scenario "${saved.name}". Saved to disk.`);
     window.setTimeout(() => setFlash(null), 6000);
   }, [manifest, snapshot, addLogEntry]);
 
@@ -325,6 +337,26 @@ function SnapshotLiveToMockButton() {
         <MessageBar intent="success">
           <MessageBarBody>{flash}</MessageBarBody>
         </MessageBar>
+      )}
+      {hasData && (
+        <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3, lineHeight: 1.5 }} data-test-id="live-buffer-inspector">
+          <div style={{ marginBottom: 2 }}><strong>Buffered live retrieves</strong> — captured by every <code>retrieveRecord</code> / <code>retrieveMultipleRecords</code> in live mode. Click Snapshot to merge into mock; existing entities are preserved.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {Object.entries(liveFetchBuffer)
+              .filter(([, byId]) => Object.keys(byId).length > 0)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([entityType, byId]) => (
+                <Badge key={entityType} appearance="outline" size="small" data-test-id={`live-buffer-entry-${entityType}`}>
+                  {entityType} · {Object.keys(byId).length}
+                </Badge>
+              ))}
+          </div>
+          {Object.keys(liveFetchBuffer).length === 0 && cachedPageRecords > 0 && (
+            <div style={{ fontStyle: 'italic' }}>
+              Page record only ({cachedPageRecords} entity type(s)). Trigger more fetches to capture related data.
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
