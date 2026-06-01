@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
 import {
-  makeStyles, tokens, Button, Badge, Textarea, MessageBar, MessageBarBody, Checkbox,
+  makeStyles, tokens, Button, Badge, MessageBar, MessageBarBody, Checkbox,
   Radio, RadioGroup, Dropdown, Option, Spinner, Label, Input,
 } from '@fluentui/react-components';
 import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular, ChevronRight20Regular, ChevronDown20Regular } from '@fluentui/react-icons';
@@ -101,14 +101,21 @@ const useStyles = makeStyles({
   },
   textarea: {
     flex: 1,
-    fontFamily: "'Consolas', monospace",
-    fontSize: '11px',
+    minHeight: 0,
     width: '100%',
     maxWidth: '100%',
-    '& textarea': {
-      width: '100% !important',
-      maxWidth: '100% !important',
-      boxSizing: 'border-box',
+    boxSizing: 'border-box',
+    fontFamily: "'Consolas', monospace",
+    fontSize: '11px',
+    padding: '6px 8px',
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground1,
+    resize: 'none',
+    outline: 'none',
+    '&:focus': {
+      border: `1px solid ${tokens.colorBrandStroke1}`,
     },
   },
   actions: {
@@ -965,22 +972,12 @@ export function DataPanel() {
                   <MessageBarBody>{editError}</MessageBarBody>
                 </MessageBar>
               )}
-              <Textarea
+              <textarea
                 className={styles.textarea}
                 value={editJson}
-                onChange={(_, d) => setEditJson(d.value)}
-                resize="none"
-                style={{ minHeight: 150, flex: 1, width: '100%', display: 'flex' }}
-                textarea={{
-                  style: {
-                    width: '100%',
-                    maxWidth: '100%',
-                    height: '100%',
-                    minHeight: 0,
-                    flex: 1,
-                    boxSizing: 'border-box',
-                  },
-                }}
+                onChange={e => setEditJson(e.target.value)}
+                spellCheck={false}
+                wrap="off"
               />
             </div>
           )}
