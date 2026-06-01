@@ -1066,6 +1066,7 @@ export function DataPanel() {
                     appearance="subtle"
                     size="small"
                     icon={<Delete16Regular />}
+                    style={isSelected ? { color: 'white' } : undefined}
                     onClick={(e) => { e.stopPropagation(); handleDeleteEntity(row.name); }}
                     title={`Delete entity "${row.name}" (records + schema)`}
                     data-test-id={`entity-delete-${row.name}`}
