@@ -70,8 +70,34 @@ const useStyles = makeStyles({
   editorHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    flexWrap: 'wrap',
+    gap: '6px',
+    rowGap: '4px',
     fontSize: tokens.fontSizeBase200,
+    minWidth: 0,
+  },
+  editorTitle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    flex: '1 1 auto',
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  editorName: {
+    fontWeight: 600,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    minWidth: 0,
+    fontFamily: "'Consolas', monospace",
+  },
+  editorActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    flexShrink: 0,
+    marginLeft: 'auto',
   },
   textarea: {
     flex: 1,
@@ -895,36 +921,44 @@ export function DataPanel() {
           {selection && (
             <div className={styles.editorArea}>
               <div className={styles.editorHeader}>
-                <Badge appearance="outline" size="small">{selection.kind}</Badge>
-                <span style={{ fontWeight: 600 }}>{selection.name}</span>
-                {selection.kind === 'data' ? (
-                  <span className={styles.info}>({tables.find(t => t.name === selection.name)?.records.length ?? 0} records)</span>
-                ) : (
-                  <span className={styles.info}>({Object.keys(metadataSnapshot[selection.name]?.columns ?? {}).length} columns)</span>
-                )}
-                <span style={{ flex: 1 }} />
-                {selection.kind === 'metadata' && (
-                  <Button
-                    appearance="subtle"
-                    size="small"
-                    onClick={() => {
-                      deleteEntityMetadata(selection.name);
-                      setSelection(null);
-                      setEditJson('');
-                    }}
-                    title="Drop this entity from the metadata cache for this session."
+                <div className={styles.editorTitle}>
+                  <Badge appearance="outline" size="small" style={{ flexShrink: 0 }}>{selection.kind}</Badge>
+                  <span
+                    className={styles.editorName}
+                    title={selection.name}
                   >
-                    Remove
+                    {selection.name}
+                  </span>
+                  <span className={styles.info} style={{ flexShrink: 0 }}>
+                    {selection.kind === 'data'
+                      ? `(${tables.find(t => t.name === selection.name)?.records.length ?? 0} records)`
+                      : `(${Object.keys(metadataSnapshot[selection.name]?.columns ?? {}).length} cols)`}
+                  </span>
+                </div>
+                <div className={styles.editorActions}>
+                  {selection.kind === 'metadata' && (
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      onClick={() => {
+                        deleteEntityMetadata(selection.name);
+                        setSelection(null);
+                        setEditJson('');
+                      }}
+                      title="Drop this entity from the metadata cache for this session."
+                    >
+                      Remove
+                    </Button>
+                  )}
+                  <Button
+                    appearance="primary"
+                    icon={<Save24Regular />}
+                    size="small"
+                    onClick={handleApply}
+                  >
+                    Apply
                   </Button>
-                )}
-                <Button
-                  appearance="primary"
-                  icon={<Save24Regular />}
-                  size="small"
-                  onClick={handleApply}
-                >
-                  Apply
-                </Button>
+                </div>
               </div>
               {editError && (
                 <MessageBar intent="error">
