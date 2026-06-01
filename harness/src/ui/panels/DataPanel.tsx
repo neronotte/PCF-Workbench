@@ -52,9 +52,6 @@ const useStyles = makeStyles({
     '&:hover': {
       backgroundColor: tokens.colorNeutralBackground3,
     },
-    '&:hover .row-trash': {
-      visibility: 'visible',
-    },
   },
   tableItemActive: {
     backgroundColor: tokens.colorBrandBackground,
@@ -64,8 +61,9 @@ const useStyles = makeStyles({
     },
   },
   rowTrash: {
-    visibility: 'hidden',
     flexShrink: 0,
+    opacity: 0.55,
+    ':hover': { opacity: 1 },
   },
   tableName: {
     flex: 1,
@@ -1051,7 +1049,7 @@ export function DataPanel() {
                       </Badge>
                     </span>
                     <span className={styles.rowCountSlot}>
-                      <Badge appearance="outline" color="subtle" size="small" title={`${row.columnCount} schema columns`}>
+                      <Badge appearance="tint" color={isSelected ? 'subtle' : 'informative'} size="small" title={`${row.columnCount} schema columns`}>
                         {row.columnCount} col
                       </Badge>
                     </span>
