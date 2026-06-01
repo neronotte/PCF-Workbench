@@ -2,10 +2,14 @@ import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
 import {
   makeStyles, tokens, Button, Badge, MessageBar, MessageBarBody, Checkbox,
   Radio, RadioGroup, Dropdown, Option, Spinner, Label, Input,
+  TabList, Tab,
 } from '@fluentui/react-components';
-import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular, ChevronRight20Regular, ChevronDown20Regular } from '@fluentui/react-icons';
+import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular, Add16Regular, Delete16Regular } from '@fluentui/react-icons';
 import { useHarnessStore, type DataSource, type PublicProfile } from '../../store/harness-store';
-import { loadEntityData, getEntityStoreKeys, getEntityData } from '../../store/data-store';
+import {
+  loadEntityData, getEntityStoreKeys, getEntityData,
+  deleteEntityTable, createEntityTable,
+} from '../../store/data-store';
 import {
   getAllMetadata, setEntityMetadata, deleteEntityMetadata,
   subscribeMetadata, getMetadataVersion,
@@ -48,6 +52,9 @@ const useStyles = makeStyles({
     '&:hover': {
       backgroundColor: tokens.colorNeutralBackground3,
     },
+    '&:hover .row-trash': {
+      visibility: 'visible',
+    },
   },
   tableItemActive: {
     backgroundColor: tokens.colorBrandBackground,
@@ -55,6 +62,10 @@ const useStyles = makeStyles({
     '&:hover': {
       backgroundColor: tokens.colorBrandBackground,
     },
+  },
+  rowTrash: {
+    visibility: 'hidden',
+    flexShrink: 0,
   },
   tableName: {
     flex: 1,
@@ -653,13 +664,11 @@ export function DataPanel() {
   const activeScenarioName = useHarnessStore(s => s.activeScenarioName);
   const manifest = useHarnessStore(s => s.manifest);
   const [tables, setTables] = useState<{ name: string; records: any[] }[]>([]);
-  type Selection = { kind: 'data' | 'metadata'; name: string };
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
+  const [editorMode, setEditorMode] = useState<'records' | 'schema'>('records');
   const [editJson, setEditJson] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [dataExpanded, setDataExpanded] = useState(true);
-  const [metadataExpanded, setMetadataExpanded] = useState(false);
 
   // Subscribe to metadata-store mutations (live fetches, scenario apply,
   // user edits) via useSyncExternalStore. Snapshot is keyed by the version
@@ -706,20 +715,58 @@ export function DataPanel() {
     hydrateFromStore();
   }, [hydrateFromStore, dataVersion, activeScenarioName]);
 
-  const handleSelectNode = useCallback((kind: 'data' | 'metadata', name: string) => {
-    setSelection({ kind, name });
-    setEditError(null);
-    if (kind === 'data') {
-      const table = tables.find(t => t.name === name);
+  // Unified entity list — union of data table names and metadata keys.
+  // Each row knows whether it has records, schema, or both. This is the
+  // backbone of Option A: one entity per row, editor scopes to records/schema
+  // via a TabList.
+  type EntityRow = { name: string; recordCount: number; columnCount: number; hasData: boolean; hasSchema: boolean };
+  const entityRows: EntityRow[] = (() => {
+    const map = new Map<string, EntityRow>();
+    for (const t of tables) {
+      map.set(t.name, {
+        name: t.name,
+        recordCount: t.records.length,
+        columnCount: 0,
+        hasData: true,
+        hasSchema: false,
+      });
+    }
+    for (const [name, meta] of metadataEntries) {
+      const existing = map.get(name);
+      const colCount = Object.keys(meta.columns ?? {}).length;
+      if (existing) {
+        existing.columnCount = colCount;
+        existing.hasSchema = true;
+      } else {
+        map.set(name, { name, recordCount: 0, columnCount: colCount, hasData: false, hasSchema: true });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  })();
+
+  const refreshEditor = useCallback((entity: string, mode: 'records' | 'schema') => {
+    if (mode === 'records') {
+      const table = tables.find(t => t.name === entity);
       setEditJson(JSON.stringify(table?.records ?? [], null, 2));
     } else {
-      const meta = metadataSnapshot[name];
-      setEditJson(JSON.stringify(meta ?? {}, null, 2));
+      const meta = metadataSnapshot[entity];
+      setEditJson(JSON.stringify(meta ?? { displayName: entity, columns: {} }, null, 2));
     }
+    setEditError(null);
   }, [tables, metadataSnapshot]);
 
+  const handleSelectEntity = useCallback((name: string) => {
+    setSelectedEntity(name);
+    refreshEditor(name, editorMode);
+  }, [editorMode, refreshEditor]);
+
+  const handleSwitchMode = useCallback((mode: 'records' | 'schema') => {
+    setEditorMode(mode);
+    if (selectedEntity) refreshEditor(selectedEntity, mode);
+  }, [selectedEntity, refreshEditor]);
+
   const handleApply = useCallback(() => {
-    if (!selection) return;
+    if (!selectedEntity) return;
     let parsed: any;
     try {
       parsed = JSON.parse(editJson);
@@ -727,34 +774,115 @@ export function DataPanel() {
       setEditError(`Invalid JSON: ${err.message}`);
       return;
     }
-    if (selection.kind === 'data') {
+    if (editorMode === 'records') {
       if (!Array.isArray(parsed)) {
-        setEditError('Data must be a JSON array of records');
+        setEditError('Records must be a JSON array');
         return;
       }
       const allData: Record<string, any[]> = {};
       for (const t of tables) {
-        allData[t.name] = t.name === selection.name ? parsed : t.records;
+        allData[t.name] = t.name === selectedEntity ? parsed : t.records;
+      }
+      // If selectedEntity is metadata-only (no table yet), seed it.
+      if (!tables.some(t => t.name === selectedEntity)) {
+        allData[selectedEntity] = parsed;
       }
       loadEntityData(allData);
-      setTables(tables.map(t => t.name === selection.name ? { ...t, records: parsed } : t));
       setEditError(null);
-      addLogEntry({ category: 'data', method: 'updateTable', args: { table: selection.name, records: parsed.length } });
+      addLogEntry({ category: 'data', method: 'updateTable', args: { table: selectedEntity, records: parsed.length } });
     } else {
-      // Metadata: must be an EntityMetadata-shaped object {displayName, columns}
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        setEditError('Metadata must be an object with { displayName, columns, ... }');
+        setEditError('Schema must be an object with { displayName, columns, ... }');
         return;
       }
       if (typeof parsed.displayName !== 'string' || !parsed.columns || typeof parsed.columns !== 'object') {
-        setEditError('Metadata must have a string `displayName` and an object `columns`');
+        setEditError('Schema must have a string `displayName` and an object `columns`');
         return;
       }
-      setEntityMetadata(selection.name, parsed as EntityMetadata);
+      setEntityMetadata(selectedEntity, parsed as EntityMetadata);
       setEditError(null);
-      addLogEntry({ category: 'data', method: 'updateMetadata', args: { entity: selection.name, columns: Object.keys(parsed.columns).length } });
+      addLogEntry({ category: 'data', method: 'updateMetadata', args: { entity: selectedEntity, columns: Object.keys(parsed.columns).length } });
     }
-  }, [selection, editJson, tables, addLogEntry]);
+  }, [selectedEntity, editorMode, editJson, tables, addLogEntry]);
+
+  const isValidEntityName = (n: string) => /^[a-z][a-z0-9_]*$/.test(n);
+
+  // Atomic add: create both an empty records array AND a stub schema. This
+  // upholds the harness invariant — every entity needs metadata or shims
+  // (primaryIdAttribute lookup, dataset columns) silently degrade.
+  const handleAddEntity = useCallback(() => {
+    const raw = window.prompt('New entity — logical name (e.g. account, msdyn_workorder):');
+    if (raw == null) return;
+    const name = raw.trim().toLowerCase();
+    if (!name) return;
+    if (!isValidEntityName(name)) {
+      window.alert(`"${name}" is not a valid logical name. Use lowercase letters, digits, and underscores; must start with a letter.`);
+      return;
+    }
+    if (entityRows.some(r => r.name === name)) {
+      window.alert(`Entity "${name}" already exists.`);
+      return;
+    }
+    createEntityTable(name);
+    if (!metadataSnapshot[name]) {
+      setEntityMetadata(name, {
+        displayName: name,
+        columns: {},
+        primaryIdAttribute: `${name}id`,
+        primaryNameAttribute: 'name',
+      });
+    }
+    setTables(prev => [...prev, { name, records: [] }]);
+    setSelectedEntity(name);
+    setEditorMode('records');
+    refreshEditor(name, 'records');
+    addLogEntry({ category: 'data', method: 'createEntity', args: { entity: name } });
+  }, [entityRows, metadataSnapshot, refreshEditor, addLogEntry]);
+
+  // Atomic delete: remove both the data table and the schema. Confirms once.
+  const handleDeleteEntity = useCallback((name: string) => {
+    if (!window.confirm(`Delete entity "${name}"? Removes both records and schema from the in-memory store. Save the scenario to persist.`)) return;
+    deleteEntityTable(name);
+    deleteEntityMetadata(name);
+    setTables(prev => prev.filter(t => t.name !== name));
+    if (selectedEntity === name) {
+      setSelectedEntity(null);
+      setEditJson('');
+    }
+    addLogEntry({ category: 'data', method: 'deleteEntity', args: { entity: name } });
+  }, [selectedEntity, addLogEntry]);
+
+  // Infer a stub schema from the first record's keys. Useful when records
+  // exist but schema is missing — one click fills the gap so the rest of
+  // the harness (primary-id resolution, dataset fallback) works.
+  const handleGenerateSchema = useCallback((name: string) => {
+    const table = tables.find(t => t.name === name);
+    const sample = table?.records?.[0];
+    if (!sample || typeof sample !== 'object') {
+      window.alert(`No records on "${name}" — add records first or edit the schema directly.`);
+      return;
+    }
+    const columns: Record<string, any> = {};
+    for (const key of Object.keys(sample)) {
+      const v = (sample as any)[key];
+      let type: string = 'String';
+      if (typeof v === 'number') type = Number.isInteger(v) ? 'Integer' : 'Decimal';
+      else if (typeof v === 'boolean') type = 'Boolean';
+      else if (v && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) type = 'DateTime';
+      columns[key] = { displayName: key, type };
+    }
+    const guessedPk = `${name}id`;
+    setEntityMetadata(name, {
+      displayName: name,
+      columns,
+      primaryIdAttribute: guessedPk in columns ? guessedPk : Object.keys(columns)[0],
+      primaryNameAttribute: 'name' in columns ? 'name' : Object.keys(columns)[0],
+    });
+    if (selectedEntity === name && editorMode === 'schema') {
+      refreshEditor(name, 'schema');
+    }
+    addLogEntry({ category: 'data', method: 'generateSchema', args: { entity: name, columns: Object.keys(columns).length } });
+  }, [tables, selectedEntity, editorMode, refreshEditor, addLogEntry]);
 
   return (
     <div className={styles.root}>
@@ -854,109 +982,102 @@ export function DataPanel() {
             </div>
           )}
 
-          {/* Two collapsible sections (Data + Metadata) feed a single editor.
-              Selection is { kind, name } so the bottom editor knows which
-              store to read/write on Apply. Metadata starts collapsed because
-              most users only edit data. */}
-          <div className={styles.sectionHeader} onClick={() => setDataExpanded(v => !v)}>
-            {dataExpanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
-            <span>Data</span>
-            <span className={styles.sectionCount}>({tables.length})</span>
+          {/* Unified entity list — one row per entity. Records and schema
+              live together because they describe the same thing; you cannot
+              meaningfully have one without the other. The editor below
+              switches between Records / Schema for the selected entity via
+              a TabList. */}
+          <div className={styles.sectionHeader}>
+            <span>Entities</span>
+            <span className={styles.sectionCount}>({entityRows.length})</span>
+            <span style={{ flex: 1 }} />
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<Add16Regular />}
+              onClick={(e) => { e.stopPropagation(); handleAddEntity(); }}
+              title="Add an entity. Creates an empty records array AND a stub schema atomically — both are required for the harness to resolve primary id, dataset columns, etc."
+              data-test-id="entity-add"
+            >
+              Add entity
+            </Button>
           </div>
-          {dataExpanded && (
-            <div className={styles.sectionList}>
-              {tables.map(t => {
-                const isSelected = selection?.kind === 'data' && selection.name === t.name;
-                return (
-                  <div
-                    key={`data-${t.name}`}
-                    className={`${styles.tableItem} ${isSelected ? styles.tableItemActive : ''}`}
-                    onClick={() => handleSelectNode('data', t.name)}
-                    data-test-id={`data-node-${t.name}`}
-                  >
-                    <span className={styles.tableName}>{t.name}</span>
-                    <Badge appearance="filled" color={isSelected ? 'subtle' : 'informative'} size="small">
-                      {t.records.length}
-                    </Badge>
-                  </div>
-                );
-              })}
-              {tables.length === 0 && (
-                <div className={styles.info} style={{ paddingLeft: 8 }}>No data tables.</div>
-              )}
-            </div>
-          )}
-
-          <div
-            className={styles.sectionHeader}
-            onClick={() => setMetadataExpanded(v => !v)}
-            title="Entity metadata (logical name, attributes, primary id/name, option-set values). Auto-populated from data.json fixtures and from live EntityDefinitions fetches. Edit any node to override the cached schema for the active scenario."
-          >
-            {metadataExpanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
-            <span>Metadata</span>
-            <span className={styles.sectionCount}>({metadataEntries.length})</span>
-          </div>
-          {metadataExpanded && (
-            <div className={styles.sectionList}>
-              {metadataEntries.map(([name, meta]) => {
-                const isSelected = selection?.kind === 'metadata' && selection.name === name;
-                const colCount = Object.keys(meta.columns ?? {}).length;
-                return (
-                  <div
-                    key={`meta-${name}`}
-                    className={`${styles.tableItem} ${isSelected ? styles.tableItemActive : ''}`}
-                    onClick={() => handleSelectNode('metadata', name)}
-                    data-test-id={`metadata-node-${name}`}
-                    title={`${meta.displayName ?? name}${meta.primaryIdAttribute ? ` · pk: ${meta.primaryIdAttribute}` : ''}`}
-                  >
-                    <span className={styles.tableName}>{name}</span>
-                    <Badge appearance="filled" color={isSelected ? 'subtle' : 'subtle'} size="small">
-                      {colCount}
-                    </Badge>
-                  </div>
-                );
-              })}
-              {metadataEntries.length === 0 && (
-                <div className={styles.info} style={{ paddingLeft: 8 }}>
-                  No metadata loaded yet. Live mode auto-loads it via context.utils.getEntityMetadata,
-                  or drop a metadata.json into the control folder.
+          <div className={styles.sectionList}>
+            {entityRows.map(row => {
+              const isSelected = selectedEntity === row.name;
+              const meta = metadataSnapshot[row.name];
+              return (
+                <div
+                  key={`entity-${row.name}`}
+                  className={`${styles.tableItem} ${isSelected ? styles.tableItemActive : ''}`}
+                  onClick={() => handleSelectEntity(row.name)}
+                  data-test-id={`entity-node-${row.name}`}
+                  title={`${meta?.displayName ?? row.name}${meta?.primaryIdAttribute ? ` · pk: ${meta.primaryIdAttribute}` : ''}`}
+                >
+                  <span className={styles.tableName}>{row.name}</span>
+                  <Badge appearance="filled" color={isSelected ? 'subtle' : 'informative'} size="small" title="records">
+                    {row.recordCount}
+                  </Badge>
+                  <Badge appearance="outline" color={isSelected ? 'subtle' : 'subtle'} size="small" title="schema columns">
+                    {row.columnCount} col
+                  </Badge>
+                  {!row.hasSchema && (
+                    <Badge appearance="tint" color="warning" size="small" title="No schema — primaryIdAttribute and dataset columns will fall back to heuristics. Click the entity then 'Generate schema from records'.">⚠ no schema</Badge>
+                  )}
+                  {!row.hasData && (
+                    <Badge appearance="tint" color="subtle" size="small" title="Schema exists but no records yet.">◌ no data</Badge>
+                  )}
+                  <Button
+                    className={`${styles.rowTrash} row-trash`}
+                    appearance="subtle"
+                    size="small"
+                    icon={<Delete16Regular />}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteEntity(row.name); }}
+                    title={`Delete entity "${row.name}" (records + schema)`}
+                    data-test-id={`entity-delete-${row.name}`}
+                  />
                 </div>
-              )}
-            </div>
-          )}
+              );
+            })}
+            {entityRows.length === 0 && (
+              <div className={styles.info} style={{ paddingLeft: 8 }}>No entities yet. Click "Add entity" to create one, or apply a scenario.</div>
+            )}
+          </div>
 
-          {selection && (
+          {selectedEntity && (
             <div className={styles.editorArea}>
               <div className={styles.editorHeader}>
                 <div className={styles.editorTitle}>
-                  <Badge appearance="outline" size="small" style={{ flexShrink: 0 }}>{selection.kind}</Badge>
                   <span
                     className={styles.editorName}
-                    title={selection.name}
+                    title={selectedEntity}
                   >
-                    {selection.name}
+                    {selectedEntity}
                   </span>
                   <span className={styles.info} style={{ flexShrink: 0 }}>
-                    {selection.kind === 'data'
-                      ? `(${tables.find(t => t.name === selection.name)?.records.length ?? 0} records)`
-                      : `(${Object.keys(metadataSnapshot[selection.name]?.columns ?? {}).length} cols)`}
+                    {(() => {
+                      const r = entityRows.find(x => x.name === selectedEntity);
+                      return r ? `(${r.recordCount} records · ${r.columnCount} cols)` : '';
+                    })()}
                   </span>
                 </div>
                 <div className={styles.editorActions}>
-                  {selection.kind === 'metadata' && (
-                    <Button
-                      appearance="subtle"
-                      size="small"
-                      onClick={() => {
-                        deleteEntityMetadata(selection.name);
-                        setSelection(null);
-                        setEditJson('');
-                      }}
-                      title="Drop this entity from the metadata cache for this session."
-                    >
-                      Remove
-                    </Button>
-                  )}
+                  {(() => {
+                    const schemaCols = Object.keys(metadataSnapshot[selectedEntity]?.columns ?? {}).length;
+                    const recordCount = tables.find(t => t.name === selectedEntity)?.records.length ?? 0;
+                    const showGenerate = editorMode === 'schema' && schemaCols === 0 && recordCount > 0;
+                    return showGenerate ? (
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        onClick={() => handleGenerateSchema(selectedEntity)}
+                        title="Infer columns from the first record. Best-effort — review and tune types after."
+                        data-test-id="schema-generate"
+                      >
+                        Generate from records
+                      </Button>
+                    ) : null;
+                  })()}
                   <Button
                     appearance="primary"
                     icon={<Save24Regular />}
@@ -967,6 +1088,19 @@ export function DataPanel() {
                   </Button>
                 </div>
               </div>
+              <TabList
+                selectedValue={editorMode}
+                onTabSelect={(_, d) => handleSwitchMode(d.value as 'records' | 'schema')}
+                size="small"
+              >
+                <Tab value="records" data-test-id="editor-tab-records">Records</Tab>
+                <Tab value="schema" data-test-id="editor-tab-schema">Schema</Tab>
+              </TabList>
+              {editorMode === 'schema' && !metadataSnapshot[selectedEntity] && (
+                <MessageBar intent="warning">
+                  <MessageBarBody>No schema yet. Edit and Apply to create one, or click "Generate from records".</MessageBarBody>
+                </MessageBar>
+              )}
               {editError && (
                 <MessageBar intent="error">
                   <MessageBarBody>{editError}</MessageBarBody>

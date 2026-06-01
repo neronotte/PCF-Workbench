@@ -69,6 +69,30 @@ export function clearEntityData(): void {
 }
 
 /**
+ * Delete a single entity table from the mock store. Used by DataPanel's
+ * inline trash affordance. No-op if the table doesn't exist.
+ */
+export function deleteEntityTable(entityType: string): boolean {
+  if (!(entityType in entityStore)) return false;
+  const next = { ...entityStore };
+  delete next[entityType];
+  entityStore = next;
+  notify();
+  return true;
+}
+
+/**
+ * Create an empty entity table. Used by DataPanel's "+ Add" affordance.
+ * Returns `false` if a table with that name already exists.
+ */
+export function createEntityTable(entityType: string): boolean {
+  if (entityType in entityStore) return false;
+  entityStore = { ...entityStore, [entityType]: [] };
+  notify();
+  return true;
+}
+
+/**
  * Snapshot the in-memory MOCK entity table only. Bypasses the live cache
  * regardless of `dataSource` so scenario Save never accidentally serializes
  * live Dataverse records (rubber-duck #4).
