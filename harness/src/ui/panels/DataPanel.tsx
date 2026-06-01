@@ -970,8 +970,17 @@ export function DataPanel() {
                 value={editJson}
                 onChange={(_, d) => setEditJson(d.value)}
                 resize="none"
-                style={{ minHeight: 150, flex: 1, width: '100%' }}
-                textarea={{ style: { width: '100%', maxWidth: '100%', boxSizing: 'border-box' } }}
+                style={{ minHeight: 150, flex: 1, width: '100%', display: 'flex' }}
+                textarea={{
+                  style: {
+                    width: '100%',
+                    maxWidth: '100%',
+                    height: '100%',
+                    minHeight: 0,
+                    flex: 1,
+                    boxSizing: 'border-box',
+                  },
+                }}
               />
             </div>
           )}
