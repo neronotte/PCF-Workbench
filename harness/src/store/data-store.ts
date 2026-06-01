@@ -10,6 +10,7 @@
  */
 
 import { useHarnessStore } from './harness-store';
+import { getEntityMetadata } from './metadata-store';
 
 let entityStore: Record<string, Record<string, any>[]> = {};
 const listeners = new Set<() => void>();
@@ -116,7 +117,16 @@ export function mergeMockEntityData(
     if (!incoming.length) continue;
     entityCount++;
     const existing = next[entityType] ? [...next[entityType]] : [];
-    const idField = findIdField(incoming[0]) ?? 'id';
+    // Resolve the authoritative id column. Order:
+    //   1. Metadata-store PrimaryIdAttribute (e.g. systemform → formid)
+    //   2. <entityType>id convention
+    //   3. Heuristic: any key ending with 'id' / generic 'id'
+    const meta = getEntityMetadata(entityType);
+    const idField =
+      meta?.primaryIdAttribute
+      ?? (incoming.find(r => r[`${entityType}id`] != null) ? `${entityType}id` : undefined)
+      ?? findIdField(incoming[0])
+      ?? 'id';
     const indexById = new Map<string, number>();
     existing.forEach((r, i) => {
       const id = r[idField];
@@ -139,6 +149,75 @@ export function mergeMockEntityData(
   entityStore = next;
   notify();
   return { entityCount, addedCount, updatedCount };
+}
+
+/**
+ * Variant of mergeMockEntityData that accepts the live-fetch buffer shape
+ * `{ [entityType]: { [id]: record } }`. Callers (e.g. snapshotLiveToMock)
+ * already have authoritative ids as object keys — no id-field detection
+ * heuristics needed. Use this whenever you have keyed input; it's the
+ * robust path. Existing entities not in `data` are preserved.
+ */
+export function mergeKeyedMockEntityData(
+  data: Record<string, Record<string, Record<string, any>>>,
+): {
+  entityCount: number;
+  addedCount: number;
+  updatedCount: number;
+  perEntity: Record<string, { added: number; updated: number; total: number; idField: string }>;
+} {
+  let entityCount = 0;
+  let addedCount = 0;
+  let updatedCount = 0;
+  const perEntity: Record<string, { added: number; updated: number; total: number; idField: string }> = {};
+  const next: Record<string, Record<string, any>[]> = { ...entityStore };
+  for (const [entityType, byId] of Object.entries(data)) {
+    const ids = Object.keys(byId);
+    if (ids.length === 0) continue;
+    entityCount++;
+    const existing = next[entityType] ? [...next[entityType]] : [];
+    // Determine the existing-mock id column from metadata so we can find
+    // matches against incoming records keyed by the live buffer id.
+    const meta = getEntityMetadata(entityType);
+    const idField =
+      meta?.primaryIdAttribute
+      ?? (existing[0] && existing[0][`${entityType}id`] != null ? `${entityType}id` : undefined)
+      ?? (existing[0] ? findIdField(existing[0]) : undefined)
+      ?? `${entityType}id`;
+    const indexById = new Map<string, number>();
+    existing.forEach((r, i) => {
+      const id = r[idField];
+      if (id != null) indexById.set(String(id), i);
+    });
+    let entityAdded = 0;
+    let entityUpdated = 0;
+    for (const id of ids) {
+      const rec = { ...byId[id] };
+      // Ensure the record carries the id under the resolved id column so
+      // downstream consumers (UI editor, scenario serialisation) can find it.
+      if (rec[idField] == null) rec[idField] = id;
+      if (indexById.has(id)) {
+        existing[indexById.get(id)!] = rec;
+        updatedCount++;
+        entityUpdated++;
+      } else {
+        existing.push(rec);
+        indexById.set(id, existing.length - 1);
+        addedCount++;
+        entityAdded++;
+      }
+    }
+    next[entityType] = existing;
+    perEntity[entityType] = {
+      added: entityAdded,
+      updated: entityUpdated,
+      total: existing.length,
+      idField,
+    };
+  }
+  entityStore = next;
+  notify();
+  return { entityCount, addedCount, updatedCount, perEntity };
 }
 
 /** Subscribe to data store mutations. Returns an unsubscribe function. */

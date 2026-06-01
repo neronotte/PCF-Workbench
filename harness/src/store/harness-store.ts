@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ManifestConfig } from '../types/manifest';
-import { replaceMockEntityData, mergeMockEntityData } from './data-store';
+import { replaceMockEntityData, mergeKeyedMockEntityData } from './data-store';
 import { getEntityMetadata } from './metadata-store';
 import { isLiveBlocked } from '../lib/live-block';
 import { __clearLiveAttributeMetadataCache } from '../api/dv-client';
@@ -378,7 +378,12 @@ export interface HarnessStore {
    *  included alongside multi-record buffer contents (deduplicated by id).
    *  Existing mock entities not present in the live capture are preserved
    *  (per-entity upsert, not full replace). */
-  snapshotLiveToMock: () => { entityCount: number; addedCount: number; updatedCount: number };
+  snapshotLiveToMock: () => {
+    entityCount: number;
+    addedCount: number;
+    updatedCount: number;
+    perEntity: Record<string, { added: number; updated: number; total: number; idField: string }>;
+  };
   bumpReloadEpoch: () => void;
   setPacReauthRequired: (state: PacReauthState | null) => void;
   setLivePageRecordError: (msg: string | null) => void;
@@ -832,22 +837,22 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   clearLiveFetchBuffer: () => set({ liveFetchBuffer: {} }),
   snapshotLiveToMock: () => {
     const state = get();
-    const merged: Record<string, Record<string, any>[]> = {};
-    // Buffered multi-record fetches first (the "primary" source — these
-    // came from explicit retrieveRecord / retrieveMultipleRecords calls).
+    // Build the keyed shape `{ entityType: { id: record } }`. liveFetchBuffer
+    // is already in that shape; we deep-merge liveRecordCache (page record)
+    // on top, keyed by its extracted id. No id-field heuristics — every
+    // record was pushed under its authoritative id at retrieve time.
+    const keyed: Record<string, Record<string, Record<string, any>>> = {};
     for (const [entityType, byId] of Object.entries(state.liveFetchBuffer)) {
-      const records = Object.values(byId);
-      if (records.length > 0) merged[entityType] = [...records];
+      if (Object.keys(byId).length === 0) continue;
+      keyed[entityType] = { ...byId };
     }
-    // Fold in the page record from liveRecordCache, deduped by id.
     for (const [entityType, record] of Object.entries(state.liveRecordCache)) {
       const id = extractRecordId(entityType, record);
-      if (!merged[entityType]) merged[entityType] = [];
-      const arr = merged[entityType];
-      const exists = id && arr.some(r => extractRecordId(entityType, r) === id);
-      if (!exists) arr.push(record);
+      if (!id) continue;
+      if (!keyed[entityType]) keyed[entityType] = {};
+      keyed[entityType][id] = record;
     }
-    const counts = mergeMockEntityData(merged);
+    const counts = mergeKeyedMockEntityData(keyed);
     set(s => ({
       dataSource: 'mock' as DataSource,
       dataVersion: s.dataVersion + 1,

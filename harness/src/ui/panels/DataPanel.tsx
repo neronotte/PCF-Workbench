@@ -280,11 +280,14 @@ function SnapshotLiveToMockButton() {
     const detail = result.updatedCount > 0
       ? `${result.addedCount} added, ${result.updatedCount} updated`
       : `${result.addedCount} added`;
+    const breakdown = Object.entries(result.perEntity)
+      .map(([k, v]) => `${k} +${v.added}/~${v.updated} → ${v.total} (id: ${v.idField})`)
+      .join(' · ');
     const msg = activeScenarioName
-      ? `Merged ${written} record(s) (${detail}) across ${result.entityCount} entity type(s). Existing mock entities preserved. Click Save to persist into "${activeScenarioName}".`
-      : `Merged ${written} record(s) (${detail}) across ${result.entityCount} entity type(s). Existing mock entities preserved. Switched to Mock mode.`;
+      ? `Merged ${written} record(s) (${detail}) across ${result.entityCount} entity type(s). ${breakdown ? '[' + breakdown + '] ' : ''}Existing mock entities preserved. Click Save to persist into "${activeScenarioName}".`
+      : `Merged ${written} record(s) (${detail}) across ${result.entityCount} entity type(s). ${breakdown ? '[' + breakdown + '] ' : ''}Existing mock entities preserved. Switched to Mock mode.`;
     setFlash(msg);
-    window.setTimeout(() => setFlash(null), 6000);
+    window.setTimeout(() => setFlash(null), 12000);
   }, [snapshot, addLogEntry, activeScenarioName]);
 
   // P2: capture into a brand-new scenario without dirtying the current one.
