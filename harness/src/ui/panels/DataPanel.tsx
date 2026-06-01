@@ -3,7 +3,7 @@ import {
   makeStyles, tokens, Button, Badge, Textarea, MessageBar, MessageBarBody, Checkbox,
   Radio, RadioGroup, Dropdown, Option, Spinner, Label, Input,
 } from '@fluentui/react-components';
-import { ArrowClockwise24Regular, Save24Regular, Globe16Regular } from '@fluentui/react-icons';
+import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular } from '@fluentui/react-icons';
 import { useHarnessStore, type DataSource, type PublicProfile } from '../../store/harness-store';
 import { loadEntityData, getEntityStoreKeys, getEntityData } from '../../store/data-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
@@ -246,6 +246,58 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
 /* Live mode subpanel                                                          */
 /* -------------------------------------------------------------------------- */
 
+function SnapshotLiveToMockButton() {
+  const liveFetchBuffer = useHarnessStore(s => s.liveFetchBuffer);
+  const liveRecordCache = useHarnessStore(s => s.liveRecordCache);
+  const snapshot = useHarnessStore(s => s.snapshotLiveToMock);
+  const activeScenarioName = useHarnessStore(s => s.activeScenarioName);
+  const addLogEntry = useHarnessStore(s => s.addLogEntry);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  // Count what's available without re-deriving on every render
+  const bufferEntityCount = Object.keys(liveFetchBuffer).length;
+  const bufferRecordCount = Object.values(liveFetchBuffer).reduce(
+    (n, byId) => n + Object.keys(byId).length,
+    0,
+  );
+  const cachedPageRecords = Object.keys(liveRecordCache).length;
+  const total = bufferRecordCount + (cachedPageRecords > bufferEntityCount ? cachedPageRecords - bufferEntityCount : 0);
+  const hasData = bufferRecordCount > 0 || cachedPageRecords > 0;
+
+  const onClick = useCallback(() => {
+    const result = snapshot();
+    addLogEntry({ category: 'data', method: 'snapshotLiveToMock', args: result });
+    const msg = activeScenarioName
+      ? `Captured ${result.recordCount} record(s) across ${result.entityCount} entity type(s). Click Save in the scenario header to persist into "${activeScenarioName}".`
+      : `Captured ${result.recordCount} record(s) across ${result.entityCount} entity type(s). Switched to Mock mode.`;
+    setFlash(msg);
+    window.setTimeout(() => setFlash(null), 6000);
+  }, [snapshot, addLogEntry, activeScenarioName]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+      <Button
+        appearance="primary"
+        size="small"
+        icon={<ArrowDownload24Regular />}
+        onClick={onClick}
+        disabled={!hasData}
+        title={hasData
+          ? `Promote ${total} buffered live record(s) into the mock entity store, switch to Mock mode, and mark the active scenario dirty. Save the scenario afterwards to persist to disk.`
+          : 'No live records buffered yet. Render the control or fetch records via context.webAPI to populate the buffer.'}
+        data-test-id="snapshot-live-to-mock"
+      >
+        Snapshot live → mock ({total})
+      </Button>
+      {flash && (
+        <MessageBar intent="success">
+          <MessageBarBody>{flash}</MessageBarBody>
+        </MessageBar>
+      )}
+    </div>
+  );
+}
+
 function LiveModeControls() {
   const liveProfile = useHarnessStore(s => s.liveProfile);
   const liveProfiles = useHarnessStore(s => s.liveProfiles);
@@ -343,6 +395,8 @@ function LiveModeControls() {
           )}
         </div>
       )}
+
+      <SnapshotLiveToMockButton />
 
       {error && (
         <MessageBar intent="error">

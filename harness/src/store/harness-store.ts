@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ManifestConfig } from '../types/manifest';
+import { replaceMockEntityData } from './data-store';
 
 export type CoverageStatus = 'implemented' | 'stub' | 'unimplemented';
 
@@ -325,6 +326,14 @@ export interface HarnessStore {
    *  name. Populated by the live page-record auto-fetch hook; cleared by
    *  `clearLiveCache` and on every control reload via `bumpReloadEpoch`. */
   liveRecordCache: Record<string, Record<string, any>>;
+  /** Multi-record live-fetch buffer: every record returned by a live
+   *  `retrieveRecord` / `retrieveMultipleRecords` call lands here, keyed by
+   *  `[entityType][id]`. Cleared on dataSource flips, profile changes, and
+   *  control reload. The "Snapshot live → mock" action drains this buffer
+   *  (plus liveRecordCache for the page record) into the mock entity store
+   *  so the user can capture a working real-data fixture into the active
+   *  scenario without writing data.json by hand. */
+  liveFetchBuffer: Record<string, Record<string, Record<string, any>>>;
   /** Increments on every `ControlHost.reload()`. The live page-record hook
    *  watches this so user-driven reloads (top-bar Reload, FormChrome refresh,
    *  bundle hot reload, etc.) implicitly re-fetch from Dataverse — no
@@ -345,12 +354,36 @@ export interface HarnessStore {
   clearEntitySetCache: () => void;
   cacheLiveRecord: (entityType: string, record: Record<string, any>) => void;
   clearLiveCache: () => void;
+  /** Push a single live-fetched record into the multi-record buffer. */
+  addLiveFetch: (entityType: string, record: Record<string, any>) => void;
+  /** Push N live-fetched records into the multi-record buffer. */
+  addLiveFetches: (entityType: string, records: Record<string, any>[]) => void;
+  /** Drop all buffered live-fetch records (e.g. on profile/dataSource flip). */
+  clearLiveFetchBuffer: () => void;
+  /** Promote every buffered live record into the mock entity store, switch
+   *  to mock mode, mark the active scenario dirty. Returns counts so the UI
+   *  can flash a confirmation. The page record (liveRecordCache) is
+   *  included alongside multi-record buffer contents (deduplicated by id). */
+  snapshotLiveToMock: () => { entityCount: number; recordCount: number };
   bumpReloadEpoch: () => void;
   setPacReauthRequired: (state: PacReauthState | null) => void;
   setLivePageRecordError: (msg: string | null) => void;
 }
 
 let nextLogId = 1;
+
+/**
+ * Best-effort record-id extraction. Dataverse records expose `<entitytype>id`
+ * as the GUID column (e.g. `contactid`). Fall back to a generic `id` field.
+ * Used by the live fetch buffer + snapshot-live-to-mock action to dedupe
+ * records across multiple fetches.
+ */
+function extractRecordId(entityType: string, record: Record<string, any>): string | null {
+  const primary = record[`${entityType}id`];
+  if (typeof primary === 'string' && primary.length > 0) return primary;
+  if (typeof record.id === 'string' && record.id.length > 0) return record.id;
+  return null;
+}
 
 export const useHarnessStore = create<HarnessStore>((set, get) => ({
   // Manifest
@@ -663,6 +696,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   liveProfiles: [],
   entitySetCache: {},
   liveRecordCache: {},
+  liveFetchBuffer: {},
   reloadEpoch: 0,
   pacReauthRequired: null,
   livePageRecordError: null,
@@ -675,6 +709,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
       dataSource: source,
       entitySetCache: {},
       liveRecordCache: {},
+      liveFetchBuffer: {},
       pacReauthRequired: null,
       livePageRecordError: null,
       dataVersion: s.dataVersion + 1,
@@ -694,6 +729,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
       liveProfile: profile,
       entitySetCache: {},
       liveRecordCache: {},
+      liveFetchBuffer: {},
       livePageRecordError: null,
       dataVersion: s.dataVersion + 1,
     }));
@@ -703,18 +739,81 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     entitySetCache: { ...s.entitySetCache, [logicalName]: entitySetName },
   })),
   clearEntitySetCache: () => set({ entitySetCache: {} }),
-  cacheLiveRecord: (entityType, record) => set(s => ({
-    liveRecordCache: { ...s.liveRecordCache, [entityType]: record },
-    dataVersion: s.dataVersion + 1,
-  })),
+  cacheLiveRecord: (entityType, record) => set(s => {
+    const id = extractRecordId(entityType, record);
+    const nextBuffer = id ? {
+      ...s.liveFetchBuffer,
+      [entityType]: { ...(s.liveFetchBuffer[entityType] ?? {}), [id]: record },
+    } : s.liveFetchBuffer;
+    return {
+      liveRecordCache: { ...s.liveRecordCache, [entityType]: record },
+      liveFetchBuffer: nextBuffer,
+      dataVersion: s.dataVersion + 1,
+    };
+  }),
   clearLiveCache: () => set(s => ({
     liveRecordCache: {},
+    liveFetchBuffer: {},
     dataVersion: s.dataVersion + 1,
   })),
+  addLiveFetch: (entityType, record) => set(s => {
+    const id = extractRecordId(entityType, record);
+    if (!id) return {};
+    return {
+      liveFetchBuffer: {
+        ...s.liveFetchBuffer,
+        [entityType]: { ...(s.liveFetchBuffer[entityType] ?? {}), [id]: record },
+      },
+    };
+  }),
+  addLiveFetches: (entityType, records) => set(s => {
+    if (!records.length) return {};
+    const bucket = { ...(s.liveFetchBuffer[entityType] ?? {}) };
+    for (const r of records) {
+      const id = extractRecordId(entityType, r);
+      if (id) bucket[id] = r;
+    }
+    return { liveFetchBuffer: { ...s.liveFetchBuffer, [entityType]: bucket } };
+  }),
+  clearLiveFetchBuffer: () => set({ liveFetchBuffer: {} }),
+  snapshotLiveToMock: () => {
+    const state = get();
+    const merged: Record<string, Record<string, any>[]> = {};
+    // Buffered multi-record fetches first (the "primary" source — these
+    // came from explicit retrieveRecord / retrieveMultipleRecords calls).
+    for (const [entityType, byId] of Object.entries(state.liveFetchBuffer)) {
+      const records = Object.values(byId);
+      if (records.length > 0) merged[entityType] = [...records];
+    }
+    // Fold in the page record from liveRecordCache, deduped by id.
+    for (const [entityType, record] of Object.entries(state.liveRecordCache)) {
+      const id = extractRecordId(entityType, record);
+      if (!merged[entityType]) merged[entityType] = [];
+      const arr = merged[entityType];
+      const exists = id && arr.some(r => extractRecordId(entityType, r) === id);
+      if (!exists) arr.push(record);
+    }
+    replaceMockEntityData(merged);
+    set(s => ({
+      dataSource: 'mock' as DataSource,
+      dataVersion: s.dataVersion + 1,
+    }));
+    try { localStorage.setItem('pcf.dataSource', 'mock'); } catch { /* ignore */ }
+    // Dirty the active scenario so the user knows to Save (which will
+    // serialize merged into scenario.dataRecords).
+    state.markDirty();
+    const entityCount = Object.keys(merged).length;
+    const recordCount = Object.values(merged).reduce(
+      (n, arr) => n + arr.length,
+      0,
+    );
+    return { entityCount, recordCount };
+  },
   bumpReloadEpoch: () => set(s => ({
     reloadEpoch: s.reloadEpoch + 1,
     // Reload always invalidates the live cache so the next render re-fetches.
     liveRecordCache: {},
+    liveFetchBuffer: {},
     livePageRecordError: null,
     dataVersion: s.dataVersion + 1,
   })),

@@ -306,6 +306,8 @@ export function createWebApiShim(
               method: `${prefix}retrieveMultipleRecords`, entityType, durationMs: duration,
               responseSize: size, recordCount: adapted.entities.length, options,
             });
+            // Buffer for later "Snapshot live → mock" capture.
+            getState().addLiveFetches(entityType, adapted.entities as Record<string, any>[]);
             return { entities: adapted.entities as Record<string, any>[], nextLink: adapted.nextLink };
           } catch (e) {
             const err = e instanceof DvProxyError
@@ -396,6 +398,8 @@ export function createWebApiShim(
               method: `${prefix}retrieveRecord`, entityType, durationMs: duration,
               responseSize: size, recordCount: 1, options,
             });
+            // Buffer for later "Snapshot live → mock" capture.
+            getState().addLiveFetch(entityType, record as Record<string, any>);
             return record as Record<string, any>;
           } catch (e) {
             const err = e instanceof DvProxyError
