@@ -631,6 +631,14 @@ export function applyScenarioToStore(scenario: TestScenario): void {
 
   if (scenario.isControlDisabled !== undefined) s.setControlDisabled(scenario.isControlDisabled);
 
+  // Data source — honour scenario's pinned mode (P3). Switching to live is
+  // safe even without a profile: the live web-api branch surfaces a clean
+  // "Live mode requires a selected PAC profile" error instead of silently
+  // failing, and the LiveModeControls UI guides the user to pick one.
+  if (scenario.dataSource !== undefined && scenario.dataSource !== s.dataSource) {
+    s.setDataSource(scenario.dataSource);
+  }
+
   // Data records — only when mock and present. Live mode is opted out at Save.
   if (scenario.dataRecords && scenario.dataSource !== 'live') {
     replaceMockEntityData(scenario.dataRecords);
@@ -683,6 +691,35 @@ export function resetScenarioDefaults(
   const fresh = buildDefaultScenario(manifest, newName);
   applyScenarioAsActive(controlId, fresh);
   return fresh;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Capture-as-new helper (used by DataPanel "Capture as new scenario")        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Capture the current harness state as a fresh scenario, persist it to
+ * localStorage + disk, make it the active scenario, and bump
+ * `scenariosListVersion` so any external scenario list view refreshes.
+ *
+ * If a scenario with `name` already exists, a unique suffix is appended
+ * (e.g. "Live capture 2026-06-01 13:14 (1)") so we never overwrite.
+ */
+export async function captureAndSaveAsNewScenario(
+  controlId: string,
+  baseName: string,
+): Promise<TestScenario> {
+  const list = await loadAllScenarios(controlId);
+  const uniqueName = list.some(s => s.name === baseName)
+    ? findUniqueCopyName(list, baseName)
+    : baseName;
+  const snap = captureScenarioFromStore(uniqueName);
+  const next = upsertScenario(list, snap);
+  saveScenariosToStorage(controlId, next);
+  void saveScenariosToDisk(controlId, next);
+  applyScenarioAsActive(controlId, snap);
+  useHarnessStore.getState().bumpScenariosListVersion();
+  return snap;
 }
 
 /* -------------------------------------------------------------------------- */

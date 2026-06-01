@@ -259,22 +259,22 @@
     {
       "id": "wb-textinput-set",
       "status": "pass",
-      "detail": "wrote 'wb-1780313679283'"
+      "detail": "wrote 'wb-1780317390003'"
     },
     {
       "id": "wb-numberinput-set",
       "status": "pass",
-      "detail": "wrote 138"
+      "detail": "wrote 810"
     },
     {
       "id": "wb-record-set",
       "status": "pass",
-      "detail": "wrote 'Glow Test 1780313679414'"
+      "detail": "wrote 'Glow Test 1780317390154'"
     },
     {
       "id": "wb-same-value-skip",
       "status": "pass",
-      "detail": "stable at 'pin-1780313679498'"
+      "detail": "stable at 'pin-1780317390254'"
     }
   ],
   "consoleErrors": []

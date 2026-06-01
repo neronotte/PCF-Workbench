@@ -8,7 +8,7 @@ import { useHarnessStore, type DataSource, type PublicProfile } from '../../stor
 import { loadEntityData, getEntityStoreKeys, getEntityData } from '../../store/data-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
 import { listProfiles, DvProxyError } from '../../api/dv-client';
-import { loadAllScenarios, applyScenarioAsActive } from '../../lib/scenario-store';
+import { loadAllScenarios, applyScenarioAsActive, captureAndSaveAsNewScenario } from '../../lib/scenario-store';
 
 const useStyles = makeStyles({
   root: {
@@ -251,6 +251,7 @@ function SnapshotLiveToMockButton() {
   const liveRecordCache = useHarnessStore(s => s.liveRecordCache);
   const snapshot = useHarnessStore(s => s.snapshotLiveToMock);
   const activeScenarioName = useHarnessStore(s => s.activeScenarioName);
+  const manifest = useHarnessStore(s => s.manifest);
   const addLogEntry = useHarnessStore(s => s.addLogEntry);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -264,7 +265,7 @@ function SnapshotLiveToMockButton() {
   const total = bufferRecordCount + (cachedPageRecords > bufferEntityCount ? cachedPageRecords - bufferEntityCount : 0);
   const hasData = bufferRecordCount > 0 || cachedPageRecords > 0;
 
-  const onClick = useCallback(() => {
+  const onSnapshot = useCallback(() => {
     const result = snapshot();
     addLogEntry({ category: 'data', method: 'snapshotLiveToMock', args: result });
     const msg = activeScenarioName
@@ -274,21 +275,51 @@ function SnapshotLiveToMockButton() {
     window.setTimeout(() => setFlash(null), 6000);
   }, [snapshot, addLogEntry, activeScenarioName]);
 
+  // P2: capture into a brand-new scenario without dirtying the current one.
+  // Timestamped name lets the user kick off many captures in a row.
+  const onCaptureAsNew = useCallback(async () => {
+    if (!manifest) return;
+    const result = snapshot();
+    const controlId = `${manifest.namespace}.${manifest.constructor}`;
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const baseName = `Live capture ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const saved = await captureAndSaveAsNewScenario(controlId, baseName);
+    addLogEntry({ category: 'data', method: 'captureAsNewScenario', args: { name: saved.name, ...result } });
+    setFlash(`Captured ${result.recordCount} record(s) across ${result.entityCount} entity type(s) into new scenario "${saved.name}". Saved to disk.`);
+    window.setTimeout(() => setFlash(null), 6000);
+  }, [manifest, snapshot, addLogEntry]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-      <Button
-        appearance="primary"
-        size="small"
-        icon={<ArrowDownload24Regular />}
-        onClick={onClick}
-        disabled={!hasData}
-        title={hasData
-          ? `Promote ${total} buffered live record(s) into the mock entity store, switch to Mock mode, and mark the active scenario dirty. Save the scenario afterwards to persist to disk.`
-          : 'No live records buffered yet. Render the control or fetch records via context.webAPI to populate the buffer.'}
-        data-test-id="snapshot-live-to-mock"
-      >
-        Snapshot live → mock ({total})
-      </Button>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        <Button
+          appearance="primary"
+          size="small"
+          icon={<ArrowDownload24Regular />}
+          onClick={onSnapshot}
+          disabled={!hasData}
+          title={hasData
+            ? `Promote ${total} buffered live record(s) into the mock entity store, switch to Mock mode, and mark the active scenario dirty. Save the scenario afterwards to persist to disk.`
+            : 'No live records buffered yet. Render the control or fetch records via context.webAPI to populate the buffer.'}
+          data-test-id="snapshot-live-to-mock"
+        >
+          Snapshot live → mock ({total})
+        </Button>
+        <Button
+          appearance="secondary"
+          size="small"
+          icon={<Save24Regular />}
+          onClick={() => { void onCaptureAsNew(); }}
+          disabled={!hasData || !manifest}
+          title={hasData
+            ? 'Capture buffered records into a brand-new scenario named "Live capture <timestamp>" and switch to it as active. Saves to disk immediately; does not dirty or overwrite the current scenario.'
+            : 'No live records buffered yet.'}
+          data-test-id="capture-as-new-scenario"
+        >
+          Capture as new scenario
+        </Button>
+      </div>
       {flash && (
         <MessageBar intent="success">
           <MessageBarBody>{flash}</MessageBarBody>

@@ -224,6 +224,22 @@ export function ScenarioHeader({ controlId }: ScenarioHeaderProps) {
     };
   }, []);
 
+  // External refresh signal: another panel (e.g. DataPanel "Capture as new
+  // scenario") just mutated the on-disk list. Re-load so our dropdown
+  // reflects the new entry. Skipped on first mount (handled by first-load
+  // effect above).
+  const scenariosListVersion = useHarnessStore(s => s.scenariosListVersion);
+  const lastSeenListVersion = useRef(scenariosListVersion);
+  useEffect(() => {
+    if (lastSeenListVersion.current === scenariosListVersion) return;
+    lastSeenListVersion.current = scenariosListVersion;
+    if (firstLoadDoneFor.current !== controlId) return;
+    void (async () => {
+      const refreshed = await loadAllScenarios(controlId);
+      setScenarios(refreshed);
+    })();
+  }, [scenariosListVersion, controlId]);
+
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------

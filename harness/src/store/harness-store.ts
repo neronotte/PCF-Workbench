@@ -189,6 +189,12 @@ export interface HarnessStore {
    *  the active scenario dirty. Restores the prior flag on exit (safe under
    *  nesting). */
   withDirtySuppression: <T>(fn: () => T) => T;
+  /** Bumped whenever the on-disk / localStorage scenario list mutates from
+   *  outside ScenarioHeader (e.g. DataPanel's "Capture as new scenario").
+   *  ScenarioHeader watches this counter and reloads its local list when
+   *  it ticks. */
+  scenariosListVersion: number;
+  bumpScenariosListVersion: () => void;
 
   // Authoring mode (designer preview). When true, context.mode.isAuthoringMode
   // returns true so InfoCard-style controls render their designer preview UI.
@@ -829,6 +835,8 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   setActiveScenarioName: (name) => set({ activeScenarioName: name, isDirty: false }),
   markDirty: () => set(s => (s.isDirty || s._suppressDirty || !s.activeScenarioName ? {} : { isDirty: true })),
   clearDirty: () => set({ isDirty: false }),
+  scenariosListVersion: 0,
+  bumpScenariosListVersion: () => set(s => ({ scenariosListVersion: s.scenariosListVersion + 1 })),
   withDirtySuppression: (fn) => {
     const prev = get()._suppressDirty;
     set({ _suppressDirty: true });
