@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { ManifestConfig } from '../types/manifest';
 import { replaceMockEntityData } from './data-store';
 import { isLiveBlocked } from '../lib/live-block';
+import { __clearLiveAttributeMetadataCache } from '../api/dv-client';
 
 export type CoverageStatus = 'implemented' | 'stub' | 'unimplemented';
 
@@ -721,6 +722,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     // Switching modes invalidates cached EntitySetNames and live records
     // (different org may have different schema / data) and any stale
     // reauth flag. Bump dataVersion so bound properties re-resolve.
+    __clearLiveAttributeMetadataCache();
     set(s => ({
       dataSource: source,
       entitySetCache: {},
@@ -741,6 +743,7 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     } catch { /* ignore */ }
     // Profile change → drop EntitySetName + live record cache (different
     // org schema). Bump dataVersion so any in-flight render sees empty.
+    __clearLiveAttributeMetadataCache();
     set(s => ({
       liveProfile: profile,
       entitySetCache: {},

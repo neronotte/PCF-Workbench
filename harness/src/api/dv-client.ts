@@ -379,40 +379,69 @@ const attrMetaInflight = new Map<string, Promise<void>>();
 const attrMetaLoaded = new Set<string>();
 
 /**
- * Fetch attribute metadata (LogicalName, DisplayName, AttributeType) for a
- * Dataverse entity in live mode and merge it into the existing metadata
- * store. The store's `parseDataverseEntity` already understands the
+ * Fetch attribute metadata (LogicalName, DisplayName, AttributeType + option
+ * sets for Picklist/State/Status attributes) for a Dataverse entity in live
+ * mode and merge it into the metadata store. The store's
+ * `parseDataverseEntity` already understands the
  * `EntityDefinitions(...)?$expand=Attributes` shape, so we just hand it the
  * raw response. Idempotent + once-per-entity per session.
+ *
+ * In live mode this ALWAYS overwrites any prior mock-derived entry — the
+ * real org is the source of truth. In mock mode this is a no-op.
+ *
+ * Two parallel fetches:
+ *   1. Basic attribute list (LogicalName/DisplayName/AttributeType) — fast.
+ *   2. PicklistAttributeMetadata typed-cast with OptionSet expansion —
+ *      slower but resolves option-set labels for choice columns. Merged on
+ *      top of (1) before handing to loadMetadata.
  */
 export async function ensureLiveAttributeMetadata(orgUrl: string, logicalName: string): Promise<void> {
-  // Mock-derived metadata wins — don't overwrite if a data.json already
-  // populated this entity. Only fetch in live mode.
   if (useHarnessStore.getState().dataSource !== 'live') return;
   if (attrMetaLoaded.has(logicalName)) return;
-  if (getEntityMetadata(logicalName)) {
-    attrMetaLoaded.add(logicalName);
-    return;
-  }
   const inflight = attrMetaInflight.get(logicalName);
   if (inflight) return inflight;
 
-  const path = `/api/data/v9.2/EntityDefinitions(LogicalName='${encodeURIComponent(logicalName)}')`
-    + `?$select=LogicalName,DisplayName`
+  const basePath = `/api/data/v9.2/EntityDefinitions(LogicalName='${encodeURIComponent(logicalName)}')`
+    + `?$select=LogicalName,DisplayName,SchemaName,PrimaryNameAttribute,PrimaryIdAttribute`
     + `&$expand=Attributes($select=LogicalName,DisplayName,AttributeType)`;
+  // Picklist/State/Status options. The typed-cast filters the Attributes
+  // collection to choice-typed entries and expands their OptionSet.
+  const picklistPath = `/api/data/v9.2/EntityDefinitions(LogicalName='${encodeURIComponent(logicalName)}')`
+    + `/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata`
+    + `?$select=LogicalName,AttributeType&$expand=OptionSet($select=Options)`;
+
   const p = (async () => {
     try {
-      const entity = await dvGet<any>(orgUrl, path);
-      // parseDataverseEntity expects a single entity object (not the $value wrapper).
+      const [entity, picklistRaw] = await Promise.all([
+        dvGet<any>(orgUrl, basePath),
+        dvGet<{ value: any[] }>(orgUrl, picklistPath).catch(() => ({ value: [] })),
+      ]);
+      // Merge OptionSet onto the matching attributes in `entity.Attributes`
+      // so parseDataverseEntity picks them up via its existing OptionSet
+      // branch. Keys are case-sensitive logical names per OData.
+      if (entity?.Attributes && Array.isArray(picklistRaw.value)) {
+        const byLogical = new Map<string, any>();
+        for (const a of picklistRaw.value) {
+          if (a?.LogicalName) byLogical.set(a.LogicalName, a);
+        }
+        for (const attr of entity.Attributes) {
+          const pl = byLogical.get(attr?.LogicalName);
+          if (pl?.OptionSet) attr.OptionSet = pl.OptionSet;
+        }
+      }
       loadMetadata({ [logicalName]: entity });
       attrMetaLoaded.add(logicalName);
       useHarnessStore.getState().addLogEntry({
         category: 'webAPI',
         method: 'live.attributeMetadata.ok',
-        args: { logicalName, attributes: Array.isArray(entity?.Attributes) ? entity.Attributes.length : 0 },
+        args: {
+          logicalName,
+          attributes: Array.isArray(entity?.Attributes) ? entity.Attributes.length : 0,
+          picklists: Array.isArray(picklistRaw.value) ? picklistRaw.value.length : 0,
+        },
       });
       // Bump dataVersion so any in-flight render picks up the new display
-      // names and column types (esp. duration formatting).
+      // names, column types, and option-set labels.
       useHarnessStore.setState(s => ({ dataVersion: s.dataVersion + 1 }));
     } catch (e) {
       useHarnessStore.getState().addLogEntry({
@@ -426,6 +455,12 @@ export async function ensureLiveAttributeMetadata(orgUrl: string, logicalName: s
   })();
   attrMetaInflight.set(logicalName, p);
   return p;
+}
+
+/** Returns the set of entities that have been hydrated with live metadata
+ *  in this session. Used by the Data panel inspector. */
+export function getLiveLoadedEntities(): string[] {
+  return Array.from(attrMetaLoaded).sort();
 }
 
 /** Test seam: clear in-process attribute-metadata caches. */

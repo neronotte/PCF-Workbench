@@ -7,7 +7,7 @@ import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24
 import { useHarnessStore, type DataSource, type PublicProfile } from '../../store/harness-store';
 import { loadEntityData, getEntityStoreKeys, getEntityData } from '../../store/data-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
-import { listProfiles, DvProxyError } from '../../api/dv-client';
+import { listProfiles, DvProxyError, getLiveLoadedEntities } from '../../api/dv-client';
 import { loadAllScenarios, applyScenarioAsActive, captureAndSaveAsNewScenario } from '../../lib/scenario-store';
 import { isLiveBlocked, liveBlockReason } from '../../lib/live-block';
 
@@ -430,6 +430,8 @@ function LiveModeControls() {
 
       <SnapshotLiveToMockButton />
 
+      <LiveMetadataInspector />
+
       {error && (
         <MessageBar intent="error">
           <MessageBarBody>{error}</MessageBarBody>
@@ -445,8 +447,51 @@ function LiveModeControls() {
       )}
 
       <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3 }}>
-        Live mode: read-only via <code>context.webAPI.retrieveRecord</code> /{' '}
-        <code>retrieveMultipleRecords</code>. Writes throw until M2.P3.
+        Live mode: reads via <code>context.webAPI</code> are direct; writes
+        prompt a per-call confirm dialog (M2.P4). Metadata is fetched from{' '}
+        <code>EntityDefinitions</code> on first access (M2.P5).
+      </div>
+    </div>
+  );
+}
+
+/**
+ * M2.P5 — Compact inspector listing every entity whose metadata has been
+ * hydrated from the live org this session. Helps debug "why is the display
+ * name wrong?" by making the cache observable.
+ */
+function LiveMetadataInspector() {
+  const dataVersion = useHarnessStore(s => s.dataVersion);
+  // Re-read from dv-client every render keyed off dataVersion (bumped after
+  // each successful ensureLiveAttributeMetadata fetch).
+  const entities = (() => {
+    try {
+      // Lazy require pattern via dynamic import would be cleaner but adds
+      // async; the function is sync + cheap so a static import is fine.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return getLiveLoadedEntities();
+    } catch {
+      return [];
+    }
+  })();
+  // dataVersion is referenced so the effect picks up cache-clear bumps too.
+  void dataVersion;
+
+  if (entities.length === 0) {
+    return (
+      <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3 }} data-test-id="live-metadata-inspector-empty">
+        Live metadata cache is empty. <code>context.utils.getEntityMetadata(...)</code>{' '}
+        will populate it on first call.
+      </div>
+    );
+  }
+  return (
+    <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3 }} data-test-id="live-metadata-inspector">
+      <div style={{ marginBottom: 2 }}><strong>Live metadata cache</strong> ({entities.length})</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {entities.map(e => (
+          <Badge key={e} appearance="outline" size="small" data-test-id={`live-meta-entry-${e}`}>{e}</Badge>
+        ))}
       </div>
     </div>
   );

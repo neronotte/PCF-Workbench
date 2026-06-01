@@ -1,6 +1,6 @@
 import type { HarnessStore } from '../store/harness-store';
 import { getEntityMetadata as getMetadataEntry } from '../store/metadata-store';
-import { resolveEntitySetName } from '../api/dv-client';
+import { resolveEntityMetadata, ensureLiveAttributeMetadata } from '../api/dv-client';
 import { pushDialog, type LookupDialogRequest } from './dialog-bus';
 
 export function createUtilsShim(getState: () => HarnessStore) {
@@ -11,6 +11,30 @@ export function createUtilsShim(getState: () => HarnessStore) {
     async getEntityMetadata(entityName: string, attributes?: string[]): Promise<any> {
       log('getEntityMetadata', { entityName, attributes });
 
+      // Live mode (M2.P5): hydrate from real org before reading the metadata
+      // store so display names + attribute types + option-set labels are
+      // accurate. ensureLiveAttributeMetadata is idempotent + once-per-entity.
+      const state = getState();
+      let entitySetName = `${entityName}s`;
+      let primaryIdAttribute = `${entityName}id`;
+      let primaryNameAttribute = 'name';
+      if (state.dataSource === 'live' && state.liveProfile) {
+        try {
+          const resolved = await resolveEntityMetadata(state.liveProfile.orgUrl, entityName);
+          entitySetName = resolved.entitySetName;
+          if (resolved.primaryIdAttribute) primaryIdAttribute = resolved.primaryIdAttribute;
+          if (resolved.primaryNameAttribute) primaryNameAttribute = resolved.primaryNameAttribute;
+        } catch {
+          // Fall back to heuristics; resolveEntityMetadata already logged it.
+        }
+        try {
+          await ensureLiveAttributeMetadata(state.liveProfile.orgUrl, entityName);
+        } catch {
+          // Attribute hydration is best-effort; mock fallback below still
+          // yields a usable shape.
+        }
+      }
+
       const meta = getMetadataEntry(entityName);
       const allColumns = meta ? Object.entries(meta.columns) : [];
       const filterSet = attributes && attributes.length > 0 ? new Set(attributes) : null;
@@ -18,36 +42,37 @@ export function createUtilsShim(getState: () => HarnessStore) {
         ? allColumns.filter(([logical]) => filterSet.has(logical))
         : allColumns;
 
-      const buildAttribute = (logicalName: string, col?: { displayName: string; type?: string }) => ({
+      const buildAttribute = (logicalName: string, col?: { displayName: string; type?: string; options?: Array<{ value: number; text: string }> }) => ({
         LogicalName: logicalName,
         DisplayName: col?.displayName ?? logicalName,
         AttributeType: col?.type ?? 'String',
+        // M2.P5: surface OptionSet labels for picklist/state/status attributes
+        // when present. Real Dataverse returns this nested under
+        // `OptionSet.Options[].Label.UserLocalizedLabel.Label`; controls
+        // typically just want `{ Value, Label }`. Provide both shapes for
+        // compatibility with controls written against either form.
+        ...(col?.options && col.options.length > 0
+          ? {
+              OptionSet: {
+                Options: col.options.map(o => ({
+                  Value: o.value,
+                  Label: { UserLocalizedLabel: { Label: o.text }, LocalizedLabels: [{ Label: o.text }] },
+                })),
+              },
+            }
+          : {}),
       });
 
       const attributesList = matched.length > 0
         ? matched.map(([logical, col]) => buildAttribute(logical, col))
         : (attributes ?? []).map(a => buildAttribute(a));
 
-      // EntitySetName: in live mode, ask Dataverse via /EntityDefinitions
-      // (cached per-session) so we get the correct plural for entities like
-      // opportunity → opportunities and any custom table. In mock mode the
-      // legacy `<logical>s` heuristic is fine because data.json keys match.
-      const state = getState();
-      let entitySetName = `${entityName}s`;
-      if (state.dataSource === 'live' && state.liveProfile) {
-        try {
-          entitySetName = await resolveEntitySetName(state.liveProfile.orgUrl, entityName);
-        } catch {
-          // Fall back to the heuristic; resolveEntitySetName already logged it.
-        }
-      }
-
       return {
         LogicalName: entityName,
         EntitySetName: entitySetName,
         DisplayName: meta?.displayName ?? entityName,
-        PrimaryIdAttribute: entityName + 'id',
-        PrimaryNameAttribute: 'name',
+        PrimaryIdAttribute: primaryIdAttribute,
+        PrimaryNameAttribute: primaryNameAttribute,
         Attributes: {
           getAll() {
             return attributesList;
