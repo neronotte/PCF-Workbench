@@ -59,6 +59,13 @@ const useStyles = makeStyles({
     '&:hover': {
       backgroundColor: tokens.colorBrandBackground,
     },
+    '& .row-trash': {
+      color: 'white',
+    },
+    '& .row-trash:hover': {
+      color: 'white',
+      backgroundColor: tokens.colorBrandBackgroundHover,
+    },
   },
   rowTrash: {
     flexShrink: 0,
