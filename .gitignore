@@ -76,3 +76,7 @@ harness/pcf-loop-reports/
 samples/*/loop-report/
 samples/MAILoopDemo/out/
 
+
+# Internal-only artifacts (XLT decks, reference screenshots) — not for the public repo
+decks/
+pcf-scripts-standard-harness.png
