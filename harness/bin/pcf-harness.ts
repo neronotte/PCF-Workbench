@@ -38,11 +38,15 @@ program
   .requiredOption('--path <dir>', 'Path to the PCF control directory (containing ControlManifest.Input.xml)')
   .option('--port <number>', 'Port to run the dev server on', '8181')
   .option('--no-open', 'Do not open the browser automatically')
+  .option('--no-watch', 'Do not auto-spawn the build watcher (M9)')
   .action(async (opts) => {
     const controlPath = path.resolve(opts.path);
     assertControlDir(controlPath);
 
     process.env.PCF_CONTROL_PATH = controlPath;
+    if (opts.watch === false) {
+      process.env.PCF_NO_WATCH = '1';
+    }
 
     console.log(`\n  PCF Dev Harness`);
     console.log(`  Control: ${controlPath}`);

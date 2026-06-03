@@ -1,11 +1,12 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { makeStyles, tokens, Spinner } from '@fluentui/react-components';
+import { makeStyles, mergeClasses, tokens, Spinner } from '@fluentui/react-components';
 import { useHarnessStore } from '../../store/harness-store';
 import { ControlHost, type ControlHostState } from '../../loader/control-host';
 import type { ManifestConfig } from '../../types/manifest';
 import { FormNotificationBanner } from '../FormNotificationBanner';
 import { ControlErrorBanner } from '../ControlErrorBanner';
 import { registerHarnessHost } from '../../test-bridge';
+import { useBuildStatus } from '../../store/build-watch-client';
 
 const useStyles = makeStyles({
   root: {
@@ -78,6 +79,30 @@ const useStyles = makeStyles({
     overflow: 'auto',
     height: '100%',
   },
+  staleControlContainer: {
+    opacity: 0.45,
+    filter: 'grayscale(0.4)',
+    pointerEvents: 'none' as const,
+    cursor: 'progress' as const,
+    transition: 'opacity 120ms ease-out, filter 120ms ease-out',
+  },
+  staleOverlay: {
+    position: 'absolute' as const,
+    top: '8px', right: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '4px 10px',
+    borderRadius: '12px',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '0.3px',
+    color: '#0b3a4a',
+    backgroundColor: 'rgba(50, 212, 255, 0.92)',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+    zIndex: 20,
+    pointerEvents: 'none' as const,
+  },
   center: {
     display: 'flex',
     alignItems: 'center',
@@ -148,6 +173,8 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
   const datasetState = useHarnessStore(s => s.datasetState);
   const dataVersion = useHarnessStore(s => s.dataVersion);
   const isAuthoringMode = useHarnessStore(s => s.isAuthoringMode);
+  const buildStatus = useBuildStatus();
+  const isStale = buildStatus.phase === 'compiling';
   const isFullBleed = useHarnessStore(s => s.isFullBleed);
 
   // Authoring mode is read on init() in real Dataverse and doesn't change at
@@ -338,7 +365,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
                 <Spinner label="Loading control..." />
               </div>
             )}
-            <div ref={containerRef} className={styles.controlContainer} data-test-id="pcf-control-container" style={isFullBleed ? {
+            <div ref={containerRef} className={mergeClasses(styles.controlContainer, isStale ? styles.staleControlContainer : undefined)} data-test-id="pcf-control-container" data-stale={isStale ? 'true' : undefined} style={isFullBleed ? {
               width: '100%',
               height: '100%',
               display: hostState.error ? 'none' : undefined,
@@ -347,6 +374,12 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
               height: containerHeight != null ? `${containerHeight}px` : '100%',
               display: hostState.error ? 'none' : undefined,
             }} />
+            {isStale && (
+              <div className={styles.staleOverlay} role="status" aria-live="polite" data-test-id="viewport-stale-overlay">
+                <Spinner size="extra-tiny" />
+                <span>Rebuilding…</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

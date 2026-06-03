@@ -28,6 +28,7 @@ import { LiveReauthBanner } from './LiveReauthBanner';
 import { CoveragePanel } from './panels/CoveragePanel';
 import { useLivePageRecord } from '../loader/use-live-page-record';
 import { isLiveBlocked, liveBlockReason } from '../lib/live-block';
+import { useBuildStatus } from '../store/build-watch-client';
 import type { ManifestConfig } from '../types/manifest';
 
 const useStyles = makeStyles({
@@ -173,6 +174,53 @@ interface Props {
 
 type SidePanelTab = 'properties' | 'form' | 'data' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance' | 'coverage';
 
+/** M9 — Build watcher status pill.
+ *
+ * Renders nothing while the watcher has never produced an event (idle+seq=0)
+ * so that environments where the watcher is disabled (PCF_NO_WATCH, no build
+ * script, gallery mode) stay clean. Once a build has happened we keep the
+ * pill visible even when idle so users can see the previous duration. */
+function BuildStatusPill() {
+  const status = useBuildStatus();
+  if (status.phase === 'idle' && status.seq === 0) return null;
+
+  const palette: Record<string, { bg: string; border: string; fg: string; label: string; emoji: string }> = {
+    compiling: { bg: 'rgba(50, 212, 255, 0.18)', border: 'rgba(50, 212, 255, 0.55)', fg: '#9be8ff', label: 'Building…', emoji: '⏳' },
+    success:   { bg: 'rgba(60, 200, 120, 0.18)',  border: 'rgba(60, 200, 120, 0.55)',  fg: '#8ee0a6', label: 'Built',     emoji: '✓' },
+    error:     { bg: 'rgba(255, 100, 100, 0.20)', border: 'rgba(255, 100, 100, 0.55)', fg: '#ff9aa2', label: 'Build error', emoji: '✗' },
+    idle:      { bg: 'rgba(180, 180, 200, 0.15)', border: 'rgba(180, 180, 200, 0.45)', fg: '#cfcfdc', label: 'Build idle', emoji: '○' },
+  };
+  const p = palette[status.phase] ?? palette.idle;
+  const dur = typeof status.durationMs === 'number' ? `${(status.durationMs / 1000).toFixed(1)}s` : '';
+  const errCount = status.errors?.length ?? 0;
+  const title = status.phase === 'error'
+    ? `Last build failed in ${dur}\n` + (status.errors ?? []).slice(0, 8).join('\n')
+    : status.phase === 'success'
+      ? `Last build succeeded in ${dur}`
+      : status.phase === 'compiling'
+        ? 'Build in progress — saving a source file rebuilds automatically'
+        : 'Build watcher idle';
+
+  return (
+    <span
+      data-test-id="build-status-pill"
+      data-phase={status.phase}
+      title={title}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+        padding: '2px 8px', borderRadius: 10,
+        color: p.fg, backgroundColor: p.bg, border: `1px solid ${p.border}`,
+      }}
+    >
+      <span aria-hidden="true">{p.emoji}</span>
+      {p.label}
+      {status.phase === 'success' && dur && <span style={{ opacity: 0.75 }}>{dur}</span>}
+      {status.phase === 'error' && errCount > 0 && <span style={{ opacity: 0.75 }}>({errCount})</span>}
+    </span>
+  );
+}
+
 export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launchedAsGallery }: Props) {
   const styles = useStyles();
   const [activeTab, setActiveTab] = useState<SidePanelTab>('properties');
@@ -294,6 +342,11 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
             🛡 LIVE BLOCKED
           </span>
         )}
+
+        {/* M9 — Build watcher status pill. Hidden when watcher reports
+            phase==='idle' AND no build has happened yet (seq===0) so we don't
+            advertise the feature in environments where it's disabled. */}
+        <BuildStatusPill />
 
         {/* Status badges */}
         {networkBadge && (

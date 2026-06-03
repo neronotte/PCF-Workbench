@@ -15,6 +15,12 @@ import {
 } from './extract-control';
 import { getSessionSecret } from './dataverse-security';
 import crypto from 'node:crypto';
+import {
+  BuildWatcher,
+  findProjectRootForBuild,
+  projectHasBuildScript,
+  type BuildStatus,
+} from './build-watcher';
 
 const VIRTUAL_ID = 'virtual:pcf-manifest';
 const RESOLVED_ID = '\0' + VIRTUAL_ID;
@@ -515,6 +521,108 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
 
     configureServer(server: ViteDevServer) {
       serverRef = server;
+
+      /* ---------- Build watcher (M9) ---------- */
+      // Single-control mode only: when state.controlDir is set and the user
+      // hasn't opted out via PCF_NO_WATCH, spawn a build watcher that runs
+      // `npm run build` whenever a source file changes. Status events fan
+      // out via the SSE endpoint below; the existing Vite watcher already
+      // HMR-reloads on out/bundle.js change, closing the loop.
+      let buildWatcher: BuildWatcher | null = null;
+      const sseClients = new Set<import('node:http').ServerResponse>();
+      let lastBuildStatus: BuildStatus = {
+        phase: 'idle',
+        seq: 0,
+        at: new Date().toISOString(),
+      };
+      const broadcastStatus = (status: BuildStatus) => {
+        lastBuildStatus = status;
+        const payload = `data: ${JSON.stringify(status)}\n\n`;
+        for (const res of sseClients) {
+          try { res.write(payload); } catch { /* dead client */ }
+        }
+      };
+
+      const startBuildWatcher = () => {
+        if (buildWatcher) return;
+        if (process.env.PCF_NO_WATCH === '1') {
+          console.log('[pcf-workbench:build-watch] disabled (PCF_NO_WATCH=1)');
+          return;
+        }
+        if (!state.controlDir) return;
+        const projectRoot = findProjectRootForBuild(state.controlDir);
+        if (!projectRoot) {
+          console.log('[pcf-workbench:build-watch] no package.json found upwards from control dir; watcher disabled');
+          return;
+        }
+        if (!projectHasBuildScript(projectRoot)) {
+          console.log('[pcf-workbench:build-watch] project has no `build` script; watcher disabled');
+          return;
+        }
+        buildWatcher = new BuildWatcher({
+          projectRoot,
+          controlDir: state.controlDir,
+          onStatus: broadcastStatus,
+        });
+        console.log(`[pcf-workbench:build-watch] enabled (project: ${projectRoot})`);
+      };
+      startBuildWatcher();
+
+      // SSE: stream build status to the harness UI.
+      server.middlewares.use('/api/build-watch/events', (req, res) => {
+        if (req.method !== 'GET') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
+        });
+        res.write(`data: ${JSON.stringify(lastBuildStatus)}\n\n`);
+        sseClients.add(res);
+        const heartbeat = setInterval(() => {
+          try { res.write(': ping\n\n'); } catch { /* */ }
+        }, 25000);
+        req.on('close', () => {
+          clearInterval(heartbeat);
+          sseClients.delete(res);
+        });
+      });
+
+      // Snapshot endpoint for clients that don't speak SSE (or for tests).
+      server.middlewares.use('/api/build-watch/status', (req, res) => {
+        if (req.method !== 'GET') {
+          res.statusCode = 405;
+          res.end();
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          enabled: buildWatcher !== null,
+          status: lastBuildStatus,
+        }));
+      });
+
+      // Cleanup on dev server shutdown so the spawned npm child doesn't
+      // outlive us. Also catches Ctrl+C via the bin entry point.
+      const httpSrv = server.httpServer;
+      const dispose = () => {
+        if (buildWatcher) {
+          buildWatcher.dispose();
+          buildWatcher = null;
+        }
+        for (const res of sseClients) {
+          try { res.end(); } catch { /* */ }
+        }
+        sseClients.clear();
+      };
+      if (httpSrv) httpSrv.once('close', dispose);
+      process.once('beforeExit', dispose);
+      process.once('SIGINT', () => { dispose(); process.exit(0); });
+      process.once('SIGTERM', () => { dispose(); process.exit(0); });
 
       // API: Dataverse EntityDefinitions proxy backed by metadata.json
       // ────────────────────────────────────────────────────────────────────
