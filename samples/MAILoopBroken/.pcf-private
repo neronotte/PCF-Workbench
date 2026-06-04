@@ -1,0 +1,11 @@
+PCF Workbench gallery-visibility marker.
+
+This file hides MAILoopBroken from the default sample gallery shown by
+`try-pcf-workbench.bat`. The control is still fully usable from the
+command line via `pcf-harness start --path samples\MAILoopBroken\MAILoopBroken`
+— the marker just keeps it out of the first-impression gallery.
+
+MAILoopBroken is the AI-build-loop demo control with deliberately bad
+patterns (banned APIs, perf antipatterns, a11y issues) so the loop has
+something to detect. Showing it to a new user without context would be
+confusing.
