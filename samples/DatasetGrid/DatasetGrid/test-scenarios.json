@@ -2,38 +2,114 @@
   {
     "schemaVersion": 2,
     "name": "Default",
-    "description": "Auto-created baseline. Edit any tab and Save to capture it.",
+    "description": "Five bookable resource bookings spanning all four status values — the canonical first-impression for the harness.",
     "savedAt": "2026-06-04T17:12:59.253Z",
     "propertyValues": {},
     "isControlDisabled": false,
     "dataSource": "mock",
     "dataRecords": {
       "bookableresourcebooking": [
-        {
-          "bookableresourcebookingid": "11111111-1111-1111-1111-111111111101",
-          "primaryName": "Onsite — North Tower #14",
-          "status": "Scheduled"
-        },
-        {
-          "bookableresourcebookingid": "11111111-1111-1111-1111-111111111102",
-          "primaryName": "Remote callback — Acme Corp",
-          "status": "In Progress"
-        },
-        {
-          "bookableresourcebookingid": "11111111-1111-1111-1111-111111111103",
-          "primaryName": "Quarterly inspection — Plant 7",
-          "status": "Completed"
-        },
-        {
-          "bookableresourcebookingid": "11111111-1111-1111-1111-111111111104",
-          "primaryName": "Emergency repair — Substation B",
-          "status": "Scheduled"
-        },
-        {
-          "bookableresourcebookingid": "11111111-1111-1111-1111-111111111105",
-          "primaryName": "Follow-up consultation — Beta Industries",
-          "status": "Pending"
-        }
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111101", "primaryName": "Onsite — North Tower #14", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111102", "primaryName": "Remote callback — Acme Corp", "status": "In Progress" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111103", "primaryName": "Quarterly inspection — Plant 7", "status": "Completed" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111104", "primaryName": "Emergency repair — Substation B", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111105", "primaryName": "Follow-up consultation — Beta Industries", "status": "Pending" }
+      ]
+    }
+  },
+  {
+    "schemaVersion": 2,
+    "name": "Empty",
+    "description": "Zero records — exercises the dataset shim's empty-state path: dataset.sortedRecordIds === [] and the grid should render its empty placeholder, not a crash.",
+    "savedAt": "2026-06-04T17:12:59.253Z",
+    "propertyValues": {},
+    "isControlDisabled": false,
+    "dataSource": "mock",
+    "dataRecords": {
+      "bookableresourcebooking": []
+    }
+  },
+  {
+    "schemaVersion": 2,
+    "name": "Single record",
+    "description": "Single record — exercises the smallest non-empty case. Useful for screenshot baselines and to verify the grid does not assume multiple rows.",
+    "savedAt": "2026-06-04T17:12:59.253Z",
+    "propertyValues": {},
+    "isControlDisabled": false,
+    "dataSource": "mock",
+    "dataRecords": {
+      "bookableresourcebooking": [
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111201", "primaryName": "Solo dispatch — single record demo", "status": "Scheduled" }
+      ]
+    }
+  },
+  {
+    "schemaVersion": 2,
+    "name": "Many records",
+    "description": "20 records — exercises sortable column behaviour, scroll height, and stable getRowId on a dataset larger than a single viewport.",
+    "savedAt": "2026-06-04T17:12:59.253Z",
+    "propertyValues": {},
+    "isControlDisabled": false,
+    "dataSource": "mock",
+    "dataRecords": {
+      "bookableresourcebooking": [
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111301", "primaryName": "Booking 01 — Annual maintenance, Plant 1", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111302", "primaryName": "Booking 02 — Customer training session", "status": "Completed" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111303", "primaryName": "Booking 03 — HVAC inspection — Tower A", "status": "In Progress" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111304", "primaryName": "Booking 04 — Network cabling — Site 19", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111305", "primaryName": "Booking 05 — Safety audit, North site", "status": "Pending" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111306", "primaryName": "Booking 06 — Equipment calibration #C44", "status": "Completed" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111307", "primaryName": "Booking 07 — Emergency repair — Substation B", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111308", "primaryName": "Booking 08 — Software rollout — Region 4", "status": "In Progress" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111309", "primaryName": "Booking 09 — Quarterly review — Beta Industries", "status": "Pending" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111310", "primaryName": "Booking 10 — Pump replacement — Lift Station 2", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111311", "primaryName": "Booking 11 — Leak survey — Pipeline 3", "status": "Completed" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111312", "primaryName": "Booking 12 — UPS battery refresh — DC1", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111313", "primaryName": "Booking 13 — Roof inspection — Building 14", "status": "Pending" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111314", "primaryName": "Booking 14 — Fire system test — Atrium", "status": "In Progress" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111315", "primaryName": "Booking 15 — Generator service — Backup #2", "status": "Completed" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111316", "primaryName": "Booking 16 — Asset tagging — Warehouse W7", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111317", "primaryName": "Booking 17 — IT helpdesk visit — Floor 3", "status": "Pending" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111318", "primaryName": "Booking 18 — HVAC retrofit — Tower B", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111319", "primaryName": "Booking 19 — Customer onboarding — Contoso", "status": "In Progress" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111320", "primaryName": "Booking 20 — Year-end shutdown checks", "status": "Pending" }
+      ]
+    }
+  },
+  {
+    "schemaVersion": 2,
+    "name": "Mobile",
+    "description": "Same five records as Default, rendered on a phone-sized viewport. Exercises @container queries / responsive column stacking. If the device picker says Phone, this is what production users on iPhone-class devices see.",
+    "savedAt": "2026-06-04T17:12:59.253Z",
+    "propertyValues": {},
+    "isControlDisabled": false,
+    "dataSource": "mock",
+    "device": { "preset": "iphone15" },
+    "dataRecords": {
+      "bookableresourcebooking": [
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111101", "primaryName": "Onsite — North Tower #14", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111102", "primaryName": "Remote callback — Acme Corp", "status": "In Progress" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111103", "primaryName": "Quarterly inspection — Plant 7", "status": "Completed" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111104", "primaryName": "Emergency repair — Substation B", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111105", "primaryName": "Follow-up consultation — Beta Industries", "status": "Pending" }
+      ]
+    }
+  },
+  {
+    "schemaVersion": 2,
+    "name": "Read-only",
+    "description": "Five records, control disabled — verifies the grid honours isControlDisabled (read-only chrome, no inline editors / row-click navigation).",
+    "savedAt": "2026-06-04T17:12:59.253Z",
+    "propertyValues": {},
+    "isControlDisabled": true,
+    "dataSource": "mock",
+    "dataRecords": {
+      "bookableresourcebooking": [
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111101", "primaryName": "Onsite — North Tower #14", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111102", "primaryName": "Remote callback — Acme Corp", "status": "In Progress" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111103", "primaryName": "Quarterly inspection — Plant 7", "status": "Completed" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111104", "primaryName": "Emergency repair — Substation B", "status": "Scheduled" },
+        { "bookableresourcebookingid": "11111111-1111-1111-1111-111111111105", "primaryName": "Follow-up consultation — Beta Industries", "status": "Pending" }
       ]
     }
   }
