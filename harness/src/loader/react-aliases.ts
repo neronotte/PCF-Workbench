@@ -12,6 +12,25 @@
 import type { ManifestResources } from '../types/manifest';
 
 /**
+ * Mirror the loaded React/ReactDOM under all versioned globals deployed PCF
+ * bundles probe for (Reactv16, Reactv940, etc.). Safe to call any time after
+ * window.React is set.
+ *
+ * Split out from `setupReactAliases` so the harness can install the aliases
+ * unconditionally at boot — community PCFs that don't declare React in
+ * <platformLibraries> still reach for window.Reactv16 (H1 from the gallery
+ * validation run).
+ */
+export function installReactVersionedAliases(): void {
+  const w = window as any;
+  if (!w.React) return;
+  const versionedReactGlobals = ['Reactv16', 'Reactv17', 'Reactv18', 'Reactv940', 'Reactv8290', 'Reactv81211'];
+  const versionedReactDomGlobals = ['ReactDOMv16', 'ReactDOMv17', 'ReactDOMv18', 'ReactDOMv940', 'ReactDOMv8290', 'ReactDOMv81211'];
+  for (const name of versionedReactGlobals) if (!w[name]) w[name] = w.React;
+  for (const name of versionedReactDomGlobals) if (!w[name]) w[name] = w.ReactDOM;
+}
+
+/**
  * Mirror the loaded React/ReactDOM under all versioned globals that deployed
  * Fluent bundles probe for, and polyfill modern React APIs (useId,
  * useSyncExternalStore, useInsertionEffect) that Fluent v9 controls assume
@@ -40,10 +59,10 @@ export function setupReactAliases(libs: ManifestResources['platformLibraries'], 
   // globals like Reactv940 / Reactv8290 (the React instance bundled with that
   // Fluent version), not window.React. Alias the loaded React under all known
   // versioned globals so bundles find what they expect regardless of manifest drift.
-  const versionedReactGlobals = ['Reactv16', 'Reactv17', 'Reactv18', 'Reactv940', 'Reactv8290', 'Reactv81211'];
-  const versionedReactDomGlobals = ['ReactDOMv16', 'ReactDOMv17', 'ReactDOMv18', 'ReactDOMv940', 'ReactDOMv8290', 'ReactDOMv81211'];
-  for (const name of versionedReactGlobals) if (!w[name]) w[name] = w.React;
-  for (const name of versionedReactDomGlobals) if (!w[name]) w[name] = w.ReactDOM;
+  // (Boot also invokes installReactVersionedAliases so this is mostly a no-op
+  // here, but kept for the case where someone calls setupReactAliases before
+  // boot has touched window.React.)
+  installReactVersionedAliases();
 
   // Polyfill React 18-only APIs that Fluent v9 controls expect even on React 16/17.
   // The platform (UCI) provides similar polyfills implicitly; deployed bundles assume

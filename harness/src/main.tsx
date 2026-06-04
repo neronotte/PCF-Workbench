@@ -5,6 +5,7 @@ import * as ReactDOM from 'react-dom';
 import { App } from './App';
 import { installXrmFormShim } from './shim/xrm-form';
 import { installTestBridge } from './test-bridge';
+import { installReactVersionedAliases } from './loader/react-aliases';
 
 // Expose the harness's bundled React 18 as window.React/ReactDOM so that
 // when resolveReactVersion picks 'fluent-upgrade' (manifest R16/R17 → R18),
@@ -23,6 +24,15 @@ import { installTestBridge } from './test-bridge';
 const w = window as any;
 if (!w.React) w.React = React;
 if (!w.ReactDOM) w.ReactDOM = { ...ReactDOM, ...ReactDOMClient };
+
+// H1 — install Reactv16 / Reactv18 / Reactv940 / Reactv8290 / Reactv81211
+// versioned aliases at boot, regardless of whether a control declares React
+// in <platformLibraries>. Community PCFs (e.g. rwilson504/PCFControls
+// Calendar + AuditControl) reference window.Reactv16 directly without
+// declaring it; aliasing only inside loadPlatformLibraries left them
+// crashing with "Reactv16 is not defined". Surfaced by the gallery
+// validation run on 2026-06-04.
+installReactVersionedAliases();
 
 installXrmFormShim();
 installTestBridge();
