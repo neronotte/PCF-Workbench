@@ -1,2 +1,8 @@
 __visual__/gallery/
-__visual__/gallery-report.json
+__visual__/gallery-*.json
+__visual__/gallery-*.jsonl
+__visual__/gallery-*.html
+
+# Phase 5 Playwright artifacts — community PCF traces / screenshots
+test-results/
+playwright-report/
