@@ -39,6 +39,9 @@ const GALLERY_ROOT = process.env.PCF_GALLERY_ROOT || 'C:\\Github.Copilot\\PowerA
 const BUILD_REPORT = path.join(GALLERY_ROOT, '_catalog', 'pcf-gallery-build-report.json');
 const SCREENSHOT_DIR = path.resolve(__dirname, '..', '__visual__', 'gallery');
 const RUN_REPORT = path.resolve(__dirname, '..', '__visual__', 'gallery-report.json');
+// JSONL spool — one line per ResultRow. Survives Playwright worker restarts
+// after test timeouts (which would otherwise wipe a module-scope array).
+const RUN_SPOOL = path.resolve(__dirname, '..', '__visual__', 'gallery-results.jsonl');
 
 const LIMIT = process.env.GALLERY_LIMIT ? parseInt(process.env.GALLERY_LIMIT, 10) : undefined;
 const OWNER_FILTER = process.env.GALLERY_OWNER;
@@ -112,6 +115,15 @@ function loadQueue(): Array<{ entry: BuildEntry; controlDir: string; scenarios: 
 const queue = loadQueue();
 const results: ResultRow[] = [];
 
+function spoolRow(row: ResultRow): void {
+  results.push(row);
+  try {
+    fs.appendFileSync(RUN_SPOOL, JSON.stringify(row) + '\n', 'utf8');
+  } catch {
+    // best-effort; don't fail tests if the spool file is locked
+  }
+}
+
 test.describe.configure({ mode: 'default' });
 // Each test = one control × all its scenarios. With ~5 scenarios at ~3s
 // each plus switch + initial-load, 180s gives generous headroom.
@@ -119,27 +131,44 @@ test.setTimeout(180_000);
 
 test.beforeAll(async () => {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  // NOTE: do NOT truncate RUN_SPOOL here. Playwright spawns a new worker
+  // after a test timeout, and that worker also runs beforeAll — truncating
+  // would wipe results from the previous worker. The caller is responsible
+  // for `Remove-Item __visual__/gallery-results.jsonl` before each run.
   console.log(`Gallery validation queue: ${queue.length} (control × all-scenarios) entries`);
   console.log(`Screenshots: ${SCREENSHOT_DIR}`);
-  console.log(`Report: ${RUN_REPORT}`);
+  console.log(`Spool:       ${RUN_SPOOL}`);
+  console.log(`Report:      ${RUN_REPORT}`);
 });
 
 test.afterAll(async () => {
+  // Read every row from the spool — this is the source of truth across
+  // worker restarts (Playwright spawns a fresh worker after a test timeout,
+  // which would wipe a module-scope `results` array).
+  let spoolRows: ResultRow[] = [];
+  try {
+    spoolRows = fs.readFileSync(RUN_SPOOL, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l) as ResultRow);
+  } catch {
+    spoolRows = results.slice();
+  }
   const summary = {
     runAt: new Date().toISOString(),
     harnessUrl: process.env.HARNESS_URL,
     options: { limit: LIMIT, owner: OWNER_FILTER, skipVisual: SKIP_VISUAL },
-    counts: results.reduce<Record<string, number>>((acc, r) => {
+    counts: spoolRows.reduce<Record<string, number>>((acc, r) => {
       acc[r.status] = (acc[r.status] ?? 0) + 1;
       return acc;
     }, {}),
-    totalControls: new Set(results.map(r => `${r.owner}/${r.repo}/${r.control}`)).size,
-    totalScenarios: results.length,
-    rows: results,
+    totalControls: new Set(spoolRows.map(r => `${r.owner}/${r.repo}/${r.control}`)).size,
+    totalScenarios: spoolRows.length,
+    rows: spoolRows,
   };
   fs.writeFileSync(RUN_REPORT, JSON.stringify(summary, null, 2) + '\n', 'utf8');
   console.log('\n' + '─'.repeat(60));
-  console.log(`Gallery run done: ${results.length} scenarios across ${summary.totalControls} controls`);
+  console.log(`Gallery run done: ${spoolRows.length} scenarios across ${summary.totalControls} controls`);
   for (const [k, v] of Object.entries(summary.counts).sort((a, b) => b[1] - a[1])) {
     console.log(`  ${k.padEnd(15)} ${v}`);
   }
@@ -207,7 +236,7 @@ for (const item of queue) {
     try {
       await switchControl(page, item.controlDir);
     } catch (err: any) {
-      results.push({
+      spoolRow({
         owner: item.entry.owner,
         repo: item.entry.repo,
         control: item.control.constructor,
@@ -229,7 +258,7 @@ for (const item of queue) {
     const t0 = Date.now();
     const { mounted, bannerError } = await waitForControlMount(page, CONTROL_LOAD_TIMEOUT_MS);
     if (!mounted) {
-      results.push({
+      spoolRow({
         owner: item.entry.owner,
         repo: item.entry.repo,
         control: item.control.constructor,
@@ -275,7 +304,7 @@ for (const item of queue) {
       }
 
       const status: ResultRow['status'] = scBanner ? 'fail' : (consoleErrors.length === 0 && pageErrors.length === 0 ? 'pass' : 'fail');
-      results.push({
+      spoolRow({
         owner: item.entry.owner,
         repo: item.entry.repo,
         control: item.control.constructor,

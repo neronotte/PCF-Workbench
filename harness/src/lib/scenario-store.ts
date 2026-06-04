@@ -578,9 +578,29 @@ export function captureScenarioFromStore(name: string, savedAt = new Date().toIS
 /**
  * Resolve property values by walking fieldBindings against the loaded entity
  * record. Pure (no store writes). Falls back to plain `propertyValues`.
+ *
+ * H3 — Defaults every manifest property that the scenario didn't list, so
+ * controls that read `context.parameters.<prop>.raw` for a prop the scenario
+ * forgot don't crash with `Cannot read properties of undefined (reading raw)`.
+ * Defaulted values come from `defaultValueFor()`, the same heuristic the
+ * scenario generator uses, so the typed `.raw` shape always matches what
+ * the property type expects.
  */
 export function resolveScenarioValues(scenario: TestScenario): Record<string, any> {
   const base = { ...(scenario.propertyValues ?? {}) };
+
+  // Backfill any manifest property the scenario omitted. This is harmless
+  // for scenarios that listed every property — only missing keys get filled.
+  const manifest = useHarnessStore.getState().manifest;
+  if (manifest?.properties) {
+    for (const prop of manifest.properties) {
+      if (!(prop.name in base)) {
+        const def = defaultValueFor(prop);
+        if (def !== undefined) base[prop.name] = def;
+      }
+    }
+  }
+
   const pc = scenario.pageContext;
   if (!scenario.fieldBindings || !pc?.entityId || !pc.typeName) return base;
 

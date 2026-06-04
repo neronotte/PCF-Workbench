@@ -6,6 +6,7 @@ import { App } from './App';
 import { installXrmFormShim } from './shim/xrm-form';
 import { installTestBridge } from './test-bridge';
 import { installReactVersionedAliases } from './loader/react-aliases';
+import { installForbiddenHeaderShim } from './shim/forbidden-headers';
 
 // Expose the harness's bundled React 18 as window.React/ReactDOM so that
 // when resolveReactVersion picks 'fluent-upgrade' (manifest R16/R17 → R18),
@@ -33,6 +34,13 @@ if (!w.ReactDOM) w.ReactDOM = { ...ReactDOM, ...ReactDOMClient };
 // crashing with "Reactv16 is not defined". Surfaced by the gallery
 // validation run on 2026-06-04.
 installReactVersionedAliases();
+
+// H4 — Silently drop browser-forbidden request headers (Accept-Encoding,
+// User-Agent, etc.) so deployed PCFs that try to set them don't generate a
+// "Refused to set unsafe header" console error. The real Dynamics platform
+// pre-sanitises these; we mimic that behaviour. Surfaced by the gallery
+// validation run on 2026-06-04.
+installForbiddenHeaderShim();
 
 installXrmFormShim();
 installTestBridge();
