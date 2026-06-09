@@ -13,6 +13,7 @@ import { rebaseDatesToToday } from './store/date-rebase';
 import { setResxStrings } from './shim/resources';
 import type { ManifestConfig } from './types/manifest';
 import { findScenarioByName, applyScenarioAsActive } from './lib/scenario-loader';
+import { bootstrapLegacyDataJson } from './lib/scenario-store';
 
 // Import from virtual module (provided by pcf-plugin).
 import { manifest as manifestData, bundlePath, cssFiles, resxStrings, isGalleryMode, controlDir, launchedAsGallery } from 'virtual:pcf-manifest';
@@ -82,6 +83,16 @@ export function App() {
       if (executeMocks && Object.keys(executeMocks).length > 0) {
         loadExecuteMocks(executeMocks);
       }
+
+      // H12 — Migrate legacy data.json into the mock entity store BEFORE the
+      // control mounts. Without this the control fires its first webAPI
+      // call(s) against an empty store and returns empty results — most
+      // visibly: BookingStatusTransitionControl loads its from-state but
+      // shows no transition buttons. ScenarioHeader does the same migration
+      // in its own first-mount effect, but that races with the control's
+      // first updateView; ScenarioHeader's bootstrap becomes the secondary
+      // safety-net once we've already done it here.
+      await bootstrapLegacyDataJson();
 
       // ?scenario=<name> — auto-apply a saved scenario before the control
       // mounts. Used by the loop CLI in CI so the harness boots in the
