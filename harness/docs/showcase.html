@@ -627,7 +627,7 @@ p{color:var(--neutral-30)}
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M6 10l3 3 6-6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <h3>Build Status Badges</h3>
-        <p>Visual indicators for compiled bundle, <code>data.json</code>, test scenarios, and thumbnails &mdash; spot issues before launching.</p>
+        <p>Visual indicators for compiled bundle, test scenarios, and thumbnails &mdash; spot issues before launching.</p>
       </div>
       <div class="feature-card">
         <div class="card-icon amber">
@@ -751,13 +751,13 @@ p{color:var(--neutral-30)}
   <div class="container">
     <div class="section-header reveal">
       <h2><span class="section-number">4</span>WebAPI Mock with OData</h2>
-      <p>A <code>data.json</code>-driven mock supporting full CRUD plus OData <code>$filter</code>, <code>$select</code>, <code>$orderby</code>, <code>$top</code>, and paging.</p>
+      <p>A scenario-driven mock supporting full CRUD plus OData <code>$filter</code>, <code>$select</code>, <code>$orderby</code>, <code>$top</code>, and paging. Mock entity records live <strong>inside test scenarios</strong> &mdash; legacy <code>data.json</code> files are auto-migrated into the active scenario on first launch and never read again.</p>
     </div>
     <div class="reveal">
       <div class="tab-strip" data-tabs="webapi">
         <button class="tab-btn active" data-tab="odata-ops">OData Filters</button>
         <button class="tab-btn" data-tab="crud-ops">CRUD Operations</button>
-        <button class="tab-btn" data-tab="data-format">data.json Format</button>
+        <button class="tab-btn" data-tab="data-format">Scenario data format</button>
       </div>
       <div class="tab-panel active" data-panel="odata-ops">
         <table class="odata-table">
@@ -787,7 +787,7 @@ p{color:var(--neutral-30)}
           </div>
           <div class="feature-card" style="padding:20px">
             <h3><code>retrieveMultipleRecords</code></h3>
-            <p>Full OData filter, select, orderby, top, and paging support against <code>data.json</code> entities.</p>
+            <p>Full OData filter, select, orderby, top, and paging support against the active scenario's entity table.</p>
           </div>
           <div class="feature-card" style="padding:20px">
             <h3><code>updateRecord</code> / <code>deleteRecord</code></h3>
@@ -797,7 +797,7 @@ p{color:var(--neutral-30)}
       </div>
       <div class="tab-panel" data-panel="data-format">
         <div class="code-block">
-          <span class="code-label">data.json</span>
+          <span class="code-label">scenario.dataRecords (or legacy data.json &mdash; auto-migrated)</span>
           <button class="code-copy" onclick="copyCode(this)">Copy</button>
 {<br>
 &nbsp;&nbsp;<span class="string">"bookableresourcebooking"</span>: [<br>
@@ -832,7 +832,7 @@ p{color:var(--neutral-30)}
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="white" stroke-width="1.5" fill="none"/><line x1="3" y1="8" x2="17" y2="8" stroke="white" stroke-width="1.5"/><line x1="8" y1="3" x2="8" y2="17" stroke="white" stroke-width="1.5"/></svg>
         </div>
         <h3>Records &amp; Columns</h3>
-        <p>Reads records from <code>data.json</code>. Exposes <code>getValue()</code>, <code>getFormattedValue()</code>, and record IDs through the standard <code>EntityRecord</code> interface.</p>
+        <p>Reads records from the active test scenario's entity table. Exposes <code>getValue()</code>, <code>getFormattedValue()</code>, and record IDs through the standard <code>EntityRecord</code> interface.</p>
       </div>
       <div class="feature-card">
         <div class="card-icon green">
@@ -1464,7 +1464,7 @@ p{color:var(--neutral-30)}
   <div class="container">
     <div class="section-header reveal">
       <h2><span class="section-number">21</span>Date Rebase &amp; Time Travel <span class="badge badge-new">Just shipped</span></h2>
-      <p>Test scenarios capture an <em>anchor date</em>. When a scenario is loaded, every date in <code>data.json</code> is rebased relative to today &mdash; so a saved scenario stays meaningful months later instead of decaying into stale "yesterday's tomorrow."</p>
+      <p>Test scenarios capture an <em>anchor date</em>. When a scenario is loaded, every date in its entity records is rebased relative to today &mdash; so a saved scenario stays meaningful months later instead of decaying into stale "yesterday's tomorrow."</p>
     </div>
     <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
       <div>
@@ -1515,8 +1515,8 @@ p{color:var(--neutral-30)}
 &nbsp;&nbsp;<span class="dir">out/</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">controls/MyControl/</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">bundle.js</span> &nbsp;<span class="comment"># Required: compiled control bundle</span><br>
-&nbsp;&nbsp;<span class="file">data.json</span> &nbsp;<span class="comment"># Mock entity data for WebAPI &amp; dataset shims</span><br>
-&nbsp;&nbsp;<span class="file">test-scenarios.json</span> &nbsp;<span class="comment"># Pre-configured harness test scenarios</span><br>
+&nbsp;&nbsp;<span class="file">test-scenarios.json</span> &nbsp;<span class="comment"># Source of truth for mock entity records + harness state</span><br>
+&nbsp;&nbsp;<span class="file">data.json</span> &nbsp;<span class="comment"># Legacy — auto-migrated into the active scenario at first launch (optional)</span><br>
 &nbsp;&nbsp;<span class="file">thumbnail.jpg</span> &nbsp;<span class="comment"># Gallery thumbnail (also .png, .gif)</span><br>
 &nbsp;&nbsp;<span class="file">.pcf-private</span> &nbsp;<span class="comment"># Optional: hide from gallery by default</span>
       </div>
@@ -1792,7 +1792,7 @@ p{color:var(--neutral-30)}
             <td><span class="compare-yes">✓</span></td>
           </tr>
           <tr>
-            <td>Mock data via <code>data.json</code></td>
+            <td>Mock data via test scenarios</td>
             <td><span class="compare-no">✕</span></td>
             <td><span class="compare-yes">✓</span></td>
           </tr>
@@ -2020,7 +2020,7 @@ p{color:var(--neutral-30)}
           <div style="width:40px;height:40px;border-radius:8px;background:linear-gradient(135deg,#7B61FF,#5B45CC);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">PW</div>
           <h3 style="font-size:1.1rem;margin:0"><code>pcf-workbench</code></h3>
         </div>
-        <p style="font-size:.9rem;color:var(--neutral-30);margin:0 0 10px">Operates this harness. Picks the launch mode, wires <code>data.json</code> and scenarios, drives the build &rarr; render &rarr; report loop, hands structured JSON back to the AI.</p>
+        <p style="font-size:.9rem;color:var(--neutral-30);margin:0 0 10px">Operates this harness. Picks the launch mode, wires test scenarios, drives the build &rarr; render &rarr; report loop, hands structured JSON back to the AI.</p>
         <ul style="font-size:.82rem;color:var(--neutral-40);line-height:1.6;padding-left:18px;margin:6px 0 0">
           <li>One-shot "render with scenario X and report what broke"</li>
           <li>Headless acceptance gate after any non-trivial code change</li>
@@ -2274,7 +2274,7 @@ git add test-scenarios.json
         <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px">The workflow auto-passes <code>--scenario "$PCF_SCENARIO"</code> to <code>pcf-harness loop</code>, which appends <code>?scenario=ci-smoke</code> to the harness URL. Property values, page entity, network, and device preset are all applied before the control mounts — exactly as if you'd clicked "Load" in the Scenarios panel.</p>
 
         <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">3. Open a pull request</h3>
-        <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow auto-triggers when a PR touches <code>**/*.ts</code>, <code>**/*.tsx</code>, <code>**/ControlManifest.Input.xml</code>, <code>**/*.css</code>, <code>**/data.json</code>, or <code>**/test-scenarios.json</code>. <code>workflow_dispatch</code> is also wired so you can run it on demand from the Actions tab.</p>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow auto-triggers when a PR touches <code>**/*.ts</code>, <code>**/*.tsx</code>, <code>**/ControlManifest.Input.xml</code>, <code>**/*.css</code>, or <code>**/test-scenarios.json</code>. <code>workflow_dispatch</code> is also wired so you can run it on demand from the Actions tab.</p>
 
         <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">4. Block merge on red</h3>
         <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow exits non-zero on <code>warn</code> or <code>fail</code>. Add it to your branch protection rules as a required check and broken PCFs cannot ship.</p>
@@ -2407,7 +2407,7 @@ Perf:   firstUpdateView: 180ms ·
             <span class="milestone-pill pill-shipped">Shipped</span>
           </div>
         </div>
-        <p class="ms-desc">Optional connected mode that replaces <code>data.json</code> with a real org via <code>pac auth</code>. Read-only by default. The killer feature: snapshot live data into a scenario for offline replay. M2.P7 adds an on-disk response cache so the second run of any scenario in live mode is offline-fast.</p>
+        <p class="ms-desc">Optional connected mode that replaces mock scenario data with a real org via <code>pac auth</code>. Read-only by default. The killer feature: snapshot live data into a scenario for offline replay. M2.P7 adds an on-disk response cache so the second run of any scenario in live mode is offline-fast.</p>
         <ul class="milestone-list">
           <li class="done">Live mode toggle using the active <code>pac auth</code> profile</li>
           <li class="done">Read-only by default; writes require per-call confirmation (M2.P4)</li>
@@ -2496,7 +2496,7 @@ Perf:   firstUpdateView: 180ms ·
         </div>
         <p class="ms-desc">Builds on the <a href="#" onclick="document.querySelector('[data-view=&quot;roadmap&quot;]').click();return false">M3.P1 AI Build Loop foundation</a>: turn the loop into a PR-time quality gate. Optional perf budgets per control, a copy-pasteable GitHub Actions workflow, and an auto-posted PR-comment summary.</p>
         <ul class="milestone-list">
-          <li>Optional <code>perfBudget</code> in <code>data.json</code>: <code>firstUpdateViewMs</code>, <code>avgRenderTimeMs</code>, <code>maxRenderTimeMs</code>, <code>renderCount</code>, <code>leaks</code></li>
+          <li>Optional <code>perfBudget</code> (per-control or per-scenario): <code>firstUpdateViewMs</code>, <code>avgRenderTimeMs</code>, <code>maxRenderTimeMs</code>, <code>renderCount</code>, <code>leaks</code></li>
           <li>Soft <code>warn</code> and hard <code>fail</code> thresholds; budget violations flip the loop to non-zero exit</li>
           <li>Report schema bump to v2: <code>budget.status</code> + <code>budget.violations[]</code> with actual / budget / delta</li>
           <li>Copy-pasteable <code>.github/workflows/pcf-loop.yml</code> &mdash; runs on PR, uploads report + screenshot as artifacts</li>
@@ -2586,7 +2586,7 @@ Perf:   firstUpdateView: 180ms ·
           <li><span class="milestone-size size-m" style="margin-right:6px">M</span><strong>AI Code Review</strong> &mdash; provider-agnostic AI bridge (Anthropic / OpenAI / Azure / Ollama / WebLLM / no-AI fallback) reviews PCF best practices, perf, a11y</li>
           <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>GitHub</strong> &mdash; browse a configured org, clone a PCF repo, build it, load it into the gallery</li>
           <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>Solution Push</strong> &mdash; push current control + test data into a Dataverse solution via PAC CLI</li>
-          <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>Schema-aware Data Generator</strong> &mdash; auto-fill <code>data.json</code> from a Dataverse table schema</li>
+          <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>Schema-aware Data Generator</strong> &mdash; auto-fill a test scenario's entity records from a Dataverse table schema</li>
           <li><span class="milestone-size size-s" style="margin-right:6px">S</span><strong>Telemetry</strong> &mdash; capture &amp; replay App Insights / Dataverse telemetry events</li>
         </ul>
       </div>
@@ -2601,7 +2601,7 @@ Perf:   firstUpdateView: 180ms ·
         </div>
         <p class="ms-desc">Smaller items, batched into a single release.</p>
         <ul class="milestone-list">
-          <li>Auto-generate sample <code>data.json</code> &amp; <code>test-scenarios.json</code> during scaffolding</li>
+          <li>Auto-generate a starter <code>test-scenarios.json</code> during scaffolding</li>
           <li>Scenario diff view (side-by-side compare)</li>
           <li>Bundle analyzer (treemap of <code>bundle.js</code>)</li>
           <li>Source-map debugging (TypeScript breakpoints)</li>
