@@ -48,13 +48,15 @@ const OWNER_FILTER = process.env.GALLERY_OWNER;
 const SKIP_VISUAL = process.env.GALLERY_SKIP_VISUAL === '1';
 
 const CONTROL_LOAD_TIMEOUT_MS = 25000;
+const CONTROL_LOAD_TIMEOUT_LARGE_MS = 60000;
+const LARGE_BUNDLE_BYTES = 2 * 1024 * 1024; // 2MB
 const SCENARIO_LOAD_WAIT_MS = 2500;
 
 interface BuildEntry {
   owner: string;
   repo: string;
   pcfProjectDir: string;
-  controls: Array<{ manifestPath: string; namespace: string; constructor: string; bundlePath?: string }>;
+  controls: Array<{ manifestPath: string; namespace: string; constructor: string; bundlePath?: string; bundleBytes?: number }>;
   installStatus: string;
   buildStatus: string;
 }
@@ -256,7 +258,12 @@ for (const item of queue) {
     await page.goto('/');
 
     const t0 = Date.now();
-    const { mounted, bannerError } = await waitForControlMount(page, CONTROL_LOAD_TIMEOUT_MS);
+    // H2 — Large bundles (PDF/Docx/canvas controls) take longer than 25s to
+    // download + parse on a cold harness. Auto-extend the mount timeout when
+    // we know the bundle is heavy.
+    const bundleSize = item.control.bundleBytes ?? 0;
+    const mountTimeout = bundleSize >= LARGE_BUNDLE_BYTES ? CONTROL_LOAD_TIMEOUT_LARGE_MS : CONTROL_LOAD_TIMEOUT_MS;
+    const { mounted, bannerError } = await waitForControlMount(page, mountTimeout);
     if (!mounted) {
       spoolRow({
         owner: item.entry.owner,

@@ -34,7 +34,7 @@ test("ConformanceTester: P1+P2 rows pass", async ({ page }) => {
     });
 
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     const root = page.locator("[data-test-id=ct-root]");
     await expect(root).toBeVisible({ timeout: 30_000 });
@@ -128,7 +128,7 @@ test("PropertyEditor: bound chip highlights after writeback", async ({ page }) =
     });
 
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     const chip = page.locator('[data-test-id="pe-bound-chip-record"]');
     const badge = page.locator('[data-test-id="pe-bound-updated-record"]');

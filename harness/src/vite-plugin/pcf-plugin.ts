@@ -1395,6 +1395,25 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
           res.end();
         }
       });
+
+      // H9 — JSON-404 catch-all for unhandled /api/* and /pcf-data/* paths.
+      // Without this, unmatched requests fall through to Vite's SPA index
+      // handler which returns text/html. Controls that fetch and JSON.parse
+      // (e.g. kuldipmaharjan/ImageViewerPCF) crash with "Unexpected token
+      // '<', \"<!DOCTYPE \"... is not valid JSON" instead of getting a clean
+      // 404 they can handle. Register LAST so all the specific routes above
+      // get first dibs.
+      server.middlewares.use((req, res, next) => {
+        if (!req.url) return next();
+        const u = req.url.split('?')[0];
+        if (u.startsWith('/api/') || u.startsWith('/pcf-data/')) {
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'not found', path: u }));
+          return;
+        }
+        next();
+      });
     },
   };
 }

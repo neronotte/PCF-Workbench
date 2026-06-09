@@ -68,6 +68,15 @@ export class ControlHost {
     this.onStateChange({ isLoaded: false, error: null });
 
     try {
+      // H8 — Install global Xrm shims (Xrm.WebApi, Xrm.Navigation, Xrm.Utility)
+      // BEFORE loading the bundle. Some community PCFs (e.g. rwilson504/PCFControls
+      // AuditControl) read Xrm.Utility.getGlobalContext() at module top-level, before
+      // init() is ever called. Installing the shims afterwards leaves those modules
+      // failing with "Cannot read properties of undefined (reading 'getGlobalContext')".
+      // The closures here just read this.getState() lazily, so they pick up state
+      // at call time, not install time — safe to install early.
+      installXrmGlobalShims(this.getState, getEntityData);
+
       // Load bundle (platform libs loaded first for virtual controls)
       const Ctor = await loadBundle(
         this.bundlePath,
@@ -101,10 +110,6 @@ export class ControlHost {
       this.context = createContext(this.manifest, this.getState, getEntityData, {
         requestRender: () => this.callUpdateView(),
       });
-
-      // Install global Xrm shims (Xrm.WebApi, Xrm.Navigation, Xrm.Utility)
-      // so 3rd-party controls that use globals instead of context APIs work correctly
-      installXrmGlobalShims(this.getState, getEntityData);
 
       // notifyOutputChanged callback — defer logging to avoid triggering
       // React re-renders during the control's synchronous render cycle.
