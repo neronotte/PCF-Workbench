@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest>
+  <control namespace="PcfWorkbench" constructor="StarRating" version="1.0.0" display-name-key="StarRating_Display_Key" description-key="StarRating_Desc_Key" control-type="virtual">
+    <external-service-usage enabled="false" />
+
+    <!-- Bound: the 0..N integer rating -->
+    <property name="value" display-name-key="Value_Display_Key" description-key="Value_Desc_Key" of-type="Whole.None" usage="bound" required="true" />
+
+    <!-- Input: total stars rendered (default 5) -->
+    <property name="maxStars" display-name-key="MaxStars_Display_Key" description-key="MaxStars_Desc_Key" of-type="Whole.None" usage="input" required="false" default-value="5" />
+
+    <!-- Input: whether clicking the selected star (or pressing 0) clears to 0 -->
+    <property name="allowClear" display-name-key="AllowClear_Display_Key" description-key="AllowClear_Desc_Key" of-type="TwoOptions" usage="input" required="false" default-value="true" />
+
+    <resources>
+      <code path="index.ts" order="1"/>
+      <platform-library name="React" version="16.14.0" />
+      <platform-library name="Fluent" version="9.68.0" />
+    </resources>
+  </control>
+</manifest>

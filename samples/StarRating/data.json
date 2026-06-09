@@ -1,0 +1,12 @@
+{
+  "record": "sr-record-0001",
+  "value": 3,
+  "maxStars": 5,
+  "allowClear": true,
+  "perfBudget": {
+    "firstUpdateViewMs": { "warn": 200, "fail": 800 },
+    "avgRenderTimeMs": { "warn": 60, "fail": 150 },
+    "leaks": 0,
+    "unimplementedCount": { "warn": 5, "fail": 20 }
+  }
+}

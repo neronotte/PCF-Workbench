@@ -1,0 +1,43 @@
+{
+  "$schema": "../../harness/docs/test-scenarios.schema.json",
+  "scenarios": [
+    {
+      "id": "default-empty",
+      "name": "Default — no rating",
+      "description": "Loads with value=null. Expects 5 outline stars, no console errors, role=radiogroup present.",
+      "propertyValues": { "value": null, "maxStars": 5, "allowClear": true }
+    },
+    {
+      "id": "rated-3",
+      "name": "Pre-rated 3 of 5",
+      "description": "Loads with value=3. Expects 3 filled + 2 outlined.",
+      "propertyValues": { "value": 3, "maxStars": 5, "allowClear": true }
+    },
+    {
+      "id": "clamp-high",
+      "name": "Value out-of-range (clamped)",
+      "description": "value=10, maxStars=5. Expects render-only clamp to 5 filled, no write-back.",
+      "propertyValues": { "value": 10, "maxStars": 5, "allowClear": true }
+    },
+    {
+      "id": "invalid-max",
+      "name": "Invalid maxStars",
+      "description": "maxStars=0 renders the inline error placeholder.",
+      "propertyValues": { "value": 0, "maxStars": 0, "allowClear": true }
+    },
+    {
+      "id": "disabled",
+      "name": "Disabled state",
+      "description": "isControlDisabled=true. Expects dimmed stars, no pointer/keyboard interaction.",
+      "propertyValues": { "value": 4, "maxStars": 5, "allowClear": true },
+      "controlState": { "disabled": true }
+    },
+    {
+      "id": "authoring-mode",
+      "name": "Designer preview (isAuthoringMode)",
+      "description": "Renders static 3-filled / 2-outlined preview + 'Rating control' label.",
+      "propertyValues": { "value": 0, "maxStars": 5, "allowClear": true },
+      "controlState": { "isAuthoringMode": true }
+    }
+  ]
+}

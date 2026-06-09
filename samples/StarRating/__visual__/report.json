@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "runId": "mq6osk79-izfvwp",
+  "capturedAt": "2026-06-09T13:39:51.237Z",
+  "durationMs": 3336,
+  "control": {
+    "path": "C:\\Github.Copilot\\PowerApps\\PCFWorkbench\\samples\\StarRating\\StarRating"
+  },
+  "build": {
+    "ok": true,
+    "skipped": true,
+    "durationMs": 0,
+    "errors": []
+  },
+  "harness": {
+    "url": "http://127.0.0.1:8182/?chrome=none",
+    "ok": true,
+    "consoleErrors": [],
+    "pageErrors": [],
+    "diagnostics": [],
+    "report": {
+      "schemaVersion": 1,
+      "capturedAt": 1781012391030,
+      "control": {
+        "namespace": "PcfWorkbench",
+        "constructor": "StarRating",
+        "version": "1.0.0",
+        "type": "virtual"
+      },
+      "lifecycle": {
+        "events": [
+          {
+            "method": "init",
+            "durationMs": 0,
+            "timestamp": 1781012390895
+          },
+          {
+            "method": "updateView",
+            "durationMs": 0.30000001192092896,
+            "timestamp": 1781012390903
+          },
+          {
+            "method": "destroy",
+            "durationMs": 0,
+            "timestamp": 1781012390963
+          }
+        ],
+        "initCalled": true,
+        "firstUpdateViewMs": 8
+      },
+      "performance": {
+        "renderCount": 1,
+        "lastRenderTimeMs": 0.30000001192092896,
+        "avgRenderTimeMs": 0.3,
+        "domNodeCount": 16,
+        "jsHeapUsedMB": 87.45193481445312
+      },
+      "leaks": [],
+      "webApi": {
+        "totalCalls": 0,
+        "errorCount": 0,
+        "calls": []
+      },
+      "logs": {
+        "recent": [
+          {
+            "category": "lifecycle",
+            "method": "init"
+          },
+          {
+            "category": "lifecycle",
+            "method": "updateView"
+          },
+          {
+            "category": "lifecycle",
+            "method": "destroy"
+          }
+        ],
+        "unimplementedCount": 0
+      }
+    },
+    "screenshot": "screenshot.png"
+  },
+  "budget": {
+    "status": "pass",
+    "source": "C:\\Github.Copilot\\PowerApps\\PCFWorkbench\\samples\\StarRating\\data.json",
+    "budget": {
+      "firstUpdateViewMs": {
+        "warn": 200,
+        "fail": 800
+      },
+      "avgRenderTimeMs": {
+        "warn": 60,
+        "fail": 150
+      },
+      "leaks": 0,
+      "unimplementedCount": {
+        "warn": 5,
+        "fail": 20
+      }
+    },
+    "violations": []
+  },
+  "summary": {
+    "status": "pass",
+    "headline": "control rendered cleanly",
+    "errors": 0,
+    "leaks": 0
+  }
+}

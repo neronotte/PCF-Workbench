@@ -318,7 +318,12 @@ async function runLoop(opts: LoopOpts): Promise<number> {
   let harnessReport: any = null;
 
   try {
-    await page.goto(url, { waitUntil: 'networkidle', timeout: opts.timeoutMs });
+    // 'load' fires when the document and its initial resources are done. We
+    // deliberately don't wait for 'networkidle' because Vite's HMR WebSocket
+    // keeps an open connection forever, so the page is never network-idle in
+    // dev. The real readiness signal is the test-bridge's __pcfwbHarnessReady
+    // flag below.
+    await page.goto(url, { waitUntil: 'load', timeout: opts.timeoutMs });
     // Wait for control to render (test-bridge sets __pcfwbHarnessReady on first
     // successful updateView).
     await page.waitForFunction(() => (window as any).__pcfwbHarnessReady === true, undefined, {

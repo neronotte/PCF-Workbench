@@ -14,17 +14,27 @@ These are real PCFs built with `pac pcf init` + `pcf-scripts`. They are committe
 ```
 samples/
 ├── README.md                       (this file)
-└── ConformanceTester/              real pac-pcf-init project
-    ├── ConformanceTester.pcfproj
-    ├── eslint.config.mjs
-    ├── package.json
-    ├── tsconfig.json
-    ├── data.json                   harness fixture seed
-    ├── test-scenarios.json         Playwright scenario manifest
-    └── ConformanceTester/
+├── ConformanceTester/              real pac-pcf-init project
+│   ├── ConformanceTester.pcfproj
+│   ├── eslint.config.mjs
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── data.json                   harness fixture seed
+│   ├── test-scenarios.json         Playwright scenario manifest
+│   └── ConformanceTester/
+│       ├── ControlManifest.Input.xml
+│       ├── index.ts
+│       └── ConformanceGrid.tsx
+└── StarRating/                     M10.P3 worked example — built end-to-end by AI
+    ├── BUILT_WITH_AI.md            prompts + workflow (start here)
+    ├── DESIGN.md                   AI-coauthored spec
+    ├── PLAN.md                     milestoned plan + acceptance gates
+    ├── data.json
+    ├── test-scenarios.json
+    └── StarRating/
         ├── ControlManifest.Input.xml
         ├── index.ts
-        └── ConformanceGrid.tsx
+        └── StarRating.tsx
 ```
 
 ## Building
@@ -50,6 +60,17 @@ Then open http://localhost:8181 and select the **Form** panel to seed attributes
 ## Conformance Tester
 
 A field-bound PCF whose UI is a grid of one row per shim API. Each row has a stable `data-test-id` (`ct-row-<id>-status`, `ct-run-<id>`) so Playwright can drive it deterministically. See `harness/docs/showcase.html` for the M1 roadmap and `.github/copilot-instructions.md` § Validation workflow for the per-phase Playwright gate.
+
+## StarRating — built end-to-end by AI
+
+The worked example for **M10.P3** of the PCF Workbench roadmap. A 0–5 star field-bound rating control written entirely via the `pcf-engineer` + `pcf-workbench` Copilot CLI skills, validated by the headless harness loop, with zero Dataverse round-trips during development. Read [`StarRating/BUILT_WITH_AI.md`](./StarRating/BUILT_WITH_AI.md) for the exact prompts, the design/plan workflow, and how the AI caught a real harness bug along the way.
+
+```powershell
+cd harness
+npx tsx bin/pcf-harness.ts loop --path ..\samples\StarRating\StarRating
+```
+
+Expected: `[summary] PASS — control rendered cleanly`, exit 0.
 
 ## Adding a new sample
 

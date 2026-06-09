@@ -11,12 +11,12 @@
 # 1. Scaffold
 pac pcf init --namespace YourCo --name MyControl --template field --framework react --run-npm-install
 
-# 2. Author with AI (Copilot CLI auto-loads pcf-engineer + pcf-workbench from this repo)
+# 2. Plan with AI — co-author DESIGN.md + PLAN.md, sign off, THEN build
 copilot
-> Build a MyControl that does X. Bind to Y. Validate with PCF Workbench against scenarios A/B/C.
+> I want a MyControl that does X. Bind to Y. Co-author DESIGN.md and a milestoned PLAN.md first, stop for my approval, then build and validate with PCF Workbench against scenarios A/B/C.
 
 # 3. The loop runs itself
-#    pcf-engineer writes the code → pcf-workbench builds, renders, reports → AI fixes → repeat
+#    pcf-engineer writes the code per the plan → pcf-workbench builds, renders, reports → AI fixes → repeat
 ```
 
 ---
@@ -110,31 +110,38 @@ pac pcf init --namespace YourCo --name MyControl --template field --framework re
 
 Pick `field` for property-bound (single value), `dataset` for grid/list controls. `--framework react` is the modern default.
 
-### 2. Drop a requirement on Copilot
+### 2. Plan first — don't jump to code
 
-From the repo root:
+The single biggest predictor of a clean AI build is a written plan you've signed off on *before* any code is generated. Ask Copilot to produce two artifacts and **stop**:
 
-```powershell
-cd C:\path\to\PCF-Workbench
-copilot
-```
+1. **`DESIGN.md`** — bound property, manifest properties, UX states (default / focus / disabled / error / empty), Fluent component choice, a11y notes, edge cases. You can write it yourself or co-author it with Copilot.
+2. **`PLAN.md`** — milestoned plan with todos and explicit acceptance criteria per milestone. e.g. M1: manifest + skeleton, M2: render + bound value, M3: validation + a11y, M4: scenarios + headless gate.
 
-Then describe what you want. The more concrete, the better:
+Review both, push back, iterate. *Only then* green-light the build. This catches half the bugs before a single line is written and gives you a checklist to verify against later.
 
 ```
-Build a MyControl in samples\MyControl\ that:
-- Binds to a SingleLine.Text field
-- Renders a Fluent v9 SearchBox with debounced onChange
-- Pushes the typed value back via notifyOutputChanged
-- Shows a small inline error when value.length > 100
-- Disabled state should grey out and stop input
+I want a MyControl in samples\MyControl that lets a user rate a record
+0-5 stars, writing back to a Whole.None field.
 
-Validate with PCF Workbench using two scenarios:
-1. empty starting value, type "hello", expect output "hello"
-2. starting value of 105 chars, expect error visible
+Before writing any code, co-author with me:
+  1. A short DESIGN.md covering bound property, manifest properties,
+     UX states, a11y, edge cases
+  2. A milestoned PLAN.md with todos and acceptance criteria per
+     milestone
+
+Stop after the plan. I'll review and approve before you build.
 ```
 
-`pcf-engineer` writes the manifest + `index.ts` + React component. `pcf-workbench` then:
+Copilot drafts both files, you tighten them, then say *"go"*. The skills now have an explicit contract to build against — not a vibe.
+
+### 3. Build — then let the loop close itself
+
+```
+Plan approved. Execute M1, then run the headless harness loop and
+report. Stop at the first failing milestone so I can review.
+```
+
+`pcf-engineer` writes the manifest + `index.ts` + React component per the plan. `pcf-workbench` then:
 
 1. Builds the control (`npm run build` in `samples\MyControl`)
 2. Launches the harness pointed at it
@@ -142,19 +149,21 @@ Validate with PCF Workbench using two scenarios:
 4. Captures screenshot + JSON report (pass / fail / N/A per row)
 5. Hands the result back to Copilot
 
-If anything fails, Copilot reads the report and patches the code. Loop until green.
+If anything fails, Copilot reads the report, patches the code, and reruns — ticking off the plan's todos as it goes. Loop until green.
 
-### 3. Iterate
+### 4. Iterate by extending the plan
 
-You don't need to babysit the loop. Just keep adding requirements:
+New work goes into the plan first, not straight into code:
 
 ```
-Also support a "max length" property in the manifest and read it via context.parameters.maxLength.raw
+Add a new milestone to PLAN.md: support a "max length" manifest
+property read via context.parameters.maxLength.raw. Update DESIGN.md's
+UX states if it affects the error path, then build once I approve.
 ```
 
 `pcf-engineer` updates the manifest (bumps version), updates `index.ts`, `pcf-workbench` rebuilds + reruns scenarios. Saved scenarios mean regressions get caught the moment they regress.
 
-### 4. Ship
+### 5. Ship
 
 When the harness is green and the scenarios pass, push to a real environment:
 
@@ -181,8 +190,9 @@ Use pcf-engineer + pcf-workbench to build a field-bound rating star control (1-5
 
 ```
 New control in samples\PercentBar — dataset, no framework.
-Renders each row as a horizontal bar where width = (row.value / maxValue) * 100%.
-Validate with one scenario of 5 rows, screenshot and confirm bars are visible and proportional.
+Plan first (DESIGN.md + PLAN.md), wait for my OK, then build:
+each row is a horizontal bar where width = (row.value / maxValue) * 100%.
+Validate with one scenario of 5 rows, screenshot and confirm proportional.
 ```
 
 ### Verbose (production-grade)

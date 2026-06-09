@@ -2039,18 +2039,31 @@ pac pcf init --namespace YourCo --name MyControl `
              --template field --framework react `
              --run-npm-install</pre>
 
-        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">3. Drop a requirement on Copilot</h3>
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">3. Plan first &mdash; don't jump to code</h3>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin:0 0 10px">The single biggest predictor of a clean AI build is a written plan you've signed off on <em>before</em> any code is generated. Ask Copilot to produce two artifacts and stop:</p>
+        <ol style="font-size:.88rem;color:var(--neutral-40);line-height:1.7;padding-left:20px;margin:0 0 12px">
+          <li><strong>Design document</strong> &mdash; bound property, manifest properties, UX states (default / focus / disabled / error / empty), Fluent component choice, a11y notes, edge cases. You can write it yourself or co-author it with Copilot.</li>
+          <li><strong>Milestoned plan with todos</strong> &mdash; M1: manifest + skeleton, M2: render + bound value, M3: validation + a11y, M4: scenarios + headless gate. Each milestone has explicit acceptance criteria.</li>
+        </ol>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin:0 0 10px">Review both, push back, iterate. <em>Only then</em> green-light the build. This catches half the bugs before a single line is written and gives you a checklist to verify against later.</p>
 <pre class="code-block"><span class="var">PS</span> C:\PCF-Workbench&gt; copilot
-<span class="string">&gt; Build a MyControl in samples\MyControl that:
-&gt;  - Binds to a SingleLine.Text field
-&gt;  - Renders a Fluent v9 SearchBox with debounced onChange
-&gt;  - Shows an inline error when value.length &gt; 100
-&gt;  - Disabled state greys out and stops input
+<span class="string">&gt; I want a MyControl in samples\MyControl that lets a user
+&gt; rate a record 0-5 stars, writing back to a Whole.None field.
 &gt;
-&gt; Validate with two scenarios:
-&gt;  1. empty value, type "hello", expect output "hello"
-&gt;  2. starting value of 105 chars, expect error visible</span></pre>
-        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px"><code>pcf-engineer</code> writes the manifest + <code>index.ts</code> + React component. <code>pcf-workbench</code> builds it, runs each scenario headlessly, captures screenshots + JSON, and hands the result back. If anything fails, Copilot patches the code and reruns. Loop until green &mdash; <em>no</em> Dataverse round-trip.</p>
+&gt; Before writing any code, co-author with me:
+&gt;  1. A short design doc (DESIGN.md) covering bound property,
+&gt;     manifest properties, UX states, a11y, edge cases
+&gt;  2. A milestoned plan (PLAN.md) with todos and acceptance
+&gt;     criteria per milestone
+&gt;
+&gt; Stop after the plan. I'll review and approve before you build.</span></pre>
+        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px">Copilot drafts both files, you tighten them, then say <em>"go"</em>. The skills now have an explicit contract to build against &mdash; not a vibe.</p>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">4. Build &mdash; then let the loop close itself</h3>
+<pre class="code-block"><span class="string">&gt; Plan approved. Execute M1, then run the headless
+&gt; harness loop and report. Stop at the first failing
+&gt; milestone so I can review.</span></pre>
+        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px"><code>pcf-engineer</code> writes the manifest + <code>index.ts</code> + React component per the plan. <code>pcf-workbench</code> builds it, runs each scenario headlessly, captures screenshots + JSON, and hands the result back. If anything fails, Copilot patches the code and reruns &mdash; ticking off the plan's todos as it goes. Loop until green &mdash; <em>no</em> Dataverse round-trip.</p>
       </div>
 
       <div>
@@ -2071,17 +2084,18 @@ pac pcf init --namespace YourCo --name MyControl `
           </tbody>
         </table></div>
 
-        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">Iterate by adding requirements</h3>
-<pre class="code-block"><span class="string">&gt; Also support a "max length" property in the
-&gt; manifest and read it via
-&gt; context.parameters.maxLength.raw</span></pre>
-        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:8px"><code>pcf-engineer</code> bumps the manifest version, updates <code>index.ts</code>; <code>pcf-workbench</code> rebuilds and reruns scenarios. Saved scenarios catch regressions instantly.</p>
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">Iterate by extending the plan</h3>
+<pre class="code-block"><span class="string">&gt; Add a new milestone to PLAN.md: support a "max length"
+&gt; manifest property read via context.parameters.maxLength.raw.
+&gt; Update DESIGN.md's UX states if it affects the error path,
+&gt; then build once I approve.</span></pre>
+        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:8px">New work goes into the plan first. <code>pcf-engineer</code> bumps the manifest version and updates <code>index.ts</code>; <code>pcf-workbench</code> rebuilds and reruns scenarios. Saved scenarios catch regressions instantly.</p>
 
-        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:24px">Sample 3-line prompt</h3>
-<pre class="code-block"><span class="string">&gt; New dataset control in samples\PercentBar.
-&gt; Each row = horizontal bar where width =
-&gt; (row.value / maxValue) * 100%. Screenshot
-&gt; with 5 rows and confirm proportional.</span></pre>
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:24px">Sample 3-line prompt &mdash; with plan-first baked in</h3>
+<pre class="code-block"><span class="string">&gt; New dataset control in samples\PercentBar: each row is
+&gt; a horizontal bar where width = (row.value / maxValue) * 100%.
+&gt; Plan first (DESIGN.md + PLAN.md), wait for my OK, then build
+&gt; and screenshot 5 rows to confirm proportional.</span></pre>
 
         <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:24px">Honest caveats</h3>
         <ul style="font-size:.82rem;color:var(--neutral-40);line-height:1.7;padding-left:18px;margin-top:6px">
@@ -2408,6 +2422,24 @@ Perf:   firstUpdateView: 180ms ·
           <li class="done">Walkthrough + remediation playbook (<code>ai-build-loop.md</code>)</li>
           <li class="done">Drop-in Copilot CLI / Claude system-prompt skill (<code>ai-loop-skill.md</code>)</li>
           <li class="done">Worked example: real PASS exhibit captured against ConformanceTester</li>
+        </ul>
+      </div>
+
+      <div class="milestone-card shipped">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M10</span>AI-First Authoring Path</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-m">M</span>
+            <span class="milestone-pill pill-shipped">Shipped</span>
+          </div>
+        </div>
+        <p class="ms-desc">Make the AI build loop a first-class onboarding path: <code>git clone</code> + <code>copilot</code> and the skills auto-load. Backed by a documented plan-first workflow (design doc &rarr; milestoned plan &rarr; sign-off &rarr; build) and a worked end-to-end example so partners can read the recipe rather than guess at it.</p>
+        <ul class="milestone-list">
+          <li class="done"><strong>Skills in repo</strong> &mdash; <code>pcf-engineer</code> + <code>pcf-workbench</code> ship under <code>.copilot/skills/</code>; auto-register when Copilot CLI runs inside the clone</li>
+          <li class="done"><strong><code>BUILDING.md</code></strong> &mdash; AI-first dev workflow as the public landing page: scaffold &rarr; plan &rarr; build &rarr; iterate &rarr; ship</li>
+          <li class="done"><strong>Plan-first contract</strong> &mdash; <code>DESIGN.md</code> + <code>PLAN.md</code> co-authored before any code, milestones with hard acceptance gates</li>
+          <li class="done"><strong><code>samples/StarRating</code></strong> &mdash; end-to-end sample built entirely via the AI loop, validated by the headless harness, with <code>BUILT_WITH_AI.md</code> capturing the exact prompts</li>
+          <li class="done">Loop CLI hardening: fixed <code>page.goto</code> waiting on <code>networkidle</code> (broken under Vite HMR) &mdash; surfaced by the StarRating dogfood run</li>
         </ul>
       </div>
     </div>
