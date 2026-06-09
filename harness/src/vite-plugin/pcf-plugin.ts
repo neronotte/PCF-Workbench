@@ -1276,6 +1276,53 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
         next();
       });
 
+      // H5 — Serve image / font / generic resources declared by the manifest
+      // (<img path="..."/>, plus anything controls fetch from their own
+      // directory). Path-restricted to controlDir + outDir to prevent directory
+      // traversal. Without this, controls that reference image assets via
+      // relative paths get the SPA index.html fallback and fail with cryptic
+      // MIME / decode errors.
+      server.middlewares.use('/pcf-resource', (req, res, next) => {
+        if (!state.controlDir || !req.url) return next();
+        const urlPath = decodeURIComponent(req.url.split('?')[0]);
+        // Block traversal — relative path only, no ..
+        if (urlPath.includes('..')) {
+          res.statusCode = 403;
+          res.end();
+          return;
+        }
+        const candidates = [
+          path.join(state.controlDir, urlPath),
+          state.outDir ? path.join(state.outDir, urlPath) : '',
+        ].filter(Boolean);
+        for (const filePath of candidates) {
+          if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            const ext = path.extname(filePath).toLowerCase();
+            const mime: Record<string, string> = {
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.gif': 'image/gif',
+              '.svg': 'image/svg+xml',
+              '.webp': 'image/webp',
+              '.ico': 'image/x-icon',
+              '.woff': 'font/woff',
+              '.woff2': 'font/woff2',
+              '.ttf': 'font/ttf',
+              '.otf': 'font/otf',
+              '.eot': 'application/vnd.ms-fontobject',
+            };
+            res.setHeader('Content-Type', mime[ext] ?? 'application/octet-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            fs.createReadStream(filePath).pipe(res);
+            return;
+          }
+        }
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'not found', path: urlPath }));
+      });
+
       // Workspace root API — get or change the gallery scan root
       server.middlewares.use('/api/workspace-root', (req, res) => {
         if (req.method === 'GET') {

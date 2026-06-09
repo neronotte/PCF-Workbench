@@ -4,7 +4,7 @@ import type { ManifestConfig, ManifestProperty, EnumValue, FeatureUsage, Manifes
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
-  isArray: (name) => ['property', 'data-set', 'uses-feature', 'code', 'css', 'platform-library', 'resx', 'value', 'type-group', 'type'].includes(name),
+  isArray: (name) => ['property', 'data-set', 'uses-feature', 'code', 'css', 'img', 'platform-library', 'resx', 'value', 'type-group', 'type'].includes(name),
 });
 
 /** Parse a ControlManifest.Input.xml string into a ManifestConfig. */
@@ -65,6 +65,13 @@ export function parseManifest(xmlContent: string): ManifestConfig {
     css: (res.css ?? []).map((c: any) => ({
       path: c['@_path'],
       order: parseInt(c['@_order'] ?? '1', 10),
+    })),
+    // H5 — <img> resource declarations. Many community PCFs (e.g. icon/avatar
+    // controls) reference image assets relative to the control directory. The
+    // pcf-plugin serves these via /pcf-resource/* — see also `images` getter
+    // in ManifestResources.
+    images: (res.img ?? []).map((c: any) => ({
+      path: c['@_path'],
     })),
     platformLibraries: (res['platform-library'] ?? []).map((pl: any) => ({
       name: pl['@_name'],

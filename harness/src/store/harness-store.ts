@@ -42,6 +42,12 @@ export interface LogEntry {
    *    real behaviour will misbehave
    */
   coverage?: CoverageStatus;
+  /**
+   * H7 — Scenario active when this entry was recorded. Stamped by `addLogEntry`
+   * from `activeScenarioName`. Lets the Console panel group / filter entries
+   * by scenario when reviewing what a control did under each test condition.
+   */
+  scenario?: string;
 }
 
 export interface WebApiCallRecord {
@@ -725,7 +731,9 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   addLogEntry: (entry) => set(s => ({
     logEntries: [
       ...s.logEntries.slice(-499), // keep last 500
-      { ...entry, id: nextLogId++, timestamp: Date.now() },
+      // H7 — auto-stamp the active scenario so the Console panel can later
+      // attribute each entry to the scenario that produced it.
+      { ...entry, id: nextLogId++, timestamp: Date.now(), scenario: s.activeScenarioName ?? undefined },
     ],
   })),
   clearLog: () => set({ logEntries: [] }),

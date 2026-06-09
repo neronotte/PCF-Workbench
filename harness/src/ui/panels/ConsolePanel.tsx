@@ -59,6 +59,15 @@ const useStyles = makeStyles({
     color: '#107c10',
     marginLeft: '8px',
   },
+  scenarioTag: {
+    fontSize: '9px',
+    padding: '0 6px',
+    marginRight: '6px',
+    borderRadius: '3px',
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground3,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
 });
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -185,6 +194,14 @@ export function ConsolePanel() {
         {filteredEntries.map(entry => (
           <div key={entry.id} className={styles.entry}>
             <span className={styles.timestamp}>{formatTime(entry.timestamp)}</span>
+            {entry.scenario && (
+              <span
+                className={styles.scenarioTag}
+                title={`Recorded while scenario "${entry.scenario}" was active`}
+              >
+                {entry.scenario}
+              </span>
+            )}
             <span
               className={styles.category}
               style={{ color: CATEGORY_COLORS[entry.category] ?? '#666' }}

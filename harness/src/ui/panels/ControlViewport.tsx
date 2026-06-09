@@ -8,6 +8,26 @@ import { ControlErrorBanner } from '../ControlErrorBanner';
 import { registerHarnessHost } from '../../test-bridge';
 import { useBuildStatus } from '../../store/build-watch-client';
 
+/**
+ * H2 — Spinner that escalates its label after 15s. Large bundles (PDF, canvas,
+ * unmodified Tailwind builds) routinely take 20-40s to evaluate; the bare
+ * "Loading control..." spinner left users assuming the harness had hung.
+ */
+function SlowLoadSpinner() {
+  const [phase, setPhase] = useState<'normal' | 'slow' | 'very-slow'>('normal');
+  useEffect(() => {
+    const slow = setTimeout(() => setPhase('slow'), 15_000);
+    const verySlow = setTimeout(() => setPhase('very-slow'), 45_000);
+    return () => { clearTimeout(slow); clearTimeout(verySlow); };
+  }, []);
+  const label = phase === 'normal'
+    ? 'Loading control...'
+    : phase === 'slow'
+      ? 'Still loading… large bundles may take 30s+'
+      : 'Loading is taking unusually long — check the browser console for errors';
+  return <Spinner label={label} />;
+}
+
 const useStyles = makeStyles({
   root: {
     display: 'flex',
@@ -422,7 +442,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
             )}
             {!hostState.isLoaded && !hostState.error && (
               <div className={styles.center}>
-                <Spinner label="Loading control..." />
+                <SlowLoadSpinner />
               </div>
             )}
             <div ref={containerRef} className={mergeClasses(styles.controlContainer, isStale ? styles.staleControlContainer : undefined)} data-test-id="pcf-control-container" data-stale={isStale ? 'true' : undefined} style={isFullBleed ? {

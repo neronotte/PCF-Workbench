@@ -68,6 +68,14 @@ export class ControlHost {
     this.onStateChange({ isLoaded: false, error: null });
 
     try {
+      // H6 — Stash the expected control name for the bundle-loader's error path
+      // so its diagnostic hint can say "expected: Namespace.Constructor" rather
+      // than the generic message. Cleared when load() exits.
+      (window as any).__pcfwbExpectedControl = {
+        namespace: this.manifest.namespace,
+        constructor: this.manifest.constructor,
+      };
+
       // H8 — Install global Xrm shims (Xrm.WebApi, Xrm.Navigation, Xrm.Utility)
       // BEFORE loading the bundle. Some community PCFs (e.g. rwilson504/PCFControls
       // AuditControl) read Xrm.Utility.getGlobalContext() at module top-level, before

@@ -44,6 +44,12 @@ export interface FeatureUsage {
 export interface ManifestResources {
   code: { path: string; order: number }[];
   css: { path: string; order: number }[];
+  /**
+   * Image assets declared via <img path="..."/> in the manifest. Served by
+   * the Vite plugin under `/pcf-resource/*` so controls can reference them
+   * with the same paths they'd use at runtime in Dataverse.
+   */
+  images: { path: string }[];
   platformLibraries: { name: string; version: string }[];
   /**
    * Fluent UI majors actually referenced by the compiled bundle (detected by
