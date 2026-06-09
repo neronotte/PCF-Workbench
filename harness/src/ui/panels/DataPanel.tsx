@@ -612,6 +612,8 @@ function LiveModeControls() {
 
       <SnapshotLiveToMockButton />
 
+      <LiveCachePanel />
+
       <LiveMetadataInspector />
 
       {error && (
@@ -631,7 +633,172 @@ function LiveModeControls() {
       <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3 }}>
         Live mode: reads via <code>context.webAPI</code> are direct; writes
         prompt a per-call confirm dialog (M2.P4). Metadata is fetched from{' '}
-        <code>EntityDefinitions</code> on first access (M2.P5).
+        <code>EntityDefinitions</code> on first access (M2.P5). GET responses
+        are cached on disk for offline-fast reruns (M2.P7).
+      </div>
+    </div>
+  );
+}
+
+/**
+ * M2.P7 — Compact live-cache stats + clear button. Hits the proxy admin
+ * endpoint at /__pcf/dv/cache to show entries / hit-rate, and lets the user
+ * clear the on-disk cache (useful when org data has actually changed
+ * server-side and stale replays would mislead).
+ */
+interface LiveCacheStats {
+  enabled: boolean;
+  ttlSeconds: number;
+  hits: number;
+  misses: number;
+  stores: number;
+  invalidations: number;
+  bypasses: number;
+  staleEvictions: number;
+  entries: number;
+  sizeBytes: number;
+  rootDir: string;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function LiveCachePanel() {
+  const [stats, setStats] = useState<LiveCacheStats | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch('/__pcf/dv/cache', { method: 'GET' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setStats(await r.json() as LiveCacheStats);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const clear = useCallback(async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch('/__pcf/dv/cache', { method: 'DELETE' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const out = await r.json() as { cleared: number; stats: LiveCacheStats };
+      setStats(out.stats);
+      setFlash(`Cleared ${out.cleared} entr${out.cleared === 1 ? 'y' : 'ies'}.`);
+      window.setTimeout(() => setFlash(null), 4000);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  if (!stats) {
+    return (
+      <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3 }} data-test-id="live-cache-panel">
+        {err ? <span style={{ color: tokens.colorPaletteRedForeground1 }}>Cache stats unavailable: {err}</span> : 'Loading cache stats…'}
+      </div>
+    );
+  }
+
+  const total = stats.hits + stats.misses;
+  const hitRate = total > 0 ? Math.round((stats.hits / total) * 100) : 0;
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+        borderRadius: 4,
+        padding: '8px 10px',
+        fontSize: 11,
+        color: tokens.colorNeutralForeground2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}
+      data-test-id="live-cache-panel"
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <strong style={{ fontSize: 12 }}>Live response cache</strong>
+          <Badge
+            appearance={stats.enabled ? 'filled' : 'outline'}
+            color={stats.enabled ? 'success' : 'subtle'}
+            size="small"
+          >
+            {stats.enabled ? 'on' : 'off'}
+          </Badge>
+          {stats.ttlSeconds > 0 && (
+            <Badge appearance="outline" size="small" title={`Entries older than ${stats.ttlSeconds}s are evicted`}>
+              TTL {stats.ttlSeconds}s
+            </Badge>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <Button
+            size="small"
+            appearance="subtle"
+            icon={<ArrowClockwise24Regular />}
+            onClick={() => void refresh()}
+            disabled={busy}
+            aria-label="Refresh cache stats"
+            title="Refresh cache stats"
+          />
+          <Button
+            size="small"
+            appearance="subtle"
+            icon={<Delete16Regular />}
+            onClick={() => void clear()}
+            disabled={busy || stats.entries === 0}
+            title="Clear all cached responses"
+            data-test-id="live-cache-clear"
+          >
+            Clear
+          </Button>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 10, rowGap: 2 }}>
+        <span style={{ color: tokens.colorNeutralForeground3 }}>Entries</span>
+        <span data-test-id="live-cache-entries">{stats.entries} <span style={{ color: tokens.colorNeutralForeground3 }}>({formatBytes(stats.sizeBytes)})</span></span>
+        <span style={{ color: tokens.colorNeutralForeground3 }}>Hit rate</span>
+        <span data-test-id="live-cache-hitrate">{total > 0 ? `${hitRate}%` : '—'} <span style={{ color: tokens.colorNeutralForeground3 }}>({stats.hits}/{total})</span></span>
+        {stats.stores > 0 && (<>
+          <span style={{ color: tokens.colorNeutralForeground3 }}>Stored</span>
+          <span>{stats.stores}</span>
+        </>)}
+        {stats.invalidations > 0 && (<>
+          <span style={{ color: tokens.colorNeutralForeground3 }}>Invalidated</span>
+          <span>{stats.invalidations}</span>
+        </>)}
+        {stats.staleEvictions > 0 && (<>
+          <span style={{ color: tokens.colorNeutralForeground3 }}>Stale evictions</span>
+          <span>{stats.staleEvictions}</span>
+        </>)}
+        {stats.bypasses > 0 && (<>
+          <span style={{ color: tokens.colorNeutralForeground3 }}>Bypasses</span>
+          <span>{stats.bypasses}</span>
+        </>)}
+      </div>
+      {flash && (
+        <div style={{ color: tokens.colorPaletteGreenForeground1, fontSize: 11 }} role="status">{flash}</div>
+      )}
+      {err && (
+        <div style={{ color: tokens.colorPaletteRedForeground1, fontSize: 11 }}>{err}</div>
+      )}
+      <div style={{ fontSize: 10, color: tokens.colorNeutralForeground4 }}>
+        GETs replay from <code>{stats.rootDir}</code>. Writes invalidate by entity set. Override via env <code>PCF_LIVE_CACHE=off</code> / <code>PCF_LIVE_CACHE_TTL_SECONDS=N</code>.
       </div>
     </div>
   );

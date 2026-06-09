@@ -6,6 +6,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { URL } from 'node:url';
 
+import * as liveCache from './live-cache';
+
 import {
   PublicClientApplication,
   type AccountInfo,
@@ -469,6 +471,37 @@ async function forwardToDataverse(
       `Method ${method} not allowed by Dataverse proxy.`,
     );
   }
+
+  /* ---- M2.P7: cache fast-path for GETs ----------------------------------- */
+  const directive = liveCache.parseCacheDirective(req.headers['x-pcf-cache']);
+  if (method === 'GET' && directive !== 'bypass') {
+    const cached = liveCache.getCached(orgUrl, method, upstreamPath);
+    if (cached) {
+      res.statusCode = cached.status;
+      for (const [h, v] of Object.entries(cached.headers)) res.setHeader(h, v);
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('X-PCF-Cache', 'hit');
+      const buf = Buffer.from(cached.body, 'base64');
+      res.end(buf);
+      logProxy('GET', upstreamPath, cached.status, buf.byteLength);
+      return;
+    }
+    if (directive === 'only') {
+      res.statusCode = 504;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('X-PCF-Cache', 'miss');
+      res.end(JSON.stringify({
+        error: 'cache-miss',
+        message: 'x-pcf-cache: only requested but no cached entry exists for this request',
+      }));
+      logProxy('GET', upstreamPath, 504, 0);
+      return;
+    }
+  }
+  if (method === 'GET' && directive === 'bypass') {
+    liveCache.noteBypass();
+  }
+
   const auth = await acquireDataverseToken(orgUrl);
   const target = new URL(upstreamPath, normalizeOrgUrl(orgUrl) + '/');
 
@@ -519,11 +552,30 @@ async function forwardToDataverse(
           res.statusCode = status;
           // Pass through content-type / OData headers but never set-cookie.
           // OData-EntityId is critical for create — it carries the new id.
+          const passthroughHeaders: Record<string, string> = {};
           for (const h of ['content-type', 'odata-version', 'preference-applied', 'odata-entityid', 'location', 'etag']) {
             const v = upRes.headers[h];
-            if (typeof v === 'string') res.setHeader(h, v);
+            if (typeof v === 'string') {
+              res.setHeader(h, v);
+              passthroughHeaders[h] = v;
+            }
           }
           res.setHeader('Cache-Control', 'no-store');
+
+          /* ---- M2.P7: write-through + invalidation -------------------- */
+          if (method === 'GET' && status >= 200 && status < 300) {
+            liveCache.putCached(orgUrl, method, upstreamPath, status, passthroughHeaders, body);
+            res.setHeader('X-PCF-Cache', directive === 'bypass' ? 'bypass' : 'miss');
+          } else if (method !== 'GET' && status >= 200 && status < 300) {
+            const entitySet = liveCache.extractEntitySet(upstreamPath);
+            if (entitySet) {
+              const cleared = liveCache.invalidateEntitySet(orgUrl, entitySet);
+              if (cleared > 0) {
+                res.setHeader('X-PCF-Cache', `invalidated:${cleared}`);
+              }
+            }
+          }
+
           res.end(body);
           logProxy(method, upstreamPath, status, body.byteLength);
           resolve();
@@ -595,6 +647,22 @@ export function dataverseProxyMiddleware(): Connect.NextHandleFunction {
         // OData path + remaining query.
         const upstreamPath = u.pathname.replace(`${PROXY_BASE}/api`, '/api') + (u.search || '');
         return await forwardToDataverse(req, res, org, upstreamPath);
+      }
+
+      // GET/DELETE /__pcf/dv/cache — M2.P7 admin endpoint
+      if (url === `${PROXY_BASE}/cache` || url.startsWith(`${PROXY_BASE}/cache?`)) {
+        if (req.method === 'GET') {
+          sendJson(res, 200, liveCache.getStats());
+          logProxy('GET', '/cache', 200, 0);
+          return;
+        }
+        if (req.method === 'DELETE') {
+          const removed = liveCache.clearAll();
+          sendJson(res, 200, { cleared: removed, stats: liveCache.getStats() });
+          logProxy('DELETE', '/cache', 200, 0);
+          return;
+        }
+        throw new ProxyError('method-not-allowed', 'GET or DELETE only');
       }
 
       // Unknown sub-route under /__pcf/dv/*

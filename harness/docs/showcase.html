@@ -505,7 +505,7 @@ p{color:var(--neutral-30)}
     </button>
     <button class="view-tab" data-view="ai-loop">
       <svg class="tab-icon" viewBox="0 0 20 20" fill="none"><path d="M10 2v3M10 15v3M2 10h3M15 10h3M4.5 4.5l2 2M13.5 13.5l2 2M4.5 15.5l2-2M13.5 6.5l2-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
-      AI Build Loop
+      Building with AI
     </button>
     <button class="view-tab" data-view="roadmap">
       <svg class="tab-icon" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="5" cy="5" r="1.6" fill="currentColor"/><circle cx="9" cy="10" r="1.6" fill="currentColor"/><circle cx="13" cy="15" r="1.6" fill="currentColor"/></svg>
@@ -1966,13 +1966,183 @@ p{color:var(--neutral-30)}
 <!-- ════════════════════════════════════════════════════════ -->
 <!-- ════════════ VIEW 3: AI BUILD LOOP ═══════════════════════ -->
 <!-- ════════════════════════════════════════════════════════ -->
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- ════════════ VIEW 3: AI BUILD LOOP ═══════════════════════ -->
+<!-- ════════════════════════════════════════════════════════ -->
 <div class="view-panel" data-view-panel="ai-loop">
 
+<!-- ── Section A: Build a NEW control with AI ─── -->
 <section style="background:var(--neutral-100);border-bottom:1px solid var(--neutral-90)">
   <div class="container">
     <div class="why-hero reveal">
+      <span class="badge badge-new" style="margin-bottom:12px;display:inline-block">Section 1 of 2 &mdash; Building</span>
+      <h2>Build entire PCFs with AI &mdash; not just test them</h2>
+      <p>PCF Workbench ships <strong>two Copilot CLI skills</strong> that pair up to drive the full <em>requirement &rarr; code &rarr; render &rarr; verify &rarr; ship</em> loop on your laptop. <code>pcf-engineer</code> authors and reviews the code, <code>pcf-workbench</code> runs the harness and reports back &mdash; in a tight feedback loop where the AI fixes its own mistakes before you ever push to Dataverse. See <a href="https://github.com/jaduplesms/PCF-Workbench/blob/main/BUILDING.md" target="_blank" rel="noopener"><code>BUILDING.md</code></a> for the full guide.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+
+    <div class="reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:48px">
+      <div style="padding:24px;background:var(--neutral-100);border:1px solid var(--neutral-90);border-radius:var(--radius-m)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:40px;height:40px;border-radius:8px;background:linear-gradient(135deg,#0078D4,#106EBE);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">PE</div>
+          <h3 style="font-size:1.1rem;margin:0"><code>pcf-engineer</code></h3>
+        </div>
+        <p style="font-size:.9rem;color:var(--neutral-30);margin:0 0 10px">The senior PCF engineer in your terminal. Knows the official Microsoft Learn API surface plus the hard-won patterns Microsoft doesn't document.</p>
+        <ul style="font-size:.82rem;color:var(--neutral-40);line-height:1.6;padding-left:18px;margin:6px 0 0">
+          <li>Scaffolds manifests, <code>index.ts</code>, virtual vs standard controls</li>
+          <li>Reviews for correctness, a11y, perf, 30+ antipatterns</li>
+          <li>Field-bound, dataset, and lookup patterns</li>
+          <li>Field Service Mobile / offline considerations</li>
+          <li><code>isAuthoringMode</code> design-time UX (InfoCard-style previews)</li>
+          <li>Fluent UI v8 / v9 integration, lifecycle correctness, no leaks</li>
+        </ul>
+      </div>
+      <div style="padding:24px;background:var(--neutral-100);border:1px solid var(--neutral-90);border-radius:var(--radius-m)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:40px;height:40px;border-radius:8px;background:linear-gradient(135deg,#7B61FF,#5B45CC);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">PW</div>
+          <h3 style="font-size:1.1rem;margin:0"><code>pcf-workbench</code></h3>
+        </div>
+        <p style="font-size:.9rem;color:var(--neutral-30);margin:0 0 10px">Operates this harness. Picks the launch mode, wires <code>data.json</code> and scenarios, drives the build &rarr; render &rarr; report loop, hands structured JSON back to the AI.</p>
+        <ul style="font-size:.82rem;color:var(--neutral-40);line-height:1.6;padding-left:18px;margin:6px 0 0">
+          <li>One-shot "render with scenario X and report what broke"</li>
+          <li>Headless acceptance gate after any non-trivial code change</li>
+          <li>Device / network emulation (desktop, tablet, mobile, 3G, offline)</li>
+          <li>Leak triage &mdash; diffs listeners/timers/observers across <code>init</code>/<code>destroy</code></li>
+          <li>Build watcher &mdash; rebuild your sample, harness HMRs automatically</li>
+          <li>Scenario replay so regressions get caught the moment they regress</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="usage-grid reveal" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start">
+
+      <div>
+        <h3 style="font-size:1.15rem;margin-bottom:8px">1. One-time setup</h3>
+        <p style="font-size:.92rem;color:var(--neutral-30);margin-bottom:0">Clone the repo &mdash; both skills auto-load when you run <code>copilot</code> inside it. No install step.</p>
+<pre class="code-block"><span class="comment"># Power Platform CLI + Copilot CLI</span>
+dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+npm install -g @github/copilot
+
+<span class="comment"># Clone &mdash; skills in .copilot/skills/ auto-register</span>
+git clone https://github.com/jaduplesms/PCF-Workbench.git
+cd PCF-Workbench</pre>
+        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px">Optional &mdash; copy into your user-scope to use them in <em>every</em> workspace: <code>Copy-Item -Recurse -Force .\.copilot\skills\* "$env:USERPROFILE\.copilot\skills\"</code></p>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">2. Scaffold a new control</h3>
+<pre class="code-block">mkdir samples\MyControl
+cd samples\MyControl
+pac pcf init --namespace YourCo --name MyControl `
+             --template field --framework react `
+             --run-npm-install</pre>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">3. Drop a requirement on Copilot</h3>
+<pre class="code-block"><span class="var">PS</span> C:\PCF-Workbench&gt; copilot
+<span class="string">&gt; Build a MyControl in samples\MyControl that:
+&gt;  - Binds to a SingleLine.Text field
+&gt;  - Renders a Fluent v9 SearchBox with debounced onChange
+&gt;  - Shows an inline error when value.length &gt; 100
+&gt;  - Disabled state greys out and stops input
+&gt;
+&gt; Validate with two scenarios:
+&gt;  1. empty value, type "hello", expect output "hello"
+&gt;  2. starting value of 105 chars, expect error visible</span></pre>
+        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px"><code>pcf-engineer</code> writes the manifest + <code>index.ts</code> + React component. <code>pcf-workbench</code> builds it, runs each scenario headlessly, captures screenshots + JSON, and hands the result back. If anything fails, Copilot patches the code and reruns. Loop until green &mdash; <em>no</em> Dataverse round-trip.</p>
+      </div>
+
+      <div>
+        <h3 style="font-size:1.15rem;margin-bottom:8px">Why this changes the workflow</h3>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.82rem;color:var(--neutral-30)">
+          <thead><tr style="border-bottom:1px solid var(--neutral-90)">
+            <th style="text-align:left;padding:8px 6px;font-weight:600;color:var(--neutral-20)">Step</th>
+            <th style="text-align:left;padding:8px 6px;font-weight:600;color:var(--neutral-20)">Without AI loop</th>
+            <th style="text-align:left;padding:8px 6px;font-weight:600;color:var(--neutral-20)">With AI loop</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--neutral-90)"><td style="padding:8px 6px">Decide bound property</td><td style="padding:8px 6px">Manual research</td><td style="padding:8px 6px"><code>pcf-engineer</code> enforces conventions</td></tr>
+            <tr style="border-bottom:1px solid var(--neutral-90)"><td style="padding:8px 6px">Wire lifecycle</td><td style="padding:8px 6px">Error-prone</td><td style="padding:8px 6px">Correct first time</td></tr>
+            <tr style="border-bottom:1px solid var(--neutral-90)"><td style="padding:8px 6px">Build + render</td><td style="padding:8px 6px"><code>npm run build</code> + solution import</td><td style="padding:8px 6px">Watcher rebuilds + HMR</td></tr>
+            <tr style="border-bottom:1px solid var(--neutral-90)"><td style="padding:8px 6px">Test scenarios</td><td style="padding:8px 6px">Click through Dataverse forms</td><td style="padding:8px 6px">Saved JSON scenarios replay instantly</td></tr>
+            <tr style="border-bottom:1px solid var(--neutral-90)"><td style="padding:8px 6px">Diagnose leaks / a11y</td><td style="padding:8px 6px">DevTools by hand</td><td style="padding:8px 6px">Harness flags in-panel</td></tr>
+            <tr><td style="padding:8px 6px">Pre-ship verify</td><td style="padding:8px 6px">Hope for the best</td><td style="padding:8px 6px">Headless gate &mdash; CI-ready</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">Iterate by adding requirements</h3>
+<pre class="code-block"><span class="string">&gt; Also support a "max length" property in the
+&gt; manifest and read it via
+&gt; context.parameters.maxLength.raw</span></pre>
+        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:8px"><code>pcf-engineer</code> bumps the manifest version, updates <code>index.ts</code>; <code>pcf-workbench</code> rebuilds and reruns scenarios. Saved scenarios catch regressions instantly.</p>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:24px">Sample 3-line prompt</h3>
+<pre class="code-block"><span class="string">&gt; New dataset control in samples\PercentBar.
+&gt; Each row = horizontal bar where width =
+&gt; (row.value / maxValue) * 100%. Screenshot
+&gt; with 5 rows and confirm proportional.</span></pre>
+
+        <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:24px">Honest caveats</h3>
+        <ul style="font-size:.82rem;color:var(--neutral-40);line-height:1.7;padding-left:18px;margin-top:6px">
+          <li>AI doesn't replace knowing the platform &mdash; garbage requirement in, garbage control out</li>
+          <li>Harness targets ~95% UCI parity &mdash; ribbon / XrmAddOn / a few offline FS APIs still need a real env</li>
+          <li>Bundle size and a11y are your call &mdash; harness flags them, AI fixes when asked, bar is yours</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- ── Use it in VS Code subsection ─── -->
+    <div class="reveal" style="margin-top:48px;padding:28px 32px;background:linear-gradient(135deg,rgba(0,120,212,.06),rgba(123,97,255,.06));border:1px solid var(--neutral-90);border-radius:var(--radius-m)">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+        <svg width="32" height="32" viewBox="0 0 100 100" aria-hidden="true"><path fill="#0078D4" d="M70 5L30 45 12 30 5 36v28l7 6 18-15 40 40 25-12V17L70 5zM30 65L18 50l12-15v30zm40 8L46 50l24-23v46z"/></svg>
+        <div>
+          <h3 style="font-size:1.25rem;margin:0">Use it in VS Code</h3>
+          <p style="font-size:.85rem;color:var(--neutral-40);margin:2px 0 0">Prefer an IDE over a terminal? The same skills drive GitHub Copilot Chat inside VS Code.</p>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start">
+        <div>
+          <h4 style="font-size:.98rem;margin:0 0 8px">1. Install the extensions</h4>
+          <p style="font-size:.88rem;color:var(--neutral-30);margin:0 0 10px">Two extensions, both from the VS Code Marketplace:</p>
+          <ul style="font-size:.85rem;color:var(--neutral-40);line-height:1.7;padding-left:18px;margin:0">
+            <li><strong>GitHub Copilot</strong> &mdash; inline completions</li>
+            <li><strong>GitHub Copilot Chat</strong> &mdash; chat + agent mode (the part that reads skills)</li>
+          </ul>
+
+          <h4 style="font-size:.98rem;margin:20px 0 8px">2. Open the PCF Workbench repo</h4>
+<pre class="code-block">code C:\path\to\PCF-Workbench</pre>
+          <p style="font-size:.82rem;color:var(--neutral-40);margin-top:8px">Copilot Chat auto-picks up <code>.github/copilot-instructions.md</code> and treats the repo's <code>.copilot/skills/</code> as workspace-scoped guidance &mdash; same skills as the CLI, no extra config.</p>
+        </div>
+
+        <div>
+          <h4 style="font-size:.98rem;margin:0 0 8px">3. Open Copilot Chat in Agent mode</h4>
+          <p style="font-size:.88rem;color:var(--neutral-30);margin:0 0 10px"><kbd>Ctrl+Alt+I</kbd> (Windows) or <kbd>&#8984;+Ctrl+I</kbd> (Mac). Switch the mode dropdown from <em>Ask</em> to <strong>Agent</strong> &mdash; this is what lets Copilot read/edit files, run the harness, and iterate.</p>
+
+          <h4 style="font-size:.98rem;margin:20px 0 8px">4. Type the same prompts</h4>
+<pre class="code-block"><span class="string">Build a MyControl in samples\MyControl that
+binds to a SingleLine.Text field, renders a
+Fluent v9 SearchBox with debounced onChange,
+and validates with two scenarios.</span></pre>
+          <p style="font-size:.82rem;color:var(--neutral-40);margin-top:8px">Agent mode invokes <code>pcf-engineer</code> for the code, runs terminal commands for <code>pcf-workbench</code>, applies edits with diff-preview, and reruns the loop &mdash; all without leaving the editor.</p>
+        </div>
+      </div>
+
+      <p style="font-size:.82rem;color:var(--neutral-40);margin:20px 0 0;padding-top:16px;border-top:1px solid var(--neutral-90)"><strong>CLI vs VS Code &mdash; same skills, same loop.</strong> The CLI is faster for one-shot prompts and CI; VS Code wins when you want side-by-side diffs, inline completions while reading the generated code, and a richer terminal panel. Pick whichever fits your flow &mdash; or alternate as needed.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── Section B: Fix / iterate on an EXISTING control ─── -->
+<section style="background:var(--neutral-100);border-top:1px solid var(--neutral-90);border-bottom:1px solid var(--neutral-90)">
+  <div class="container">
+    <div class="why-hero reveal">
+      <span class="badge badge-new" style="margin-bottom:12px;display:inline-block">Section 2 of 2 &mdash; Testing &amp; fixing</span>
       <h2>Use it with GitHub Copilot CLI</h2>
-      <p>The AI Build Loop ships with a drop-in skill so Copilot CLI &mdash; or Claude, Cursor, or any agent that reads markdown skills &mdash; drives the loop for you. You type a natural-language prompt; the agent runs <code>pcf-harness loop</code>, reads the structured JSON report, and iterates until the control renders cleanly.</p>
+      <p>Already have a PCF that builds but doesn't render? Same loop, different entry point. The shipped <code>pcf-build-loop</code> skill lets Copilot CLI &mdash; or Claude, Cursor, or any agent that reads markdown skills &mdash; drive the harness, read structured JSON reports, and iterate until your control renders cleanly.</p>
     </div>
   </div>
 </section>
@@ -2203,6 +2373,26 @@ Perf:   firstUpdateView: 180ms ·
 
       <div class="milestone-card shipped">
         <div class="milestone-h">
+          <h3><span class="milestone-num">M2</span>Live Dataverse Bridge</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-l">L</span>
+            <span class="milestone-pill pill-shipped">Shipped</span>
+          </div>
+        </div>
+        <p class="ms-desc">Optional connected mode that replaces <code>data.json</code> with a real org via <code>pac auth</code>. Read-only by default. The killer feature: snapshot live data into a scenario for offline replay. M2.P7 adds an on-disk response cache so the second run of any scenario in live mode is offline-fast.</p>
+        <ul class="milestone-list">
+          <li class="done">Live mode toggle using the active <code>pac auth</code> profile</li>
+          <li class="done">Read-only by default; writes require per-call confirmation (M2.P4)</li>
+          <li class="done">On-disk response cache &mdash; second run is offline-fast (M2.P7)</li>
+          <li class="done">One-click "snapshot live data into mock scenario" (M2.P1+P2)</li>
+          <li class="done">Visual indicator when control is hitting live data + LIVE pill (M2.P6)</li>
+          <li class="done">Per-scenario binding so scenarios pin to live or mock (M2.P3)</li>
+          <li class="done">Live metadata via real <code>EntityDefinitions</code> (M2.P5)</li>
+        </ul>
+      </div>
+
+      <div class="milestone-card shipped">
+        <div class="milestone-h">
           <h3><span class="milestone-num">M3.P1</span>AI Build Loop foundation</h3>
           <div class="milestone-pills">
             <span class="milestone-size size-m">M</span>
@@ -2229,27 +2419,26 @@ Perf:   firstUpdateView: 180ms ·
   <div class="container">
     <div class="section-header reveal">
       <h2>What's next</h2>
-      <p>Live Dataverse Bridge is the headline of the upcoming release.</p>
+      <p>Perf budgets &amp; PR-time CI loop &mdash; turn the AI Build Loop into a hard quality gate.</p>
     </div>
     <div class="milestone-grid reveal">
 
       <div class="milestone-card headline">
         <div class="milestone-h">
-          <h3><span class="milestone-num">M2</span>Live Dataverse Bridge</h3>
+          <h3><span class="milestone-num">M3.P2</span>Perf Budgets &amp; CI Loop</h3>
           <div class="milestone-pills">
-            <span class="milestone-size size-l">L</span>
+            <span class="milestone-size size-s">S</span>
             <span class="milestone-pill pill-headline">Headline</span>
           </div>
         </div>
-        <p class="ms-desc">Optional connected mode that replaces <code>data.json</code> with a real org via <code>pac auth</code>. Read-only by default. The killer feature: snapshot live data into <code>data.json</code> for offline replay.</p>
+        <p class="ms-desc">Builds on the <a href="#" onclick="document.querySelector('[data-view=&quot;roadmap&quot;]').click();return false">M3.P1 AI Build Loop foundation</a>: turn the loop into a PR-time quality gate. Optional perf budgets per control, a copy-pasteable GitHub Actions workflow, and an auto-posted PR-comment summary.</p>
         <ul class="milestone-list">
-          <li class="done">Live mode toggle using the active <code>pac auth</code> profile</li>
-          <li class="done">Read-only by default</li>
-          <li>Writes require per-call confirmation</li>
-          <li>On-disk response cache &mdash; second run is offline-fast</li>
-          <li>One-click "snapshot live data into data.json"</li>
-          <li class="done">Visual indicator when control is hitting live data</li>
-          <li>Per-scenario binding so scenarios pin to live or mock</li>
+          <li>Optional <code>perfBudget</code> in <code>data.json</code>: <code>firstUpdateViewMs</code>, <code>avgRenderTimeMs</code>, <code>maxRenderTimeMs</code>, <code>renderCount</code>, <code>leaks</code></li>
+          <li>Soft <code>warn</code> and hard <code>fail</code> thresholds; budget violations flip the loop to non-zero exit</li>
+          <li>Report schema bump to v2: <code>budget.status</code> + <code>budget.violations[]</code> with actual / budget / delta</li>
+          <li>Copy-pasteable <code>.github/workflows/pcf-loop.yml</code> &mdash; runs on PR, uploads report + screenshot as artifacts</li>
+          <li>Auto-posted PR comment: status / lifecycle / leaks / render perf / budget violations</li>
+          <li>Non-zero CLI exit fails the workflow &rarr; PR check red, merge blocked</li>
         </ul>
       </div>
 
@@ -2265,25 +2454,6 @@ Perf:   firstUpdateView: 180ms ·
       <p>Larger investments lined up after the next release. Roughly in the order they'd ship.</p>
     </div>
     <div class="milestone-grid reveal">
-
-      <div class="milestone-card later">
-        <div class="milestone-h">
-          <h3><span class="milestone-num">M3.P2</span>Perf Budgets &amp; CI Loop</h3>
-          <div class="milestone-pills">
-            <span class="milestone-size size-s">S</span>
-            <span class="milestone-pill pill-later">Later</span>
-          </div>
-        </div>
-        <p class="ms-desc">Builds on the <a href="#" onclick="document.querySelector('[data-view=&quot;roadmap&quot;]').click();return false">M3.P1 AI Build Loop foundation</a>: turn the loop into a PR-time quality gate. Optional perf budgets per control, a copy-pasteable GitHub Actions workflow, and an auto-posted PR-comment summary.</p>
-        <ul class="milestone-list">
-          <li>Optional <code>perfBudget</code> in <code>data.json</code>: <code>firstUpdateViewMs</code>, <code>avgRenderTimeMs</code>, <code>maxRenderTimeMs</code>, <code>renderCount</code>, <code>leaks</code></li>
-          <li>Soft <code>warn</code> and hard <code>fail</code> thresholds; budget violations flip the loop to non-zero exit</li>
-          <li>Report schema bump to v2: <code>budget.status</code> + <code>budget.violations[]</code> with actual / budget / delta</li>
-          <li>Copy-pasteable <code>.github/workflows/pcf-loop.yml</code> &mdash; runs on PR, uploads report + screenshot as artifacts</li>
-          <li>Auto-posted PR comment: status / lifecycle / leaks / render perf / budget violations</li>
-          <li>Non-zero CLI exit fails the workflow &rarr; PR check red, merge blocked</li>
-        </ul>
-      </div>
 
       <div class="milestone-card later">
         <div class="milestone-h">

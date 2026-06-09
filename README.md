@@ -157,6 +157,31 @@ Gallery cards display the total `out/` directory size for each built control, wi
 
 ---
 
+## Build PCFs with AI (Copilot CLI Skills)
+
+PCF Workbench ships two [GitHub Copilot CLI](https://github.com/github/copilot-cli) **skills** that turn the harness into an end-to-end AI dev loop — not just a tester. Clone the repo and the skills auto-load whenever you run `copilot` from inside it.
+
+| Skill | What it does | Triggers on |
+|---|---|---|
+| **`pcf-engineer`** | Senior PCF authoring/review/debug. Knows the official Microsoft Learn API surface, manifest gotchas, virtual-control patterns, accessibility, Field Service Mobile / offline limits, 30+ antipatterns, and `isAuthoringMode` design-time UX. | "PCF", "ControlManifest", "code component", "virtual control", "updateView" |
+| **`pcf-workbench`** | Operates this harness — gallery launch, single-control loop, device/network emulation, scenario authoring, build→render→report iteration, leak triage. | "PCF Workbench", "harness", "run pcf locally", "pcf gallery", "debug pcf control" |
+
+Both skills live in [`.copilot/skills/`](./.copilot/skills/). Use them together: `pcf-engineer` writes/reviews the code, `pcf-workbench` runs and validates it. See [`BUILDING.md`](./BUILDING.md) for the full AI-first workflow (requirement → `pac pcf init` → AI codegen → harness loop → ship).
+
+**Global availability** (optional) — copy them into your user-scoped skills folder so they're available in every workspace:
+
+```powershell
+# Windows
+Copy-Item -Recurse -Force .\.copilot\skills\* "$env:USERPROFILE\.copilot\skills\"
+```
+
+```bash
+# macOS / Linux
+cp -R ./.copilot/skills/* ~/.copilot/skills/
+```
+
+---
+
 ## Quick Start
 
 ### Prerequisites
