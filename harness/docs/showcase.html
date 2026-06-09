@@ -707,6 +707,13 @@ p{color:var(--neutral-30)}
         <h3>Container Queries</h3>
         <p>The viewport is a <code>@container pcf-viewport</code> context. Your <code>@media</code> rules auto-convert to <code>@container</code> so responsive logic fires at the emulated size &mdash; not the browser width.</p>
       </div>
+      <div class="feature-card">
+        <div class="card-icon purple">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10h14M10 3v14" stroke="white" stroke-width="1.6" stroke-linecap="round"/><path d="M6 6l-2 2 2 2M14 14l2-2-2-2" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+        </div>
+        <h3>Reactive Desktop</h3>
+        <p>The Desktop preset is fluid &mdash; resize the browser and the control's <code>updateView</code> fires with the new <code>allocatedWidth/Height</code>, matching live UCI behaviour. Catches PCFs that re-layout from JS (not just CSS) without needing a real Dataverse form.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -880,6 +887,13 @@ p{color:var(--neutral-30)}
         </div>
         <h3>Auto-Generate</h3>
         <p>Skeleton scenarios auto-built from the manifest: every device preset, offline mode, slow 3G, disabled state, empty values, entity context.</p>
+      </div>
+      <div class="feature-card">
+        <div class="card-icon dark">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10h10M9 6l4 4-4 4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="16" cy="10" r="1.4" fill="white"/></svg>
+        </div>
+        <h3>URL Deep-Link</h3>
+        <p>Load directly into a scenario with <code>?scenario=&lt;name&gt;</code> in the URL. Used by the AI build loop, Copilot CLI's launch action, and CI runs to boot the harness in the exact state under test &mdash; no manual selection.</p>
       </div>
     </div>
   </div>
@@ -1062,8 +1076,8 @@ p{color:var(--neutral-30)}
         <div class="card-icon green">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M14 3a5 5 0 010 7.07L10 14l-4-3.93A5 5 0 1114 3z" stroke="white" stroke-width="1.5" fill="none"/><path d="M10 14v3" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
         </div>
-        <h3>File Watching</h3>
-        <p>Vite plugin watches for changes to <code>bundle.js</code> in the control's <code>out/</code> directory. Survives <code>npm run build</code> restarts.</p>
+        <h3>Auto Build Watcher <span class="badge badge-new">M9</span></h3>
+        <p>The harness spawns <code>pcf-scripts</code> in watch mode itself &mdash; one terminal, not two. Edits to your <code>.ts</code> / <code>.tsx</code> trigger rebuild, and the viewport overlays a subtle <em>Rebuilding&hellip;</em> spinner until the new <code>bundle.js</code> hot-reloads.</p>
       </div>
       <div class="feature-card">
         <div class="card-icon blue">
@@ -2422,6 +2436,23 @@ Perf:   firstUpdateView: 180ms ·
           <li class="done">Walkthrough + remediation playbook (<code>ai-build-loop.md</code>)</li>
           <li class="done">Drop-in Copilot CLI / Claude system-prompt skill (<code>ai-loop-skill.md</code>)</li>
           <li class="done">Worked example: real PASS exhibit captured against ConformanceTester</li>
+        </ul>
+      </div>
+
+      <div class="milestone-card shipped">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M9</span>Auto Build Watcher</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-s">S</span>
+            <span class="milestone-pill pill-shipped">Shipped</span>
+          </div>
+        </div>
+        <p class="ms-desc">The harness now spawns <code>pcf-scripts</code> in watch mode itself &mdash; one terminal, not two. While a rebuild is in flight the viewport overlays a subtle <em>"Rebuilding&hellip;"</em> spinner so you can see exactly when the next bundle hot-reloads. Removes the most common dev friction: editing source and forgetting <code>npm run build</code>.</p>
+        <ul class="milestone-list">
+          <li class="done">Auto-spawn <code>pcf-scripts</code> watcher when the harness starts</li>
+          <li class="done">Stale-viewport overlay during compile</li>
+          <li class="done">SSE stream surfaces build status to the harness UI</li>
+          <li class="done">Survives clean rebuilds (gracefully reattaches after <code>out/</code> wipe)</li>
         </ul>
       </div>
 
