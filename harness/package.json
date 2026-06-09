@@ -18,7 +18,7 @@
     "@azure/msal-node": "^5.2.2",
     "@azure/msal-node-extensions": "^5.2.2",
     "@fluentui/react-components": "^9.73.8",
-    "@fluentui/react-icons": "^2.0.327",
+    "@fluentui/react-icons": "^2.0.328",
     "chokidar": "^3.6.0",
     "commander": "^12.1.0",
     "fast-xml-parser": "^5.7.0",
