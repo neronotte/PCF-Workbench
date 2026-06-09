@@ -17,7 +17,11 @@ const PROXY_BASE = '/__pcf/dv';
 
 let sessionSecretCache: string | null = null;
 
-function getSessionSecret(): string {
+/** Returns the per-session secret injected by dataverse-security plugin via
+ *  `<meta name="pcf-session">`. Exported so other callers (cache admin panel)
+ *  can attach the required `x-pcf-session` header without re-implementing the
+ *  lookup. Throws if the meta tag is missing. */
+export function getSessionSecret(): string {
   if (sessionSecretCache) return sessionSecretCache;
   if (typeof document === 'undefined') {
     throw new Error('dv-client: document not available (server-side render?)');

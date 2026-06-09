@@ -16,7 +16,7 @@ import {
   type EntityMetadata,
 } from '../../store/metadata-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
-import { listProfiles, DvProxyError, getLiveLoadedEntities } from '../../api/dv-client';
+import { listProfiles, DvProxyError, getLiveLoadedEntities, getSessionSecret } from '../../api/dv-client';
 import { loadAllScenarios, applyScenarioAsActive, captureAndSaveAsNewScenario } from '../../lib/scenario-store';
 import { isLiveBlocked, liveBlockReason } from '../../lib/live-block';
 
@@ -24,7 +24,7 @@ const useStyles = makeStyles({
   root: {
     padding: '12px',
     overflowX: 'hidden',
-    overflowY: 'hidden',
+    overflowY: 'auto',
     boxSizing: 'border-box',
     minWidth: 0,
     display: 'flex',
@@ -291,7 +291,7 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span
           className={styles.header}
-          title="Page context — what the harness tells the control about the record/form it is hosted on. Drives context.page.entityTypeName / entityId and context.mode.contextInfo. Change these to test the control against different entity types and records."
+          title="Page context — set the entity type and record ID the control thinks it is hosted on"
         >
           Page context
         </span>
@@ -435,8 +435,8 @@ function SnapshotLiveToMockButton() {
           onClick={onSnapshot}
           disabled={!hasData}
           title={hasData
-            ? `Promote ${total} buffered live record(s) into the mock entity store, switch to Mock mode, and mark the active scenario dirty. Save the scenario afterwards to persist to disk.`
-            : 'No live records buffered yet. Render the control or fetch records via context.webAPI to populate the buffer.'}
+            ? `Snapshot to mock — copy ${total} buffered live record(s) into mock data and switch to Mock mode`
+            : 'No live records buffered yet — render the control to populate the buffer'}
           data-test-id="snapshot-live-to-mock"
         >
           Snapshot live → mock ({total})
@@ -448,7 +448,7 @@ function SnapshotLiveToMockButton() {
           onClick={() => { void onCaptureAsNew(); }}
           disabled={!hasData || !manifest}
           title={hasData
-            ? 'Capture buffered records into a brand-new scenario named "Live capture <timestamp>" and switch to it as active. Saves to disk immediately; does not dirty or overwrite the current scenario.'
+            ? 'Capture as new scenario — save buffered live records to a new scenario on disk'
             : 'No live records buffered yet.'}
           data-test-id="capture-as-new-scenario"
         >
@@ -595,7 +595,7 @@ function LiveModeControls() {
           icon={loading ? <Spinner size="tiny" /> : <ArrowClockwise24Regular />}
           onClick={() => void refresh()}
           disabled={loading}
-          title="Re-list PAC profiles (pac auth list)"
+          title="Refresh profiles"
           aria-label="Refresh profiles"
         />
       </div>
@@ -631,10 +631,10 @@ function LiveModeControls() {
       )}
 
       <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3 }}>
-        Live mode: reads via <code>context.webAPI</code> are direct; writes
-        prompt a per-call confirm dialog (M2.P4). Metadata is fetched from{' '}
-        <code>EntityDefinitions</code> on first access (M2.P5). GET responses
-        are cached on disk for offline-fast reruns (M2.P7).
+        Live mode: reads from <code>context.webAPI</code> hit the org directly;
+        writes prompt a per-call confirm. Metadata is fetched from{' '}
+        <code>EntityDefinitions</code> on first access. GET responses are
+        cached on disk for offline-fast reruns.
       </div>
     </div>
   );
@@ -676,7 +676,10 @@ function LiveCachePanel() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await fetch('/__pcf/dv/cache', { method: 'GET' });
+      const r = await fetch('/__pcf/dv/cache', {
+        method: 'GET',
+        headers: { 'x-pcf-session': getSessionSecret() },
+      });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setStats(await r.json() as LiveCacheStats);
     } catch (e) {
@@ -690,7 +693,10 @@ function LiveCachePanel() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await fetch('/__pcf/dv/cache', { method: 'DELETE' });
+      const r = await fetch('/__pcf/dv/cache', {
+        method: 'DELETE',
+        headers: { 'x-pcf-session': getSessionSecret() },
+      });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const out = await r.json() as { cleared: number; stats: LiveCacheStats };
       setStats(out.stats);
@@ -732,7 +738,12 @@ function LiveCachePanel() {
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <strong style={{ fontSize: 12 }}>Live response cache</strong>
+          <strong
+            style={{ fontSize: 12, cursor: 'help' }}
+            title={`Live response cache — replays GET responses from disk on the second run so live mode is offline-fast. Writes invalidate by entity set. Storage: ${stats.rootDir}. Override via env PCF_LIVE_CACHE=off / PCF_LIVE_CACHE_TTL_SECONDS=N.`}
+          >
+            Live response cache
+          </strong>
           <Badge
             appearance={stats.enabled ? 'filled' : 'outline'}
             color={stats.enabled ? 'success' : 'subtle'}
@@ -797,9 +808,6 @@ function LiveCachePanel() {
       {err && (
         <div style={{ color: tokens.colorPaletteRedForeground1, fontSize: 11 }}>{err}</div>
       )}
-      <div style={{ fontSize: 10, color: tokens.colorNeutralForeground4 }}>
-        GETs replay from <code>{stats.rootDir}</code>. Writes invalidate by entity set. Override via env <code>PCF_LIVE_CACHE=off</code> / <code>PCF_LIVE_CACHE_TTL_SECONDS=N</code>.
-      </div>
     </div>
   );
 }
@@ -1083,7 +1091,7 @@ export function DataPanel() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span
             className={styles.header}
-            title="Data source — choose where context.webAPI gets its records. Mock = the active scenario's dataRecords (default; deterministic, offline-safe; persisted in test-scenarios.json). Live = a real Dataverse environment via PAC CLI auth (read-only by default, writes require confirmation)."
+            title="Data source — use mock records from the scenario, or connect to a real Dataverse org"
           >
             Data source
           </span>
@@ -1100,7 +1108,7 @@ export function DataPanel() {
             icon={<ArrowClockwise24Regular />}
             onClick={() => reloadControl?.()}
             disabled={!reloadControl}
-            title="Reload control (full destroy + init + updateView)"
+            title="Reload — fresh restart of the control"
             data-test-id="data-panel-reload"
           >
             Reload
@@ -1138,7 +1146,7 @@ export function DataPanel() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
               className={styles.header}
-              title="Mock Data — in-memory entity records sourced from the active scenario's dataRecords. Edit JSON below to add/modify records; changes flow into context.webAPI immediately and mark the scenario as dirty. Save the scenario to persist edits to disk. Use 'Rebase dates to today' so seeded timestamps stay relative to now."
+              title="Mock data — edit records that flow into context.webAPI; save the scenario to persist changes"
             >
               Mock Data
             </span>
@@ -1149,7 +1157,7 @@ export function DataPanel() {
               onClick={() => { void resetToActiveScenario(); }}
               disabled={!activeScenarioName}
               title={activeScenarioName
-                ? `Reset mock data to "${activeScenarioName}" scenario's saved records (discards unsaved edits in this panel).`
+                ? `Reset to "${activeScenarioName}" — discard unsaved edits and reload the scenario's records`
                 : 'No active scenario to reset to.'}
             />
           </div>
@@ -1189,7 +1197,7 @@ export function DataPanel() {
               size="small"
               icon={<Add16Regular />}
               onClick={(e) => { e.stopPropagation(); handleAddEntity(); }}
-              title="Add an entity. Creates an empty records array AND a stub schema atomically — both are required for the harness to resolve primary id, dataset columns, etc."
+              title="Add entity — adds an empty table with records and schema placeholders"
               data-test-id="entity-add"
             >
               Add entity
@@ -1210,7 +1218,7 @@ export function DataPanel() {
                   <span className={styles.tableName}>{row.name}</span>
                   <div className={styles.rowChips}>
                     {!row.hasSchema && (
-                      <Badge appearance="tint" color="warning" size="small" title="No schema — primaryIdAttribute and dataset columns will fall back to heuristics. Switch to the Schema tab and click 'Generate from records'.">⚠ no schema</Badge>
+                      <Badge appearance="tint" color="warning" size="small" title="No schema — primary key and columns are guessed; go to Schema tab to generate one">⚠ no schema</Badge>
                     )}
                     {!row.hasData && (
                       <Badge appearance="tint" color="subtle" size="small" title="Schema exists but no records yet.">◌ no data</Badge>

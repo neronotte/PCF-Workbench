@@ -166,28 +166,28 @@ export function PerformancePanel() {
       <div>
         <div
           className={styles.sectionHeader}
-          title="Overview — high-level perf snapshot for the loaded control: how many times it has re-rendered, how long the last render took, how many DOM nodes the control has produced, and how many WebAPI calls it has made (with failures highlighted)."
+          title="Overview — render count, last render time, DOM nodes, and WebAPI call totals"
         >
           Overview
           <span style={{ flex: 1 }} />
-          <Button appearance="subtle" icon={<Delete24Regular />} size="small" onClick={resetMetrics} title="Reset metrics — clears render counters, WebAPI history, and slowest/largest request lists." />
+          <Button appearance="subtle" icon={<Delete24Regular />} size="small" onClick={resetMetrics} title="Reset metrics" />
         </div>
         <div className={styles.grid} style={{ marginTop: 6 }}>
-          <div className={styles.metric} title="Renders — total updateView() invocations since the control was loaded. A high number with no user interaction often indicates a notifyOutputChanged feedback loop.">
+          <div className={styles.metric} title="Renders — total updateView calls; a high count with no interaction may mean a render loop">
             <div className={styles.metricValue}>{renderCount}</div>
             <div className={styles.metricLabel}>Renders</div>
           </div>
-          <div className={styles.metric} title="Last Render — wall-clock time for the most recent updateView(). Orange/red means it exceeded the 16ms single-frame budget. Avg is the rolling average of all renders.">
+          <div className={styles.metric} title="Last render — time the most recent updateView took; orange/red means it exceeded 16ms">
             <div className={`${styles.metricValue} ${renderTimeColor}`}>
               {lastRenderTimeMs.toFixed(1)}ms
             </div>
             <div className={styles.metricLabel}>Last Render {avgRenderTime > 0 && `(avg ${avgRenderTime.toFixed(1)}ms)`}</div>
           </div>
-          <div className={styles.metric} title="DOM Nodes — number of DOM elements currently inside the control's container. A growing count across re-renders suggests the control is appending rather than reusing nodes.">
+          <div className={styles.metric} title="DOM nodes — count of elements inside the control; a rising count may mean nodes are leaking">
             <div className={styles.metricValue}>{domNodeCount}</div>
             <div className={styles.metricLabel}>DOM Nodes</div>
           </div>
-          <div className={styles.metric} title="WebAPI Calls — total context.webAPI requests made by the control (retrieve, retrieveMultiple, create, update, delete). High counts in init() are usually a sign of an N+1 query pattern.">
+          <div className={styles.metric} title="WebAPI calls — total requests made; many calls in init may mean an N+1 query pattern">
             <div className={styles.metricValue}>{webApiCallCount}</div>
             <div className={styles.metricLabel}>WebAPI Calls {failedCalls.length > 0 && <Badge color="danger" size="small">{failedCalls.length} failed</Badge>}</div>
           </div>
@@ -199,7 +199,7 @@ export function PerformancePanel() {
         <div>
           <div
             className={styles.sectionHeader}
-            title="Render Timeline — sparkline of every render's duration (left = oldest, right = newest). The dashed line marks the 16ms single-frame budget. Spikes above it cause visible jank on a 60Hz display."
+            title="Render timeline — sparkline of every render; spikes above the line cause visible jank"
           >
             Render Timeline
           </div>
@@ -229,7 +229,7 @@ export function PerformancePanel() {
         <div>
           <div
             className={styles.sectionHeader}
-            title="Slowest Requests — top WebAPI calls by latency. Red is over 1s, orange over 100ms. Targets here usually need server-side optimisation (FetchXML changes, view indexes) or batching."
+            title="Slowest requests — WebAPI calls by latency; red = over 1s, orange = over 100ms"
           >
             Slowest Requests
           </div>
@@ -263,7 +263,7 @@ export function PerformancePanel() {
         <div>
           <div
             className={styles.sectionHeader}
-            title="Largest Responses — top WebAPI calls by payload size. Red over 100KB, orange over 10KB. Targets here usually need narrower $select clauses or pagination."
+            title="Largest responses — WebAPI calls by payload size; red = over 100KB, orange = over 10KB"
           >
             Largest Responses
           </div>
@@ -297,7 +297,7 @@ export function PerformancePanel() {
         <div>
           <div
             className={styles.sectionHeader}
-            title="Failed Requests — WebAPI calls that returned an error or rejected. Most recent 5 are shown with the error message. Check the Data panel for the records (or schema gaps) involved."
+            title="Failed requests — WebAPI calls that errored; check the Data panel for missing records"
           >
             Failed Requests
             <Badge color="danger" size="small">{failedCalls.length}</Badge>

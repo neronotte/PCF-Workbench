@@ -373,7 +373,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
             icon={<ArrowClockwise20Regular />}
             onClick={() => reloadControl?.()}
             disabled={!reloadControl}
-            title="Reload the control (full destroy + init + updateView cycle)"
+            title="Reload — fresh restart of the control"
             style={{ color: 'white' }}
             data-test-id="harness-top-reload"
           >
@@ -383,7 +383,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         <div
           className={styles.topBarControl}
           data-test-id="shim-profile-control"
-          title="Which Dataverse API surface the harness emulates. Newer profiles expose APIs (e.g. Xrm.App.sidePanes, sidePanel command bar) that older orgs don't have. Use this to validate that your control degrades gracefully on older targets."
+          title="API profile — choose which Dataverse version the harness emulates to test backward compatibility"
         >
           <Label size="small" style={{ color: 'white' }}>API</Label>
           <Dropdown
@@ -400,7 +400,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         </div>
         <div
           className={styles.topBarControl}
-          title="Render the UCI form chrome (header, command bar, tab strip, footer) around the control. Off = bare canvas, like hosting in a custom page or canvas app."
+          title="Form chrome — show the UCI header, command bar, tab strip, and footer around the control"
         >
           <Label size="small" style={{ color: 'white' }}>Form chrome</Label>
           <Switch
@@ -412,7 +412,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         </div>
         <div
           className={styles.topBarControl}
-          title="Show the control in designer-preview mode. Some controls detect this and render lightweight placeholder content instead of the full UI — useful for testing how the control looks inside the canvas-app or model-driven designer."
+          title="Authoring mode — preview how the control looks inside the canvas or model-driven designer"
         >
           <Label size="small" style={{ color: 'white' }}>
             Authoring
@@ -427,7 +427,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
         </div>
         <div
           className={styles.topBarControl}
-          title="Pass disabled=true to the control. Tests how the control behaves on a read-only form, or for users without write privileges on the bound field."
+          title="Disabled — test how the control renders when it cannot be edited"
         >
           <Label size="small" style={{ color: 'white' }}>Disabled</Label>
           <Switch
@@ -502,15 +502,15 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
                     onTabSelect={(_, d) => setActiveTab(d.value as SidePanelTab)}
                     size="small"
                   >
-                    <Tab value="properties" icon={<Settings24Regular />} title="Properties — edit the values bound to each manifest property and watch the control re-render on change" />
-                    <Tab value="form" icon={<Form24Regular />} title="Form — inspect form-level state (attributes, controls, tabs, sections) and trigger onLoad / onChange handlers. Wires up formContext and the legacy Xrm.Page alias." />
-                    <Tab value="data" icon={<Database24Regular />} title="Data — browse and edit the in-memory entity records served to context.webAPI. Switch between mock (data.json) and live (real Dataverse) modes." />
-                    <Tab value="network" icon={<PlugConnected24Regular />} title="Network — throttle or fail WebAPI calls to simulate offline, slow 3G, or custom latency. Tests how the control behaves under poor connectivity." />
-                    <Tab value="device" icon={<Phone24Regular />} title="Device — emulate phone / tablet / desktop viewports with touch input and orientation. Verifies responsive layout without resizing the browser." />
-                    <Tab value="user" icon={<Person24Regular />} title="User — change language (LCID), time-zone, RTL direction, and security roles passed to context.userSettings. Tests localisation and permission handling." />
-                    <Tab value="lifecycle" icon={<Play24Regular />} title="Lifecycle — timeline of init / updateView / getOutputs / destroy calls with durations. Catches missing updateView triggers and slow init paths." />
-                    <Tab value="performance" icon={<TopSpeed24Regular />} title="Performance — render timings, WebAPI call counts, heap usage, DOM node count. Flags resource leaks (unremoved listeners / observers) after destroy." />
-                    <Tab value="coverage" icon={<Shield24Regular />} title="Shim coverage — track which Context / Xrm / formContext APIs the control actually called. Identifies hot paths and shim gaps." />
+                    <Tab value="properties" icon={<Settings24Regular />} title="Properties — set the control's bound and input property values" />
+                    <Tab value="form" icon={<Form24Regular />} title="Form — simulate the surrounding form: attributes, controls, tabs and their events" />
+                    <Tab value="data" icon={<Database24Regular />} title="Data — edit mock records or connect to a real Dataverse org" />
+                    <Tab value="network" icon={<PlugConnected24Regular />} title="Network — test the control offline or on slow connections" />
+                    <Tab value="device" icon={<Phone24Regular />} title="Device — preview on phone, tablet or desktop viewports" />
+                    <Tab value="user" icon={<Person24Regular />} title="User — switch language, time zone, RTL and security roles" />
+                    <Tab value="lifecycle" icon={<Play24Regular />} title="Lifecycle — see when init / updateView / destroy fire and how long they take" />
+                    <Tab value="performance" icon={<TopSpeed24Regular />} title="Performance — render timings, WebAPI calls, and resource-leak detection" />
+                    <Tab value="coverage" icon={<Shield24Regular />} title="Coverage — see which platform APIs your control actually uses" />
                   </TabList>
                 </div>
                 <div className={styles.sidePanelContent}>

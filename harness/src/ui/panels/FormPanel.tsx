@@ -1,7 +1,8 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore, useCallback, type ReactNode } from 'react';
 import {
   makeStyles, mergeClasses, tokens, Input, Switch, Button, Badge, Divider, Text, Dropdown, Option,
 } from '@fluentui/react-components';
+import { ChevronDown16Regular, ChevronRight16Regular } from '@fluentui/react-icons';
 import {
   subscribeFormState,
   getFormStateVersion,
@@ -52,6 +53,30 @@ const useStyles = makeStyles({
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
     color: tokens.colorNeutralForeground2,
+  },
+  // h10/UX — collapsible section header. Clickable row with chevron + title.
+  // Persists open/closed state per-section to localStorage so the user's
+  // last layout survives reload.
+  collapsibleHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    cursor: 'pointer',
+    userSelect: 'none' as const,
+    padding: '2px 0',
+    borderRadius: tokens.borderRadiusSmall,
+    ':hover': { backgroundColor: tokens.colorNeutralBackground2 },
+  },
+  collapsibleChevron: {
+    flexShrink: 0,
+    color: tokens.colorNeutralForeground3,
+    width: '16px',
+    height: '16px',
+  },
+  collapsibleBody: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '6px',
   },
   // All three row types share a flex-wrap layout so that when the side
   // panel is narrow, action chips drop to the next line instead of
@@ -190,6 +215,82 @@ const FORM_TYPE_LABEL: Record<number, string> = {
   11: 'ReadOptimized',
 };
 
+const COLLAPSE_STORAGE_KEY = 'pcf-workbench:form-panel:collapsed';
+
+function readCollapsedMap(): Record<string, boolean> {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as Record<string, boolean> : {};
+  } catch { return {}; }
+}
+
+function writeCollapsedMap(map: Record<string, boolean>): void {
+  if (typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+}
+
+interface CollapsibleSectionProps {
+  /** Stable id used to persist open/closed state across reloads. */
+  id: string;
+  title: ReactNode;
+  /** Optional tooltip on the header (mirrors what the section title already
+   *  had so users get the same explanation when hovering). */
+  titleTooltip?: string;
+  /** When true, section starts collapsed unless the user has flipped it. */
+  defaultCollapsed?: boolean;
+  /** Stable test id for the section root. */
+  testId?: string;
+  children: ReactNode;
+}
+
+function CollapsibleSection({ id, title, titleTooltip, defaultCollapsed = false, testId, children }: CollapsibleSectionProps): JSX.Element {
+  const styles = useStyles();
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    const map = readCollapsedMap();
+    return id in map ? map[id] : defaultCollapsed;
+  });
+  const toggle = useCallback(() => {
+    setCollapsed(prev => {
+      const next = !prev;
+      const map = readCollapsedMap();
+      map[id] = next;
+      writeCollapsedMap(map);
+      return next;
+    });
+  }, [id]);
+  const onKey = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggle();
+    }
+  }, [toggle]);
+  return (
+    <div className={styles.section} data-test-id={testId}>
+      <div
+        className={mergeClasses(styles.sectionTitle, styles.collapsibleHeader)}
+        onClick={toggle}
+        onKeyDown={onKey}
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        title={titleTooltip}
+        data-test-id={testId ? `${testId}-header` : undefined}
+      >
+        {collapsed
+          ? <ChevronRight16Regular className={styles.collapsibleChevron} />
+          : <ChevronDown16Regular className={styles.collapsibleChevron} />}
+        <span>{title}</span>
+      </div>
+      {!collapsed && (
+        <div className={styles.collapsibleBody} data-test-id={testId ? `${testId}-body` : undefined}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * FormPanel — operator UI for poking the formContext store. Lets the developer
  * edit attribute values, fire onChange handlers, toggle control visibility/
@@ -216,20 +317,19 @@ export function FormPanel(): JSX.Element {
 
   return (
     <div className={styles.root} data-test-id="form-panel">
-      <div className={styles.section}>
-        <div
-          className={styles.sectionTitle}
-          title="Form-level state the host would expose at runtime — what type of form the user opened (Create / Update / ReadOnly / Disabled / BulkEdit / ReadOptimized) and whether unsaved changes exist. Controls can read this via formContext.ui.getFormType() and formContext.data.getIsDirty()."
-        >
-          Form metadata
-        </div>
+      <CollapsibleSection
+        id="form"
+        title="Form metadata"
+        titleTooltip="Use this panel to simulate the surrounding Dynamics 365 form: edit attribute values and fire onChange events, toggle control visibility / disabled state, raise notifications, and show/hide tabs — without needing a real form. Useful for any PCF that reads formContext or Xrm.Page."
+        testId="fp-section-form"
+      >
         <div className={styles.toolbar}>
-          <span title="formContext.ui.getFormType() — the lifecycle stage the form is in. Create = brand-new record, Update = editing an existing record, ReadOnly = view-only, Disabled = all fields locked, BulkEdit = editing multiple records, ReadOptimized = high-performance read view.">
+          <span title="Form type — what kind of form is open (Create, Update, ReadOnly, Disabled, BulkEdit, etc.)">
             <Badge appearance="outline" data-test-id="fp-form-type">
               FormType: {FORM_TYPE_LABEL[snap.formType] ?? snap.formType}
             </Badge>
           </span>
-          <span title="formContext.data.getIsDirty() — true if any attribute value has been changed in the harness since the last seed/save. The count shows how many attributes are currently dirty. Use the 'fire' button on an attribute row to push edits through onChange handlers.">
+          <span title="Dirty — how many attribute values have changed since the last seed or save">
             <Badge
               appearance={snap.dirty ? 'filled' : 'outline'}
               color={snap.dirty ? 'warning' : undefined}
@@ -239,17 +339,17 @@ export function FormPanel(): JSX.Element {
             </Badge>
           </span>
         </div>
-      </div>
+      </CollapsibleSection>
 
       <Divider />
 
-      <div className={styles.section}>
-        <div
-          className={styles.sectionTitle}
-          title="Attributes — the data fields on the form's record. Each attribute is the underlying column value (formContext.getAttribute(name).getValue()) that controls read from and write to. Edits here fire onChange handlers attached to that attribute, just like typing into a real form field."
-        >
-          Attributes ({snap.attributes.length})
-        </div>
+      <CollapsibleSection
+        id="attributes"
+        title={`Attributes (${snap.attributes.length})`}
+        titleTooltip="Attributes — the data fields on the form's record. Each attribute is the underlying column value (formContext.getAttribute(name).getValue()) that controls read from and write to. Edits here fire onChange handlers attached to that attribute, just like typing into a real form field."
+        defaultCollapsed={true}
+        testId="fp-section-attributes"
+      >
         {snap.attributes.length === 0 && (
           <div className={styles.emptyMsg}>
             No attributes seeded. Add records to <code>data.json</code> or bound
@@ -265,13 +365,13 @@ export function FormPanel(): JSX.Element {
             <div className={styles.attrCell}>
               <div
                 className={styles.attrName}
-                title={`Attribute logical name: ${a.name}. This is the column on the entity record that the control binds to. Edit the value in the next field; click 'fire' to push the change through any registered onChange handlers.`}
+                title={`${a.name} — column name on the entity record; edit the value and click fire to trigger onChange`}
               >
                 {a.name}
               </div>
               <div
                 className={styles.attrType}
-                title={`Attribute type — controls what kind of value the field accepts. Examples: string, integer, decimal, money, boolean, datetime, optionset, lookup. Editing the value box will coerce input to this type.`}
+                title={`Attribute type — determines what values are accepted (string, integer, boolean, lookup, etc.)`}
               >
                 {a.attributeType}
               </div>
@@ -295,7 +395,7 @@ export function FormPanel(): JSX.Element {
               }}
               data-test-id={`fp-attr-${a.name}-input`}
               className={styles.attrInput}
-              title="Attribute value — calls formContext.getAttribute(name).setValue(...) on blur. Empty string is treated as null. Booleans accept true/false/1/0. Numbers are parsed; non-numeric input becomes null."
+              title="Value — edit and tab away to update the attribute; booleans accept true/false, empty = null"
             />
             <Dropdown
               size="small"
@@ -306,7 +406,7 @@ export function FormPanel(): JSX.Element {
               }}
               className={styles.attrRequired}
               data-test-id={`fp-attr-${a.name}-required`}
-              title="Required level — none / recommended / required. Equivalent to formContext.getAttribute(name).setRequiredLevel(...). Tests how the control behaves when the field is marked mandatory."
+              title="Required level — none, recommended, or required; tests mandatory-field behaviour"
             >
               {REQUIRED_LEVELS.map(l => <Option key={l} value={l}>{l}</Option>)}
             </Dropdown>
@@ -316,28 +416,28 @@ export function FormPanel(): JSX.Element {
               onClick={() => fireOnChange(a.name)}
               data-test-id={`fp-attr-${a.name}-fire`}
               className={styles.attrFire}
-              title="Fire onChange handlers — manually triggers every callback registered with formContext.getAttribute(name).addOnChange(). Useful for testing handler logic without re-typing the value."
+              title="Fire onChange — trigger all registered onChange callbacks for this attribute"
             >
               fire
             </Button>
           </div>
         ))}
-      </div>
+      </CollapsibleSection>
 
       <Divider />
 
-      <div className={styles.section}>
-        <div
-          className={styles.sectionTitle}
-          title="Controls — the UI widgets bound to attributes. The same attribute can have multiple controls (e.g. a quick-view form). Controls expose visibility, disabled state, and notification banners that the bound control can react to or trigger."
-        >
-          Controls ({snap.controls.length})
-        </div>
+      <CollapsibleSection
+        id="controls"
+        title={`Controls (${snap.controls.length})`}
+        titleTooltip="Controls — the UI widgets bound to attributes. The same attribute can have multiple controls (e.g. a quick-view form). Controls expose visibility, disabled state, and notification banners that the bound control can react to or trigger."
+        defaultCollapsed={true}
+        testId="fp-section-controls"
+      >
         {snap.controls.map(c => (
           <div key={c.name} className={styles.controlRow} data-test-id={`fp-ctrl-${c.name}`}>
             <span
               className={mergeClasses(styles.attrName, styles.controlName)}
-              title={`Control name: ${c.name}. The control element on the form (formContext.getControl(name)). Toggle visibility/disabled to test how your PCF reacts to host-driven state changes.`}
+              title={`${c.name} — toggle visibility or disabled state to test how your PCF reacts`}
             >
               {c.name}
             </span>
@@ -347,7 +447,7 @@ export function FormPanel(): JSX.Element {
               onChange={(_, d) => setControlVisible(c.name, d.checked)}
               label="visible"
               data-test-id={`fp-ctrl-${c.name}-visible`}
-              title="Visibility — calls formContext.getControl(name).setVisible(...). Off hides the control's container. Tests how a PCF behaves when the host shows/hides its host element."
+              title="Visibility — show or hide this control on the form"
             />
             <Switch
               size="small"
@@ -355,7 +455,7 @@ export function FormPanel(): JSX.Element {
               onChange={(_, d) => setControlDisabled(c.name, d.checked)}
               label="disabled"
               data-test-id={`fp-ctrl-${c.name}-disabled`}
-              title="Disabled — calls formContext.getControl(name).setDisabled(...). Disabled controls receive disabled=true via context. Tests read-only rendering."
+              title="Disabled — make this control read-only on the form"
             />
             <Button
               size="small"
@@ -380,22 +480,22 @@ export function FormPanel(): JSX.Element {
             </Button>
           </div>
         ))}
-      </div>
+      </CollapsibleSection>
 
       <Divider />
 
-      <div className={styles.section}>
-        <div
-          className={styles.sectionTitle}
-          title="Tabs — the top-level form sections (General, Details, Related, etc.). A real form is organised into tabs containing sections containing controls. Toggle visibility and expand/collapse to test PCFs that change layout based on which tab is active."
-        >
-          Tabs ({snap.tabs.length})
-        </div>
+      <CollapsibleSection
+        id="tabs"
+        title={`Tabs (${snap.tabs.length})`}
+        titleTooltip="Tabs — the top-level form sections (General, Details, Related, etc.). A real form is organised into tabs containing sections containing controls. Toggle visibility and expand/collapse to test PCFs that change layout based on which tab is active."
+        defaultCollapsed={true}
+        testId="fp-section-tabs"
+      >
         {snap.tabs.map(t => (
           <div key={t.name} className={styles.tabRow} data-test-id={`fp-tab-${t.name}`}>
             <span
               className={mergeClasses(styles.attrName, styles.tabName)}
-              title={`Tab: ${t.label ?? t.name} (${t.name}). Access at formContext.ui.tabs.get(name).`}
+              title={`${t.label ?? t.name} — toggle visibility and display state for this tab`}
             >
               {t.label ?? t.name} <Text size={100}>({t.name})</Text>
             </span>
@@ -405,20 +505,20 @@ export function FormPanel(): JSX.Element {
               onChange={(_, d) => setTabVisible(t.name, d.checked)}
               label="visible"
               data-test-id={`fp-tab-${t.name}-visible`}
-              title="Tab visibility — calls formContext.ui.tabs.get(name).setVisible(...). Hidden tabs disappear from the chrome strip."
+              title="Visibility — show or hide this tab on the form"
             />
             <Button
               size="small"
               appearance="subtle"
               onClick={() => setTabDisplayState(t.name, t.displayState === 'expanded' ? 'collapsed' : 'expanded')}
               data-test-id={`fp-tab-${t.name}-toggle`}
-              title="Display state — expanded shows the tab's sections, collapsed hides them. Equivalent to formContext.ui.tabs.get(name).setDisplayState('expanded'|'collapsed')."
+              title="Display state — expand or collapse this tab's sections"
             >
               {t.displayState}
             </Button>
           </div>
         ))}
-      </div>
+      </CollapsibleSection>
     </div>
   );
 }

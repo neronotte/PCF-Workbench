@@ -58,13 +58,13 @@ export function UserSettingsPanel() {
     <div className={styles.root}>
       <div
         className={styles.header}
-        title="User Settings — everything exposed via context.userSettings: language (LCID), time zone, RTL direction, user id/name, and security roles. Test how the control behaves for users in different locales or with different permissions without re-authenticating."
+        title="User settings — test the control as different users: locale, time zone, RTL, and security roles"
       >
         User Settings
       </div>
 
       <div className={styles.field}>
-        <Label size="small" htmlFor="user-language" title="Language (LCID) — Windows locale identifier. 1033 = en-US, 1031 = de-DE, 1036 = fr-FR, etc. Drives context.userSettings.languageId, date/number formatting, and resx string lookup.">Language (LCID)</Label>
+        <Label size="small" htmlFor="user-language" title="Language (LCID) — Windows locale code: 1033 = en-US, 1031 = de-DE, 1036 = fr-FR">Language (LCID)</Label>
         <Dropdown
           id="user-language"
           size="small"
@@ -86,12 +86,12 @@ export function UserSettingsPanel() {
           checked={userIsRTL}
           onChange={(_, d) => setUserIsRTL(d.checked)}
           label="Right-to-left (isRTL)"
-          title="Right-to-left — when true, context.userSettings.isRTL = true and the page direction flips. Tests RTL layout for Arabic / Hebrew locales. Auto-enabled when an RTL language is picked."
+          title="Right-to-left — flip the page direction to test Arabic or Hebrew layouts"
         />
       </div>
 
       <div className={styles.field}>
-        <Label size="small" htmlFor="user-tz" title="Time zone offset — minutes from UTC. 0 = UTC, -300 = US Eastern, 60 = Central European. Returned by context.userSettings.getTimeZoneOffsetMinutes(). Tests time-zone-sensitive rendering.">Time zone offset (minutes from UTC)</Label>
+        <Label size="small" htmlFor="user-tz" title="Time zone offset — minutes from UTC: 0 = UTC, −300 = US Eastern, 60 = Central European">Time zone offset (minutes from UTC)</Label>
         <Input
           id="user-tz"
           size="small"
@@ -106,7 +106,7 @@ export function UserSettingsPanel() {
       </div>
 
       <div className={styles.field}>
-        <Label size="small" htmlFor="user-id" title="User ID — the GUID returned by context.userSettings.userId. Controls that record who-changed-what or filter records by owner use this. Keep the {braces} format consistent with real Dataverse user GUIDs.">User ID</Label>
+        <Label size="small" htmlFor="user-id" title="User ID — GUID for the current user; keep the {braces} format to match real Dataverse">User ID</Label>
         <Input
           id="user-id"
           size="small"
@@ -116,7 +116,7 @@ export function UserSettingsPanel() {
       </div>
 
       <div className={styles.field}>
-        <Label size="small" htmlFor="user-name" title="User Name — context.userSettings.userName, the display name shown in user-facing chrome. Change this to test how the control renders different name lengths or non-ASCII characters.">User Name</Label>
+        <Label size="small" htmlFor="user-name" title="User name — display name shown in user-facing chrome; test different lengths and characters">User Name</Label>
         <Input
           id="user-name"
           size="small"
@@ -126,7 +126,7 @@ export function UserSettingsPanel() {
       </div>
 
       <div className={styles.field}>
-        <Label size="small" htmlFor="user-roles" title="Security roles — names of the Dataverse security roles the current user holds. context.userSettings.securityRoles returns the list. Use this to test role-gated UI (admin-only buttons, etc.).">Security roles (one per line)</Label>
+        <Label size="small" htmlFor="user-roles" title="Security roles — names of roles the user holds; test role-gated parts of the control">Security roles (one per line)</Label>
         <Textarea
           id="user-roles"
           size="small"

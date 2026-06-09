@@ -73,7 +73,7 @@ export function DevicePanel() {
     <div className={styles.root}>
       <div
         className={styles.header}
-        title="Device Emulation — set viewport dimensions and form factor to match common phones, tablets, and desktops. The harness rewrites the control's @media queries into @container queries so it responds to the emulated viewport, not the browser window."
+        title="Device emulation — preview the control at phone, tablet, or desktop dimensions"
       >
         Device Emulation
       </div>
@@ -96,7 +96,7 @@ export function DevicePanel() {
       <div className={styles.section}>
         <div
           className={styles.header}
-          title="Host — which Power Platform host the control thinks it's running inside. Returned by context.client.getClient(). Some controls render differently for Mobile (Field Service) vs Outlook (mail-app) vs Teams (in-meeting tab)."
+          title="Host — which app the control thinks it's running in (browser, Teams, mobile, Outlook)"
         >
           Host
         </div>
@@ -118,7 +118,7 @@ export function DevicePanel() {
       <div className={styles.section}>
         <div
           className={styles.header}
-          title="Component Container Size — override the dimensions of the control's host element independently of the viewport. Useful for testing how a PCF behaves when the form section it sits in is much smaller (or larger) than the screen."
+          title="Container size — set the control's host element dimensions independently of the viewport"
         >
           Component Container Size
         </div>

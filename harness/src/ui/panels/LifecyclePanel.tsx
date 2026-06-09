@@ -209,11 +209,11 @@ export function LifecyclePanel() {
       <div>
         <div
           className={styles.sectionHeader}
-          title="Lifecycle Monitor — timeline of every PCF lifecycle method the harness called on the control: init (once at load), updateView (whenever inputs change), getOutputs (after notifyOutputChanged), and destroy (on unload). Times, error states, and resource leaks are tracked here."
+          title="Lifecycle — timeline of init, updateView, getOutputs, and destroy calls with timings"
         >
           Lifecycle Monitor
           <span style={{ flex: 1 }} />
-          <Button appearance="subtle" icon={<Delete24Regular />} size="small" onClick={clearLifecycle} title="Clear lifecycle events — wipes the timeline and counters but does not reload the control." />
+          <Button appearance="subtle" icon={<Delete24Regular />} size="small" onClick={clearLifecycle} title="Clear log" />
         </div>
       </div>
 
@@ -227,7 +227,7 @@ export function LifecyclePanel() {
           <div>
             <div
               className={styles.sectionHeader}
-              title="Call Counts — how many times each lifecycle method has fired since the control loaded. A healthy control: init=1, updateView ≥ 1, destroy=0 (or 1 if reloaded). Excessive updateView counts often indicate the control is firing notifyOutputChanged in a loop."
+              title="Call counts — times each lifecycle method has fired; high updateView counts may indicate a render loop"
             >
               Call Counts
             </div>
@@ -251,7 +251,7 @@ export function LifecyclePanel() {
           <div>
             <div
               className={styles.sectionHeader}
-              title="Avg Duration by Method — average wall-clock time the control spent in each lifecycle call. Targets: init under 200ms, updateView under 16ms (one frame), destroy under 50ms. Bars longer than these budgets indicate work that should be deferred or memoised."
+              title="Avg duration — average time spent in each lifecycle call; updateView should be under 16ms"
             >
               Avg Duration by Method
             </div>
@@ -286,7 +286,7 @@ export function LifecyclePanel() {
           <div>
             <div
               className={styles.sectionHeader}
-              title="Event Sequence — chronological strip of every lifecycle call, colour-coded by method. Hover any block to see the exact timing. Useful for spotting unexpected updateView storms or destroy/init churn."
+              title="Event sequence — colour-coded strip of every lifecycle call in order"
             >
               Event Sequence
               <Badge appearance="outline" size="small">{events.length} total</Badge>
@@ -322,7 +322,7 @@ export function LifecyclePanel() {
           <div>
             <div
               className={styles.sectionHeader}
-              title="Recent Events — the last 20 lifecycle calls in detail (time, method, duration, error). Durations over 16ms turn orange (one-frame budget); over 100ms turn red. Click into the row's tooltip for the full event payload."
+              title="Recent events — last 20 lifecycle calls with timing; orange = over 16ms, red = over 100ms"
             >
               Recent Events
             </div>
@@ -352,7 +352,7 @@ export function LifecyclePanel() {
               <div>
                 <div
                   className={styles.sectionHeader}
-                  title="Resource Leaks — listeners, timers, and observers the control created in init/updateView but did not clean up in destroy. Each entry is something likely to keep DOM nodes alive after the control unmounts, causing memory leaks in production."
+                  title="Resource leaks — listeners and timers the control registered but did not remove in destroy"
                 >
                   <Warning24Regular style={{ color: '#d13438' }} />
                   Resource Leaks
@@ -393,7 +393,7 @@ export function LifecyclePanel() {
           <div>
             <div
               className={styles.sectionHeader}
-              title="Health Checks — automated assertions about the control's lifecycle hygiene. Green = passing, red = needs attention. Useful as a quick smoke test before shipping a control."
+              title="Health checks — automated lifecycle hygiene checks; green = pass, red = needs attention"
             >
               Health Checks
             </div>
@@ -444,7 +444,7 @@ export function LifecyclePanel() {
               <div>
                 <div
                   className={styles.sectionHeader}
-                  title="Errors — any exception thrown from init / updateView / getOutputs / destroy is captured here. The last 5 are shown. Check the browser console for the full stack trace."
+                  title="Errors — exceptions thrown from lifecycle methods; check the browser console for full traces"
                 >
                   Errors <Badge color="danger" size="small">{errors.length}</Badge>
                 </div>

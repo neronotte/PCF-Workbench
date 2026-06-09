@@ -81,13 +81,13 @@ export function ControlInfoCard({ manifest }: Props) {
     <div className={styles.root}>
       <div
         className={styles.title}
-        title={`Control class name — the <control constructor=...> attribute from ControlManifest.Input.xml. The harness loads bundle.js and reads this class off the window namespace.`}
+        title={`Control class — the constructor name declared in ControlManifest.Input.xml`}
       >
         {manifest.constructor}
       </div>
       <div
         className={styles.subtitle}
-        title={`Namespace (publisher / solution prefix) and manifest version. Increment the version in ControlManifest.Input.xml each time you ship a behavioural change so the host invalidates its cache.`}
+        title={`Namespace and version — bump the version in the manifest each time you ship a change`}
       >
         {manifest.namespace} &middot; v{manifest.version}
       </div>
@@ -95,8 +95,8 @@ export function ControlInfoCard({ manifest }: Props) {
       {/* Badges */}
       <div className={styles.badgeRow}>
         <span title={isVirtual
-          ? 'Virtual control — returns React elements from updateView(). Needs platform-libraries React + Fluent declared in the manifest.'
-          : 'Standard (DOM) control — manages its own root DOM element. The harness gives it a container and the control mutates it directly.'}>
+          ? 'Virtual — returns React elements; needs React + Fluent in the manifest'
+          : 'Standard (DOM) — manages its own DOM element directly'}>
           <Badge
             appearance="filled"
             color={isVirtual ? 'important' : 'informative'}
@@ -106,32 +106,32 @@ export function ControlInfoCard({ manifest }: Props) {
           </Badge>
         </span>
         {hasWebAPI && (
-          <span title="Manifest declares the WebAPI feature — the control can call context.webAPI.retrieveRecord / retrieveMultipleRecords / createRecord / updateRecord / deleteRecord against the bound Dataverse environment.">
+          <span title="WebAPI — the control can read and write Dataverse records">
             <Badge appearance="outline" size="small" color="success">WebAPI</Badge>
           </span>
         )}
         {hasDevice && (
-          <span title="Manifest declares the Device feature — the control can call context.device APIs like pickFile, captureImage, captureAudio, captureVideo, getBarcodeValue, or getCurrentPosition.">
+          <span title="Device — the control can access the camera, microphone, location, and file picker">
             <Badge appearance="outline" size="small" color="warning">Device</Badge>
           </span>
         )}
         {hasUtility && (
-          <span title="Manifest declares the Utility feature — the control can call context.utils helpers like getEntityMetadata, lookupObjects, and openLookupObjects.">
+          <span title="Utility — the control can open lookup dialogs and fetch entity metadata">
             <Badge appearance="outline" size="small" color="brand">Utility</Badge>
           </span>
         )}
-        <span title={`Bound properties (${boundProps.length}) — properties that read/write a single column on the form's record. On a field PCF this is the field the control is attached to; on a dataset PCF these are columns inside the view.`}>
+        <span title={`Bound (${boundProps.length}) — properties that read and write a column on the host record`}>
           <Badge appearance="outline" size="small">
             {boundProps.length} bound
           </Badge>
         </span>
-        <span title={`Input properties (${inputProps.length}) — read-only configuration values the maker sets at design time (e.g. labels, colours, behaviour flags). The control sees them via context.parameters.<name>.raw.`}>
+        <span title={`Input (${inputProps.length}) — read-only settings the maker configures at design time`}>
           <Badge appearance="outline" size="small">
             {inputProps.length} input
           </Badge>
         </span>
         {cssCount > 0 && (
-          <span title={`${cssCount} stylesheet${cssCount === 1 ? '' : 's'} declared in the manifest. The harness injects these into a CSS @layer so the host's own Fluent styles win on conflict.`}>
+          <span title={`${cssCount} stylesheet${cssCount === 1 ? '' : 's'} — injected into an isolated CSS layer so harness styles win on conflict`}>
             <Badge appearance="outline" size="small">{cssCount} CSS</Badge>
           </span>
         )}
@@ -142,7 +142,7 @@ export function ControlInfoCard({ manifest }: Props) {
         <div className={styles.section}>
           <div
             className={styles.sectionTitle}
-            title="Platform Libraries — declared in the manifest via <platform-library>. The harness loads the requested major version of React / Fluent on-demand from CDN and exposes it as a versioned global so the control's bundle can import it without shipping its own copy."
+            title="Platform libraries — React and Fluent UI versions the control shares with the host instead of bundling"
           >
             Platform Libraries
           </div>
@@ -150,10 +150,10 @@ export function ControlInfoCard({ manifest }: Props) {
             <div key={lib.name} className={styles.libItem}>
               <span title={
                 lib.name === 'React'
-                  ? `React ${lib.version} requested via <platform-library>. The harness loads it from CDN and exposes it as a versioned global so the bundle can import React without bundling its own copy.`
+                  ? `React ${lib.version} — shared with the host; the control doesn't need to bundle its own copy`
                   : lib.name === 'Fluent'
-                  ? `Fluent UI ${lib.version} requested via <platform-library>. The harness loads the real Fluent UMD on-demand. For unknown majors the harness falls back to a Proxy stub.`
-                  : `${lib.name} ${lib.version} requested via <platform-library>.`
+                  ? `Fluent UI ${lib.version} — shared with the host; unknown majors fall back to a stub`
+                  : `${lib.name} ${lib.version} — shared platform library`
               }>
                 <Badge
                   appearance="filled"
@@ -177,7 +177,7 @@ export function ControlInfoCard({ manifest }: Props) {
         <div className={styles.section}>
           <div
             className={styles.sectionTitle}
-            title="Framework — the control declared no <platform-library> entries in its manifest, so it renders directly to its container with whatever framework (if any) it bundles itself. Common for legacy 'standard' (DOM) PCFs."
+            title="Standard (DOM) — no shared platform libraries; the control bundles its own framework"
           >
             Framework
           </div>
@@ -193,7 +193,7 @@ export function ControlInfoCard({ manifest }: Props) {
         <div className={styles.section}>
           <div
             className={styles.sectionTitle}
-            title="Features — Power Platform capabilities the manifest requests via <feature-usage>. WebAPI, Utility, Navigation, and various Device features. 'required' means the control will not load if the capability is unavailable; 'optional' means it degrades gracefully."
+            title="Features — capabilities the manifest requests; required ones must be available for the control to load"
           >
             Features
           </div>
@@ -212,7 +212,7 @@ export function ControlInfoCard({ manifest }: Props) {
       <div className={styles.section}>
         <div
           className={styles.sectionTitle}
-          title="Properties — manifest-declared inputs and outputs (bound to record columns or static input config). Datasets are collections of records the control iterates over (used by view/grid PCFs). Edit values in the Properties side-panel tab."
+          title="Properties — manifest inputs, outputs, and datasets; edit values in the Properties panel tab"
         >
           Properties ({manifest.properties.length})
           {manifest.dataSets.length > 0 && ` · ${manifest.dataSets.length} dataset${manifest.dataSets.length > 1 ? 's' : ''}`}

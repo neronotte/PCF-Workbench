@@ -24,6 +24,19 @@ const useStyles = makeStyles({
     overflow: 'auto',
     padding: '16px',
   },
+  // M2/h10 — Reactive Desktop: when desktop preset is active and the user has
+  // not pinned an explicit container width, let the viewport fill the
+  // available space so @container pcf-viewport queries fire reactively as the
+  // browser narrows (matching real UCI behaviour).
+  viewportWrapperFluid: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'stretch',
+    backgroundColor: '#f0f0f0',
+    overflow: 'auto',
+    padding: '16px',
+  },
   viewportWrapperFullBleed: {
     flex: 1,
     display: 'flex',
@@ -157,6 +170,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
   const viewportHeight = useHarnessStore(s => s.viewportHeight);
   const containerWidth = useHarnessStore(s => s.containerWidth);
   const containerHeight = useHarnessStore(s => s.containerHeight);
+  const devicePreset = useHarnessStore(s => s.devicePreset);
   const propertyValues = useHarnessStore(s => s.propertyValues);
   const networkMode = useHarnessStore(s => s.networkMode);
   const isControlDisabled = useHarnessStore(s => s.isControlDisabled);
@@ -333,12 +347,40 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
     return () => setReloadControl(null);
   }, [handleReload, setReloadControl]);
 
+  // h10 — Reactive Desktop mode. Active when devicePreset is 'desktop' and
+  // the user hasn't pinned an explicit container width. The viewport frame
+  // fills its wrapper, so narrowing the browser narrows the @container
+  // pcf-viewport size and the control's responsive breakpoints fire — same
+  // as a real UCI form. Tablet/Mobile presets remain pinned to their preset
+  // pixel dimensions, and full-bleed continues to use its own path.
+  const isFluidDesktop = devicePreset === 'desktop' && !isFullBleed && containerWidth == null && containerHeight == null;
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [measuredSize, setMeasuredSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    if (!isFluidDesktop) { setMeasuredSize(null); return; }
+    const el = frameRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const r = e.contentRect;
+        setMeasuredSize({ w: Math.round(r.width), h: Math.round(r.height) });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isFluidDesktop]);
+
   return (
     <div className={styles.root}>
-      <div className={isFullBleed ? styles.viewportWrapperFullBleed : styles.viewportWrapper}>
+      <div className={isFullBleed ? styles.viewportWrapperFullBleed : isFluidDesktop ? styles.viewportWrapperFluid : styles.viewportWrapper}>
         <div
+          ref={frameRef}
           className={isFullBleed ? styles.viewportFrameFullBleed : styles.viewportFrame}
-          style={isFullBleed ? undefined : {
+          style={isFullBleed ? undefined : isFluidDesktop ? {
+            width: '100%',
+            flex: 1,
+            minHeight: 0,
+          } : {
             width: viewportWidth,
             height: viewportHeight,
           }}
@@ -387,11 +429,18 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
       <div className={styles.statusBar} aria-label="Viewport size">
         <div className={styles.statusItem}>
           <span className={styles.statusLabel}>Viewport</span>
-          <span>{viewportWidth} × {viewportHeight}</span>
+          {isFluidDesktop && measuredSize ? (
+            <>
+              <span data-test-id="viewport-size-fluid">{measuredSize.w} × {measuredSize.h}</span>
+              <span style={{ opacity: 0.6, fontFamily: tokens.fontFamilyBase, fontSize: '10px' }}               title="Desktop preset is fluid — set Tablet or Mobile to lock the viewport size">(fluid)</span>
+            </>
+          ) : (
+            <span>{viewportWidth} × {viewportHeight}</span>
+          )}
         </div>
         <div className={styles.statusItem}>
           <span className={styles.statusLabel}>Container</span>
-          <span>{containerWidth ?? viewportWidth} × {containerHeight ?? viewportHeight}</span>
+          <span>{containerWidth ?? (isFluidDesktop && measuredSize ? measuredSize.w : viewportWidth)} × {containerHeight ?? (isFluidDesktop && measuredSize ? measuredSize.h : viewportHeight)}</span>
           {(containerWidth == null && containerHeight == null) && (
             <span style={{ opacity: 0.5, fontFamily: tokens.fontFamilyBase, fontSize: '10px' }}>(full)</span>
           )}

@@ -864,7 +864,7 @@ export function PropertyEditor({ manifest }: Props) {
 
       <div
         className={styles.header}
-        title="Properties — the manifest-declared inputs to the control. Bound properties read from a column on the host's record; input properties are static configuration the maker sets at design time. Edit values here to test how the control reacts to different inputs."
+        title="Properties — edit bound and input values to test how the control reacts"
       >
         Properties
       </div>
@@ -875,7 +875,7 @@ export function PropertyEditor({ manifest }: Props) {
             size="small"
             weight="semibold"
             style={{ opacity: 0.6 }}
-            title="Bound properties — properties with usage='bound' in the manifest. Each binds to a column on the host record (e.g. a field PCF binds to the field it is attached to; a dataset PCF columns bind to view columns). Toggle 'Static value' to test with literal values without a record."
+            title="Bound — properties tied to a column on the host record; toggle Static to use a literal value"
           >
             Bound Properties
           </Label>
@@ -899,7 +899,7 @@ export function PropertyEditor({ manifest }: Props) {
             size="small"
             weight="semibold"
             style={{ opacity: 0.6 }}
-            title="Input properties — properties with usage='input' in the manifest. These are read-only configuration values the maker sets at design time (labels, colours, behaviour flags). The control reads them via context.parameters.<name>.raw."
+            title="Input — read-only settings the maker configures at design time (labels, colours, flags)"
           >
             Input Properties
           </Label>

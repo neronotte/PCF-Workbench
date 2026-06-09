@@ -99,7 +99,7 @@ export function AppNotificationBanner() {
                         role="status"
                         data-test-id={`app-notification-${n.id}`}
                     >
-                        <span className={styles.appBadge} title="Application-level notification (Xrm.App.addGlobalNotification)">
+                        <span className={styles.appBadge} title="App notification — raised via Xrm.App.addGlobalNotification">
                             <Alert16Filled />
                             App
                         </span>

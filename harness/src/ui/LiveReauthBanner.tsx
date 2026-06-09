@@ -83,7 +83,7 @@ export function LiveReauthBanner() {
       <code
         className={styles.command}
         onClick={copy}
-        title="Click to copy to clipboard"
+        title="Copy to clipboard"
         data-test-id="live-reauth-command"
       >
         {command}
@@ -102,7 +102,7 @@ export function LiveReauthBanner() {
         size="small"
         icon={<ArrowClockwise16Regular />}
         onClick={() => setReauth(null)}
-        title="Retry — clears the flag so the next live call attempts a fresh token"
+        title="Retry — reconnect to the live org with a fresh token"
       >
         Retry
       </Button>

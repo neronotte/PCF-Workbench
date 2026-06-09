@@ -518,13 +518,13 @@ export function Gallery() {
                 {/* Badges */}
                 <div className={styles.cardBadges}>
                   {c.isPrivate && (
-                    <span title="Marked private (.pcf-private file present in the control directory). Hidden from the gallery by default; show via the 'Show private' toggle.">
+                    <span title="Private — hidden from the gallery by default; use Show private to reveal it">
                       <Badge appearance="filled" color="warning" size="small">private</Badge>
                     </span>
                   )}
                   <span title={c.controlType === 'virtual'
-                    ? 'Virtual control — returns React elements from updateView(). Requires platform-libraries React + Fluent.'
-                    : 'Standard (DOM) control — manages its own root DOM element.'}>
+                    ? 'Virtual — returns React elements; requires React + Fluent in the manifest'
+                    : 'Standard (DOM) — manages its own DOM element directly'}>
                     <Badge
                       appearance="filled"
                       color={c.controlType === 'virtual' ? 'important' : 'informative'}
@@ -535,12 +535,12 @@ export function Gallery() {
                   </span>
                   {c.hasBuild
                     ? (
-                      <span title="out/controls/<Name>/bundle.js exists. Run npm run build in the control project to refresh after source changes.">
+                      <span title="Bundle ready — run npm run build in the control project to refresh after changes">
                         <Badge appearance="filled" color="success" size="small">built</Badge>
                       </span>
                     )
                     : (
-                      <span title="No bundle.js found under out/controls/. Run npm run build in the control project before launching.">
+                      <span title="No bundle — run npm run build in the control project before launching">
                         <Badge appearance="outline" color="danger" size="small">not built</Badge>
                       </span>
                     )
@@ -551,19 +551,19 @@ export function Gallery() {
                     </span>
                   ))}
                   {c.platformLibraries.map(l => (
-                    <span key={l.name} title={`${l.name} ${l.version} requested via <platform-library>. The harness loads the matching UMD on-demand.`}>
+                    <span key={l.name} title={`${l.name} ${l.version} — shared platform library loaded on demand`}>
                       <Badge appearance="tint" size="small" color="brand">
                         {l.name} {l.version}
                       </Badge>
                     </span>
                   ))}
                   {c.hasDataJson && (
-                    <span title="data.json present — seeded mock records the harness loads into context.webAPI on startup.">
+                    <span title="data.json — mock records loaded into context.webAPI on startup">
                       <Badge appearance="outline" color="success" size="small">data.json</Badge>
                     </span>
                   )}
                   {c.hasTestScenarios && (
-                    <span title="test-scenarios.json present — saved property/state snapshots the harness can replay from the Scenarios panel.">
+                    <span title="test-scenarios.json — saved scenarios the harness can replay">
                       <Badge appearance="outline" color="brand" size="small">test scenarios</Badge>
                     </span>
                   )}

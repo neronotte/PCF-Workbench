@@ -150,7 +150,7 @@ export function ConsolePanel() {
       <div className={styles.header}>
         <span
           className={styles.title}
-          title="Console — every shim call the control made (Context, Xrm, formContext, WebAPI, lifecycle). Filter by category using the pills on the right. Useful for tracing the exact API path a control took."
+          title="Console — log of every API call the control made, grouped by category"
         >
           Console ({filteredEntries.length})
         </span>
