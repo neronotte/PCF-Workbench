@@ -297,7 +297,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
     return () => {
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
     };
-  }, [propertyValues, networkMode, isControlDisabled, formFactor, isDarkMode, pageEntityId, pageEntityTypeName, pageEntityRecordName, containerWidth, containerHeight, isFullscreen, userLanguageId, userIsRTL, userTimeZoneOffsetMinutes, host, datasetState, dataVersion]);
+  }, [propertyValues, networkMode, isControlDisabled, formFactor, isDarkMode, pageEntityId, pageEntityTypeName, pageEntityRecordName, containerWidth, containerHeight, viewportWidth, viewportHeight, isFullscreen, userLanguageId, userIsRTL, userTimeZoneOffsetMinutes, host, datasetState, dataVersion]);
 
   // Capture runtime errors thrown outside control-host's try/catch blocks
   // (async callbacks, event handlers, promise rejections inside the bundle).
@@ -354,21 +354,39 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
   // as a real UCI form. Tablet/Mobile presets remain pinned to their preset
   // pixel dimensions, and full-bleed continues to use its own path.
   const isFluidDesktop = devicePreset === 'desktop' && !isFullBleed && containerWidth == null && containerHeight == null;
+  const setViewportSize = useHarnessStore(s => s.setViewportSize);
   const frameRef = useRef<HTMLDivElement>(null);
   const [measuredSize, setMeasuredSize] = useState<{ w: number; h: number } | null>(null);
   useEffect(() => {
     if (!isFluidDesktop) { setMeasuredSize(null); return; }
     const el = frameRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
+    let pending: { w: number; h: number } | null = null;
+    let raf = 0;
+    const flush = () => {
+      raf = 0;
+      if (!pending) return;
+      const { w, h } = pending;
+      pending = null;
+      setMeasuredSize({ w, h });
+      // Push into the store so context.mode.allocatedWidth/Height reports
+      // the real rendered size and updateView fires — PCFs that read
+      // allocated size in JS (rather than via CSS @media) will re-render.
+      setViewportSize(w, h);
+    };
     const ro = new ResizeObserver((entries) => {
       for (const e of entries) {
         const r = e.contentRect;
-        setMeasuredSize({ w: Math.round(r.width), h: Math.round(r.height) });
+        pending = { w: Math.round(r.width), h: Math.round(r.height) };
       }
+      if (!raf) raf = requestAnimationFrame(flush);
     });
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [isFluidDesktop]);
+    return () => {
+      ro.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [isFluidDesktop, setViewportSize]);
 
   return (
     <div className={styles.root}>

@@ -163,6 +163,11 @@ export interface HarnessStore {
   viewportHeight: number;
   formFactor: number;
   setDevicePreset: (preset: string) => void;
+  /** h10 — push live measured viewport size (e.g. from a ResizeObserver in
+   *  reactive desktop mode). Re-renders the control with fresh
+   *  context.mode.allocatedWidth/Height so PCFs that read those in
+   *  updateView() respond to browser/panel resize like a real UCI form. */
+  setViewportSize: (width: number, height: number) => void;
 
   // Component container size (null = fill viewport)
   containerWidth: number | null;
@@ -492,6 +497,11 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
         formFactor: p.formFactor,
       });
     }
+  },
+  setViewportSize: (width, height) => {
+    const s = get();
+    if (s.viewportWidth === width && s.viewportHeight === height) return;
+    set({ viewportWidth: width, viewportHeight: height });
   },
 
   // Component container size (null = fill viewport)
