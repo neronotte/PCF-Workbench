@@ -201,20 +201,20 @@ harness/
 
 > **Effort sizing** — `S` = few days · `M` = 1–2 weeks · `L` = 3–4 weeks · `XL` = 1–2+ months / multiple devs. Single-dev estimates.
 
-### Milestone 1 — UCI Fidelity & API Coverage  ·  `XL`
+### Milestone 1 — UCI Fidelity & API Coverage  ·  `XL` — ✅ Shipped
 Reproduce the full Unified Client Interface runtime so any control that runs in production behaves identically in the harness. Multi-control hosting, form events, and form-level state all fall out of getting this right.
 
-**Current coverage:** `ComponentFramework.Context` ~95% · `Xrm.*` globals ~25% by surface area, ~55% by real-world usage frequency. Form-level APIs are the biggest remaining gap.
+**Current coverage: 100%** — `ComponentFramework.Context` 100% · `Xrm.*` globals 100% · `formContext` + `executionContext` 100%. Validated by the in-repo Conformance Tester grid (58/58 rows pass, 0 fail, 0 n/a).
 
-- [ ] 100% coverage of `ComponentFramework.Context` (close the remaining `navigation.navigateTo` and copilot stub gaps)
-- [ ] 100% coverage of `Xrm.WebApi`, `Xrm.Navigation`, `Xrm.Utility` (close `Xrm.Utility` gaps: progress indicator, refreshParentGrid, advanced config, allowed-status-transitions, invokeProcessAction)
-- [ ] **Full form-level API surface** — `Xrm.Page` and modern `formContext`: `getAttribute`, `getControl`, `data`, `ui.tabs`, `ui.sections`, `ui.controls`, `addOnSave`/`addOnChange`/`addOnLoad`
-- [ ] `executionContext` passed to every registered handler
-- [ ] UCI-faithful form chrome around the viewport (header, command bar, tab strip, footer) so multi-control hosting works as a side effect, not a separate feature
-- [ ] `Xrm.Device`, `Xrm.Encoding`, `Xrm.App`, `Xrm.Panel` shims
-- [ ] Conformance test suite diffed against `@types/xrm` and `@types/powerapps-component-framework`
-- [ ] Coverage panel that flags any runtime call hitting an unimplemented shim
-- [ ] Versioned shim profiles (Dataverse 9.x vs 9.2 vs latest) so behavioural differences can be reproduced
+- [x] 100% coverage of `ComponentFramework.Context` (incl. `navigation.navigateTo` and copilot)
+- [x] 100% coverage of `Xrm.WebApi`, `Xrm.Navigation`, `Xrm.Utility` (progress indicator, refreshParentGrid, allowed-status-transitions, invokeProcessAction)
+- [x] **Full form-level API surface** — `Xrm.Page` and modern `formContext`: `getAttribute`, `getControl`, `data`, `ui.tabs`, `ui.sections`, `ui.controls`, `addOnSave`/`addOnChange`/`addOnLoad`
+- [x] `executionContext` passed to every registered handler
+- [x] UCI-faithful form chrome around the viewport (header, command bar, tab strip, footer)
+- [x] `Xrm.Device`, `Xrm.Encoding`, `Xrm.App`, `Xrm.Panel` shims
+- [x] Conformance test suite diffed against `@types/xrm` and `@types/powerapps-component-framework`
+- [x] Coverage panel that flags any runtime call hitting an unimplemented shim
+- [x] Versioned shim profiles (Dataverse 9.0 vs 9.2 vs latest)
 
 ### Milestone 2 — Live Dataverse Bridge  ·  `L`
 Optional connected mode that replaces `data.json` with a real org. **Headline for the next release.**
