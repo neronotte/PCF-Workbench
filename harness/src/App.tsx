@@ -12,7 +12,7 @@ import { loadMetadata } from './store/metadata-store';
 import { rebaseDatesToToday } from './store/date-rebase';
 import { setResxStrings } from './shim/resources';
 import type { ManifestConfig } from './types/manifest';
-import { findScenarioByName, applyScenarioToStore } from './lib/scenario-loader';
+import { findScenarioByName, applyScenarioAsActive } from './lib/scenario-loader';
 
 // Import from virtual module (provided by pcf-plugin).
 import { manifest as manifestData, bundlePath, cssFiles, resxStrings, isGalleryMode, controlDir, launchedAsGallery } from 'virtual:pcf-manifest';
@@ -87,13 +87,20 @@ export function App() {
       // mounts. Used by the loop CLI in CI so the harness boots in the
       // requested state instead of with default/empty property values.
       // Must run AFTER data loads so fieldBindings resolve correctly.
+      //
+      // H11 — use applyScenarioAsActive (not applyScenarioToStore) so the
+      // ScenarioHeader's first-mount resume effect finds *this* scenario as
+      // the persisted active one. With the lower-level apply the resume
+      // effect would re-apply whatever scenario was active in the previous
+      // session, silently stomping the URL-loaded data (transitions
+      // disappearing on BookingStatusTransitionControl, etc.).
       try {
         const scenarioParam = new URLSearchParams(window.location.search).get('scenario');
         if (scenarioParam && manifestData) {
           const controlId = `${manifestData.namespace}.${manifestData.constructor}`;
           const scenario = await findScenarioByName(controlId, scenarioParam);
           if (scenario) {
-            applyScenarioToStore(scenario);
+            applyScenarioAsActive(controlId, scenario);
             console.log(`[pcf-workbench] Auto-loaded scenario "${scenarioParam}" from ?scenario= URL param`);
           } else {
             console.warn(`[pcf-workbench] ?scenario=${scenarioParam} requested but no scenario with that name was found in test-scenarios.json or localStorage`);

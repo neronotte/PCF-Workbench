@@ -10,5 +10,6 @@ export type { TestScenario } from './scenario-store';
 export {
   resolveScenarioValues,
   applyScenarioToStore,
+  applyScenarioAsActive,
   findScenarioByName,
 } from './scenario-store';
