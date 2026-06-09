@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StarRating — PCF Showcase</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181a22;
+    --panel-2: #20232d;
+    --border: #2a2e3a;
+    --text: #e8e9ee;
+    --text-dim: #9ba1ad;
+    --text-fade: #6b7280;
+    --brand: #7B61FF;
+    --brand-2: #32D4FF;
+    --accent: #FFC857;
+    --success: #39E0C7;
+    --code-bg: #0b0d11;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 48px 32px 80px; }
+  header { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+  .eyebrow { display: inline-block; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--brand-2); padding: 4px 12px; border: 1px solid rgba(50, 212, 255, .25); border-radius: 999px; margin-bottom: 14px; }
+  h1 { font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; font-size: clamp(2rem, 4vw, 3rem); margin: 0 0 10px; letter-spacing: -.01em; background: linear-gradient(135deg, #fff 0%, #b8b0d6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .tag { font-size: 1.05rem; color: var(--text-dim); max-width: 720px; margin: 0; }
+  h2 { font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; font-size: 1.4rem; margin: 48px 0 16px; color: var(--text); letter-spacing: -.005em; }
+  h2 .num { display: inline-block; width: 28px; height: 28px; line-height: 26px; text-align: center; border-radius: 8px; background: rgba(123, 97, 255, .15); border: 1px solid rgba(123, 97, 255, .35); color: var(--brand-2); font-size: .85rem; font-weight: 600; margin-right: 10px; vertical-align: middle; }
+  p { color: var(--text-dim); margin: 0 0 14px; }
+  code { font-family: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace; font-size: .9em; background: var(--code-bg); padding: 2px 6px; border-radius: 4px; color: var(--brand-2); border: 1px solid var(--border); }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; overflow-x: auto; margin: 12px 0 0; font-size: .85rem; line-height: 1.55; }
+  pre code { background: transparent; border: none; padding: 0; color: var(--text); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin-bottom: 18px; }
+  .screenshot { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; text-align: center; margin: 12px 0 0; }
+  .screenshot img { max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 12px 40px rgba(0, 0, 0, .5); }
+  .screenshot .caption { font-size: .82rem; color: var(--text-fade); margin-top: 14px; font-style: italic; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+  .meta { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .meta .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-fade); margin-bottom: 6px; }
+  .meta .value { font-size: .95rem; color: var(--text); font-weight: 500; }
+  ol, ul { color: var(--text-dim); padding-left: 22px; }
+  ol li, ul li { margin-bottom: 8px; }
+  ol li strong, ul li strong { color: var(--text); font-weight: 600; }
+  a { color: var(--brand-2); text-decoration: none; border-bottom: 1px dotted rgba(50, 212, 255, .4); }
+  a:hover { border-bottom-style: solid; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; padding: 4px 10px; border-radius: 999px; background: rgba(57, 224, 199, .08); border: 1px solid rgba(57, 224, 199, .25); color: var(--success); }
+  .badge.warn { background: rgba(255, 200, 87, .08); border-color: rgba(255, 200, 87, .3); color: var(--accent); }
+  footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); font-size: .82rem; color: var(--text-fade); text-align: center; }
+  footer a { color: var(--text-dim); }
+  .license-note { font-size: .82rem; color: var(--text-fade); margin-top: 10px; padding-left: 22px; border-left: 2px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">PCF Workbench &middot; M10.P3 worked example</span>
+    <h1>StarRating</h1>
+    <p class="tag">A small, accessible 0&ndash;5 star rating control for any <code>Whole.None</code> field. Built end-to-end via the GitHub Copilot CLI <code>pcf-engineer</code> + <code>pcf-workbench</code> skills &mdash; from plan to passing headless gate &mdash; with zero Dataverse round-trips.</p>
+    <div class="badge-row">
+      <span class="badge">v1.0.0</span>
+      <span class="badge">React + Fluent UI v9</span>
+      <span class="badge">Virtual control</span>
+      <span class="badge">~16&nbsp;KiB bundle</span>
+      <span class="badge">0 leaks &middot; 0 console errors</span>
+    </div>
+  </header>
+
+  <h2><span class="num">1</span>Brief</h2>
+  <div class="panel">
+    <p>StarRating binds to a <code>Whole.None</code> (integer) field and lets a user pick a rating between <code>0</code> and a configurable <code>maxStars</code> (default <code>5</code>). Each star is a Fluent v9 button with full WAI-ARIA radiogroup semantics: keyboard navigation, hover preview without commit, optional &ldquo;click selected star to clear&rdquo; via <code>allowClear</code>. A dedicated <code>isAuthoringMode</code> preview renders a static 3-filled placeholder for the form designer.</p>
+    <p style="margin: 0;">It's deliberately small &mdash; the goal of this sample is to demonstrate the <em>workflow</em>, not the depth of the control. See <a href="./DESIGN.md">DESIGN.md</a> for the full spec and <a href="./BUILT_WITH_AI.md">BUILT_WITH_AI.md</a> for the exact prompts that produced it.</p>
+  </div>
+
+  <h2><span class="num">2</span>Screenshot</h2>
+  <div class="screenshot">
+    <img src="./__visual__/screenshot.png" alt="StarRating rendered in PCF Workbench &mdash; 5 outline stars on a default form">
+    <div class="caption">Headless render captured by <code>pcf-harness loop</code>. Default state, no rating set. See <a href="./__visual__/report.json">report.json</a> for the full lifecycle / perf / leak report.</div>
+  </div>
+
+  <h2><span class="num">3</span>How to use</h2>
+  <div class="panel">
+    <p><strong>1. Add to a model-driven form.</strong> Edit a numeric column (Whole Number, no format) and select &ldquo;Add component&rdquo; &rarr; <code>PcfWorkbench.StarRating</code>.</p>
+    <p><strong>2. Configure the inputs.</strong> Two properties on top of the bound value:</p>
+    <pre><code>value      &mdash; bound to your Whole.None column
+maxStars   &mdash; total stars rendered (default 5; valid range 1&ndash;20)
+allowClear &mdash; if true, clicking the selected star (or pressing 0) clears to 0</code></pre>
+    <p style="margin-top: 14px;"><strong>3. Test locally first.</strong> Drop the control into PCF Workbench before importing to Dataverse:</p>
+    <pre><code>cd harness
+npx tsx bin/pcf-harness.ts loop --path ..\samples\StarRating\StarRating</code></pre>
+    <p style="margin-top: 14px;">Expected: <code style="color: var(--success);">[summary] PASS &mdash; control rendered cleanly</code>, exit 0, screenshot + report under <code>./pcf-loop-reports/</code>.</p>
+  </div>
+
+  <h2><span class="num">4</span>Technology</h2>
+  <div class="meta-grid">
+    <div class="meta"><div class="label">Framework</div><div class="value">React 16.14 (runtime 18)</div></div>
+    <div class="meta"><div class="label">UI library</div><div class="value">Fluent UI v9 (9.68)</div></div>
+    <div class="meta"><div class="label">Control type</div><div class="value">Virtual (React-based)</div></div>
+    <div class="meta"><div class="label">Bound type</div><div class="value">Whole.None (integer)</div></div>
+    <div class="meta"><div class="label">Bundle size</div><div class="value">~16 KiB minified</div></div>
+    <div class="meta"><div class="label">Manifest version</div><div class="value">1.0.0</div></div>
+    <div class="meta"><div class="label">Scaffolding</div><div class="value">pac pcf init &middot; pcf-scripts</div></div>
+    <div class="meta"><div class="label">Validation</div><div class="value">pcf-harness loop (Playwright)</div></div>
+  </div>
+  <p style="margin-top: 18px;">No 3rd-party runtime dependencies beyond Fluent UI v9 (platform-library) and React (platform-library). Both are provided by the Dynamics 365 host runtime &mdash; they do <em>not</em> ship inside the bundle.</p>
+
+  <h2><span class="num">5</span>License &amp; considerations</h2>
+  <div class="panel">
+    <p><strong>This control:</strong> released under the same license as PCF Workbench &mdash; see the repository <a href="../../LICENSE">LICENSE</a> file. Permissive (MIT-style) terms; safe to fork, modify, and embed in your own solutions.</p>
+    <p><strong>Runtime dependencies (provided by host, not bundled):</strong></p>
+    <ul>
+      <li><strong>React</strong> &mdash; MIT (Meta Platforms, Inc.)</li>
+      <li><strong>Fluent UI v9</strong> (<code>@fluentui/react-components</code>) &mdash; MIT (Microsoft)</li>
+    </ul>
+    <p style="margin-top: 14px;"><strong>Build-time dependencies</strong> (pcf-scripts, webpack, tsx, etc.) are dev-only and never reach a customer environment.</p>
+    <p class="license-note">No 3rd-party network calls. No telemetry. No <code>localStorage</code> / <code>sessionStorage</code> / cookie access. The control is fully self-contained and offline-safe.</p>
+  </div>
+
+  <footer>
+    Built with the <a href="https://github.com/jaduplesms/PCF-Workbench/blob/main/BUILDING.md">PCF Workbench AI build loop</a> &middot; <a href="./BUILT_WITH_AI.md">See the prompts</a> &middot; <a href="../../README.md">Back to repo</a>
+  </footer>
+</div>
+</body>
+</html>

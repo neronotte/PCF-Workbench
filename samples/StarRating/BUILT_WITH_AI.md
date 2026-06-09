@@ -80,6 +80,7 @@ samples/StarRating/
 ├── BUILT_WITH_AI.md          (this file)
 ├── DESIGN.md                  spec the AI built against
 ├── PLAN.md                    milestones + acceptance gates
+├── showcase.html              shareable single-page exhibit (brief / screenshot / how-to / tech / license)
 ├── data.json                  default property values + perf budget
 ├── test-scenarios.json        6 scenarios for the harness
 ├── StarRating.pcfproj

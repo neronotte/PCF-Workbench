@@ -163,9 +163,31 @@ UX states if it affects the error path, then build once I approve.
 
 `pcf-engineer` updates the manifest (bumps version), updates `index.ts`, `pcf-workbench` rebuilds + reruns scenarios. Saved scenarios mean regressions get caught the moment they regress.
 
-### 5. Ship
+### 5. Generate `showcase.html` — the shareable single-page exhibit
 
-When the harness is green and the scenarios pass, push to a real environment:
+Before shipping, ask Copilot to produce a self-contained `showcase.html` in the control's folder. It's the page you send to a stakeholder or partner so they can understand what you built without cloning the repo. One file, no build, opens in any browser.
+
+```
+Generate samples\MyControl\showcase.html. Use the harness loop screenshot
+(__visual__/screenshot.png) as the hero image. Cover:
+
+  1. Brief        — one paragraph: what it does + bound property
+  2. Screenshot   — rendered output from the headless loop
+  3. How to use   — manifest snippet + a 3-step "drop into your form" guide
+  4. Technology   — Fluent UI v9, React, manifest version, bundle size
+  5. License      — repo license + any 3rd-party dependencies you pulled in
+
+Keep it single-file (inline CSS, no JS frameworks). Match the dark / brand
+visual language of harness/docs/showcase.html so the family resembles.
+```
+
+Treat this as a hard output — not a nice-to-have. The discipline of writing the showcase forces you to articulate scope, dependencies, and licensing before the control leaves your laptop. It's also the artifact that surfaces *"oh, I depended on a GPL library, that's a problem"* before it ships.
+
+A reference exhibit lives at [`samples/StarRating/showcase.html`](./samples/StarRating/showcase.html) — Copilot can pattern-match against it.
+
+### 6. Ship
+
+When the harness is green, the scenarios pass, and `showcase.html` is reviewed, push to a real environment:
 
 ```powershell
 pac solution init --publisher-name yourco --publisher-prefix yc
