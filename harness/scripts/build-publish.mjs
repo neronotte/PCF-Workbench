@@ -54,14 +54,14 @@ rmrf(stagingDir);
 fs.mkdirSync(stagingDir, { recursive: true });
 fs.mkdirSync(path.join(stagingDir, 'bin'), { recursive: true });
 
-// 2. Build the harness UI (Vite)
-run('npm run build');
-copyDir(path.join(harnessRoot, 'dist'), path.join(stagingDir, 'dist'));
+// 2. Build the harness CLI bundle.
+//    The harness UI itself is shipped as src/ + index.html (no prebuilt
+//    dist/) — see DESIGN.md §2. Vite dev-mode transforms the source at
+//    request time so the `virtual:pcf-manifest` module re-resolves per
+//    PCF_CONTROL_PATH change. Hence: NO `vite build` step here.
+console.log('\n[publish] Skipping dist/ — virtual:pcf-manifest forces dev mode.');
 
 // 3. Bundle the CLI with esbuild.
-//    - external: deps the user's npm install resolves at runtime.
-//    - internal: src/loader/error-diagnostics + anything else under src/ used
-//      by bin/ — gets bundled into a single .js to avoid shipping src/.
 const pkg = JSON.parse(fs.readFileSync(path.join(harnessRoot, 'package.json'), 'utf8'));
 const externalDeps = [
   ...Object.keys(pkg.dependencies ?? {}),
@@ -69,21 +69,57 @@ const externalDeps = [
   // when platform=node, but list explicitly for clarity:
   'node:*',
 ];
-console.log('\n$ esbuild bin/pcf-harness.ts');
+console.log('\n$ esbuild bin/pcfworkbench.ts');
 await esbuild({
-  entryPoints: [path.join(harnessRoot, 'bin', 'pcf-harness.ts')],
+  entryPoints: [path.join(harnessRoot, 'bin', 'pcfworkbench.ts')],
   bundle: true,
   platform: 'node',
   target: 'node18',
   format: 'esm',
   outfile: path.join(stagingDir, 'bin', 'pcfworkbench.js'),
   external: externalDeps,
-  banner: {
-    // Ensure the shebang is preserved at the top of the bundled output.
-    js: '#!/usr/bin/env node',
-  },
+  // The source bin/pcfworkbench.ts already starts with `#!/usr/bin/env node`,
+  // and esbuild preserves that shebang. Adding another via `banner` would
+  // produce two shebangs and Node would syntax-error on line 2.
   logLevel: 'info',
 });
+
+// 4. Copy src/ + index.html — the harness UI source Vite dev-mode serves.
+//    Excluded: tests/, *.test.ts, *.spec.ts (build-time only).
+function shouldShipSource(file) {
+  if (file.endsWith('.test.ts') || file.endsWith('.test.tsx')) return false;
+  if (file.endsWith('.spec.ts') || file.endsWith('.spec.tsx')) return false;
+  if (file.endsWith('.test.ts.map')) return false;
+  return true;
+}
+function copyDirFiltered(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const s = path.join(src, entry.name);
+    const d = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      // Skip tests/ entirely
+      if (entry.name === 'tests' || entry.name === '__tests__') continue;
+      copyDirFiltered(s, d);
+    } else if (shouldShipSource(s)) {
+      fs.copyFileSync(s, d);
+    }
+  }
+}
+copyDirFiltered(path.join(harnessRoot, 'src'), path.join(stagingDir, 'src'));
+
+const indexHtml = path.join(harnessRoot, 'index.html');
+if (fs.existsSync(indexHtml)) {
+  fs.copyFileSync(indexHtml, path.join(stagingDir, 'index.html'));
+}
+
+// Also ship the dev-mode tsconfig + vite.config.ts so Vite resolves modules
+// the same way it does in the repo. The CLI uses `configFile: false` and
+// programmatic plugins, but Vite still reads tsconfig for TS settings.
+const devTsconfig = path.join(harnessRoot, 'tsconfig.json');
+if (fs.existsSync(devTsconfig)) {
+  fs.copyFileSync(devTsconfig, path.join(stagingDir, 'tsconfig.json'));
+}
 
 // 4. Rewrite package.json for the published tarball.
 const stagingPkg = {
@@ -98,7 +134,7 @@ const stagingPkg = {
   author: pkg.author,
   type: pkg.type,
   bin: { pcfworkbench: './bin/pcfworkbench.js' },
-  files: ['bin/', 'dist/', 'docs/', 'README.md', 'LICENSE'],
+  files: ['bin/', 'src/', 'index.html', 'tsconfig.json', 'docs/', 'README.md', 'LICENSE'],
   engines: pkg.engines,
   dependencies: pkg.dependencies,
   publishConfig: pkg.publishConfig,

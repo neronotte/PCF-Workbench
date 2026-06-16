@@ -1,63 +1,128 @@
 #!/usr/bin/env node
 
-// CLI entry point for the PCF Dev Harness.
+// CLI entry point for PCF Workbench.
 //
 // Two modes:
-//   pcf-harness --path <dir>            Start the interactive harness (default).
-//   pcf-harness loop --path <dir> ...   Run one build→render→report cycle
-//                                       headlessly and write a JSON report
-//                                       (the MAI AI build loop).
+//   pcfworkbench start --path <dir>      Launch the interactive harness UI.
+//   pcfworkbench loop  --path <dir> ...  Run one build→render→report cycle
+//                                        headlessly and write a JSON report.
+//
 // In both modes the control must have been built (`npm run build` in the PCF
 // project) so that out/controls/{Name}/bundle.js exists.
 
 import { Command } from 'commander';
-import { createServer } from 'vite';
+import { createServer, type Plugin } from 'vite';
+import react from '@vitejs/plugin-react';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { explainError } from '../src/loader/error-diagnostics';
+import { pcfPlugin } from '../src/vite-plugin/pcf-plugin';
+import { dataverseSecurity } from '../src/vite-plugin/dataverse-security';
+import { dataverseProxy } from '../src/vite-plugin/dataverse-proxy';
+import { fluentCdnPlugin } from '../src/vite-plugin/fluent-cdn';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const harnessRoot = path.resolve(__dirname, '..');
 
+/**
+ * Vite plugins we always run. Bundled into this CLI by esbuild at publish
+ * time so the user's npm install doesn't have to resolve the harness
+ * plugins separately. The dev-mode `vite.config.ts` declares the same set;
+ * we duplicate inline to keep the CLI self-contained.
+ */
+function harnessPlugins(): Plugin[] {
+  return [
+    react(),
+    // Security gate must run before the proxy so /__pcf/dv/* requests are
+    // checked before they reach the token-acquiring code.
+    dataverseSecurity(),
+    dataverseProxy(),
+    // Fluent UMD on-demand bundler — serves real Fluent v8/v9 to deployed
+    // controls whose manifests declare a Fluent platform-library.
+    fluentCdnPlugin(),
+    pcfPlugin(),
+  ] as Plugin[];
+}
+
+/** Read the package version dynamically so a single-source-of-truth bump in
+ *  package.json flows into `pcfworkbench --version` automatically. */
+function readVersion(): string {
+  try {
+    const pkgPath = path.join(harnessRoot, 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
 const program = new Command();
 
 program
-  .name('pcf-harness')
-  .description('PCF dev harness — interactive runner + AI build loop')
-  .version('0.2.0');
+  .name('pcfworkbench')
+  .description('PCF Workbench — local dev harness + AI build loop for Power Apps Component Framework controls')
+  .version(readVersion());
 
 /* ---------------------------------------------------------------- */
-/* Default: start the interactive harness.                          */
+/* `start` — launch the interactive harness in your browser.        */
 /* ---------------------------------------------------------------- */
 program
   .command('start', { isDefault: true })
-  .description('Start the interactive harness (default).')
-  .requiredOption('--path <dir>', 'Path to the PCF control directory (containing ControlManifest.Input.xml)')
-  .option('--port <number>', 'Port to run the dev server on', '8181')
+  .description('Launch the interactive harness UI in your browser.')
+  .option('--path <dir>', 'Path to a single PCF control directory (containing ControlManifest.Input.xml)')
+  .option('--workspace <dir>', 'Path to a directory containing multiple PCF controls — opens gallery mode')
+  .option('--port <number>', 'Port to bind the dev server to', '8181')
+  .option('--host <name>', 'Host to bind to', '127.0.0.1')
   .option('--no-open', 'Do not open the browser automatically')
   .option('--no-watch', 'Do not auto-spawn the build watcher (M9)')
   .action(async (opts) => {
-    const controlPath = path.resolve(opts.path);
-    assertControlDir(controlPath);
+    const hasPath = typeof opts.path === 'string' && opts.path.length > 0;
+    const hasWorkspace = typeof opts.workspace === 'string' && opts.workspace.length > 0;
 
-    process.env.PCF_CONTROL_PATH = controlPath;
-    if (opts.watch === false) {
-      process.env.PCF_NO_WATCH = '1';
+    if (!hasPath && !hasWorkspace) {
+      console.error('Error: pass --path <control-dir> or --workspace <dir-with-controls>.');
+      process.exit(2);
+    }
+    if (hasPath && hasWorkspace) {
+      console.error('Error: --path and --workspace are mutually exclusive.');
+      process.exit(2);
     }
 
-    console.log(`\n  PCF Dev Harness`);
-    console.log(`  Control: ${controlPath}`);
-    console.log(`  Port:    ${opts.port}\n`);
+    if (hasPath) {
+      const controlPath = path.resolve(opts.path);
+      assertControlDir(controlPath);
+      process.env.PCF_CONTROL_PATH = controlPath;
+      console.log(`\n  PCF Workbench`);
+      console.log(`  Control: ${controlPath}`);
+    } else {
+      const workspaceRoot = path.resolve(opts.workspace);
+      if (!fs.existsSync(workspaceRoot) || !fs.statSync(workspaceRoot).isDirectory()) {
+        console.error(`Error: workspace not found or not a directory: ${workspaceRoot}`);
+        process.exit(2);
+      }
+      process.env.PCF_WORKSPACE_ROOT = workspaceRoot;
+      console.log(`\n  PCF Workbench`);
+      console.log(`  Workspace: ${workspaceRoot} (gallery mode)`);
+    }
+
+    if (opts.watch === false) process.env.PCF_NO_WATCH = '1';
+
+    const port = parseInt(opts.port, 10);
+    const host = opts.host;
+    console.log(`  Port:    ${port}`);
+    console.log(`  Host:    ${host}\n`);
 
     try {
       const server = await createServer({
-        configFile: path.join(harnessRoot, 'vite.config.ts'),
         root: harnessRoot,
+        configFile: false,
+        plugins: harnessPlugins(),
         server: {
-          port: parseInt(opts.port, 10),
+          port,
+          host,
           open: opts.open !== false,
         },
       });
@@ -269,8 +334,9 @@ async function runLoop(opts: LoopOpts): Promise<number> {
   process.env.PCF_CONTROL_PATH = opts.controlPath;
   console.log(`  [vite] starting on port ${port} …`);
   const server = await createServer({
-    configFile: path.join(harnessRoot, 'vite.config.ts'),
     root: harnessRoot,
+    configFile: false,
+    plugins: harnessPlugins(),
     server: { port, host: '127.0.0.1', open: false },
     logLevel: 'warn',
   });

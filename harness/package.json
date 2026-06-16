@@ -33,7 +33,9 @@
   },
   "files": [
     "bin/pcfworkbench.js",
-    "dist/",
+    "src/",
+    "index.html",
+    "tsconfig.json",
     "docs/ai-loop-report.schema.json",
     "docs/ai-build-loop.md",
     "docs/ai-loop-skill.md",
@@ -50,7 +52,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "harness": "tsx bin/pcf-harness.ts",
+    "harness": "tsx bin/pcfworkbench.ts",
     "build:publish": "node scripts/build-publish.mjs",
     "conformance:diff": "tsx scripts/conformance-diff.ts"
   },
@@ -60,8 +62,10 @@
     "@fluentui/react-components": "^9.73.8",
     "@fluentui/react-icons": "^2.0.327",
     "@playwright/test": "^1.59.1",
+    "@vitejs/plugin-react": "^4.3.4",
     "chokidar": "^3.6.0",
     "commander": "^12.1.0",
+    "esbuild": "^0.25.12",
     "fast-xml-parser": "^5.7.0",
     "html2canvas": "^1.4.1",
     "react": "^18.3.1",
@@ -76,7 +80,6 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/xrm": "^9.0.92",
-    "@vitejs/plugin-react": "^4.3.4",
     "tsx": "^4.21.0",
     "typescript": "^5.6.0"
   }

@@ -29,27 +29,28 @@ Publish PCF Workbench to npm as a single package called **`pcfworkbench`** (no h
 The published package is the existing `harness/` workspace, plus a few publish-only files. Only what's listed below ships. Everything else is excluded via `files` (allow-list, not `.npmignore` deny-list — safer).
 
 ```
-pcfworkbench-1.0.0.tgz
+pcfworkbench-1.0.0-beta.1.tgz
 ├── package.json
 ├── README.md                 (publish-friendly version, see §6)
 ├── LICENSE                   (copy of repo root LICENSE)
+├── index.html                (the harness page; entry point Vite serves)
 ├── bin/
-│   └── pcfworkbench.js       (compiled CLI entry — see §3)
-├── dist/                     (output of `vite build` — the harness UI)
-│   ├── index.html
-│   ├── assets/
-│   │   ├── main-<hash>.js
-│   │   └── main-<hash>.css
-│   └── …
-├── plugin/                   (compiled Vite plugin, used by `start` command)
-│   └── pcf-plugin.js
+│   └── pcfworkbench.js       (esbuild-bundled CLI — see §3)
+├── src/                      (TypeScript source — Vite transforms on demand)
+│   └── …                     (React UI, plugins, shims, store, parser)
 └── docs/
-    └── ai-loop-report.schema.json   (JSON schema for loop reports — agents read this)
+    ├── ai-loop-report.schema.json   (JSON schema for loop reports — agents read this)
+    ├── ai-build-loop.md
+    ├── ai-loop-skill.md
+    └── examples/pcf-loop.yml
 ```
 
-**Excluded** via `package.json#files` allow-list: `src/`, `tests/`, `__visual__/`, `coverage/`, `node_modules/`, `*.test.ts`, `vitest.config.ts`, `playwright.config.ts`, `tsconfig.*`, `vite.config.ts`, `.env*`, `pcf-loop-reports/`.
+**Why ship the source instead of a prebuilt `dist/`?**
+The harness UI imports `virtual:pcf-manifest` — a Vite virtual module resolved at transform time by `pcf-plugin.ts` based on the current `PCF_CONTROL_PATH` / `PCF_WORKSPACE_ROOT` env var. If we prebuild `dist/`, the manifest is baked in (whatever happened to be the current control during the publish build), and the CLI loses the ability to load arbitrary user PCFs at runtime. Running Vite in **dev mode** against `src/` re-resolves the virtual module per request, so the CLI can switch between controls without rebuilding.
 
-Estimated tarball size: **~4–6 MB** unpacked (Fluent UI v9 + the harness chunk are the bulk; React/ReactDOM are pulled at runtime so not bundled).
+**Excluded** via `package.json#files` allow-list: `tests/`, `__visual__/`, `coverage/`, `node_modules/`, `*.test.ts`, `vitest.config.ts`, `playwright.config.ts`, `tsconfig.*`, `.env*`, `pcf-loop-reports/`, `dist/`, `publish-staging/`, the milestone planning docs, `docs/showcase.html`, `docs/roadmap-internal.md`, debug Python scripts.
+
+Estimated tarball size: **~1.5–2 MB compressed / ~5 MB unpacked** (TypeScript source is text-heavy but compresses well; the CLI bundle and runtime deps via npm install are the real install cost).
 
 ---
 
