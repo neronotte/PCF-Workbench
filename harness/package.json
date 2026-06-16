@@ -1,10 +1,49 @@
 {
-  "name": "pcf-workbench",
-  "version": "1.0.0",
-  "description": "PCF Workbench — a full-featured development environment for Power Apps Component Framework controls",
+  "name": "pcfworkbench",
+  "version": "1.0.0-beta.1",
+  "description": "PCF dev harness + AI build loop for Power Apps Component Framework controls. Run your PCFs locally against shimmed ComponentFramework.Context APIs without a Dataverse round-trip.",
   "type": "module",
+  "license": "MIT",
+  "author": "jaduplesms",
+  "homepage": "https://github.com/jaduplesms/PCF-Workbench#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaduplesms/PCF-Workbench.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jaduplesms/PCF-Workbench/issues"
+  },
+  "keywords": [
+    "pcf",
+    "powerapps",
+    "power-apps",
+    "dataverse",
+    "component-framework",
+    "harness",
+    "testing",
+    "vite",
+    "ai",
+    "ci"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
-    "pcf-harness": "./bin/pcf-harness.js"
+    "pcfworkbench": "./bin/pcfworkbench.js"
+  },
+  "files": [
+    "bin/pcfworkbench.js",
+    "dist/",
+    "docs/ai-loop-report.schema.json",
+    "docs/ai-build-loop.md",
+    "docs/ai-loop-skill.md",
+    "docs/examples/pcf-loop.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
   },
   "scripts": {
     "dev": "vite",
@@ -12,6 +51,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "harness": "tsx bin/pcf-harness.ts",
+    "build:publish": "node scripts/build-publish.mjs",
     "conformance:diff": "tsx scripts/conformance-diff.ts"
   },
   "dependencies": {
@@ -19,17 +59,18 @@
     "@azure/msal-node-extensions": "^5.2.2",
     "@fluentui/react-components": "^9.73.8",
     "@fluentui/react-icons": "^2.0.327",
+    "@playwright/test": "^1.59.1",
     "chokidar": "^3.6.0",
     "commander": "^12.1.0",
     "fast-xml-parser": "^5.7.0",
     "html2canvas": "^1.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "vite": "^6.4.2",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@fluentui/font-icons-mdl2": "^8.5.73",
-    "@playwright/test": "^1.59.1",
     "@types/node": "^22.0.0",
     "@types/powerapps-component-framework": "^1.3.18",
     "@types/react": "^18.3.12",
@@ -37,7 +78,7 @@
     "@types/xrm": "^9.0.92",
     "@vitejs/plugin-react": "^4.3.4",
     "tsx": "^4.21.0",
-    "typescript": "^5.6.0",
-    "vite": "^6.4.2"
+    "typescript": "^5.6.0"
   }
 }
+

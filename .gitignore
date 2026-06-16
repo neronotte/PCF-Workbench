@@ -76,5 +76,19 @@ harness/pcf-loop-reports/
 samples/*/loop-report/
 samples/MAILoopDemo/out/
 
+# M12 — npm publish staging (recreated by `npm run build:publish`)
+harness/publish-staging/
+
+# TypeScript incremental build artifacts
+harness/tsconfig.tsbuildinfo
+harness/*.tsbuildinfo
+
+# Stray transpiled .js emitted into src/ by `tsc -b` (we use Vite at runtime
+# and esbuild at publish — the harness `noEmit: true` setting still leaks if
+# the tsbuildinfo cache is dirty; never commit these)
+harness/src/**/*.js
+harness/bin/*.js
+!harness/bin/pcf-harness.js
+
 
 pcf-scripts-standard-harness.png

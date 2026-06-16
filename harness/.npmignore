@@ -1,0 +1,51 @@
+# Belt-and-braces. The `files` allow-list in package.json is the primary control;
+# this is here to catch anything that drifts past it.
+
+# Sources
+src/
+tests/
+scripts/
+
+# Anything in docs/ that isn't on the files allow-list — explicitly:
+docs/milestones/
+docs/roadmap-internal.md
+docs/showcase.html
+docs/generate_manual.py
+docs/debug_*.py
+docs/debug_*.png
+
+# Build / dev artefacts
+node_modules/
+__visual__/
+coverage/
+publish-staging/
+pcf-loop-reports/
+.vite/
+
+# TS / Vite / test configs
+tsconfig*.json
+vite.config.ts
+vitest.config.ts
+playwright.config.ts
+
+# Test files anywhere in the tree
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Editor / OS
+.DS_Store
+*.log
+.env
+.env.*
+
+# Internal-only docs (the publish README is scripts/README.publish.md, copied
+# into the staging dir as README.md by scripts/build-publish.mjs).
+CHANGELOG.md
+
+# Legacy bin source — only the compiled bin/pcfworkbench.js ships
+bin/pcf-harness.ts
+bin/pcf-harness.js
+bin/pcfworkbench.ts
+bin/extract-control.ts
