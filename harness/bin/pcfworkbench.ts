@@ -145,7 +145,7 @@ program
   .requiredOption('--path <dir>', 'Path to the PCF control directory')
   .option('--out <dir>', 'Directory to write report.json + screenshot.png', './pcf-loop-reports')
   .option('--skip-build', 'Skip the npm run build step (use existing out/ bundle)', false)
-  .option('--timeout <ms>', 'Max ms to wait for the control to render', '60000')
+  .option('--timeout <ms>', 'Max ms to wait for the control to render. Default 180000ms (3 min) — the first run on a fresh install downloads Fluent UI (~60–80s) on top of normal render time; subsequent runs are fast (~5–15s).', '180000')
   .option('--headed', 'Run Playwright in headed mode for debugging', false)
   .option('--scenario <name>', 'Load this saved test scenario before rendering (must exist in test-scenarios.json). Default: render with manifest defaults.')
   .action(async (opts) => {

@@ -13,7 +13,10 @@ PCF Workbench replaces `pcf-scripts start` with a richer dev loop. Build your PC
 npm i -D @pcfworkbench/cli@beta
 ```
 
-> Currently published under the `@beta` tag during the M12 stabilization period. Plain `npm i -D @pcfworkbench/cli` works once we promote to `@latest`.
+> Currently published under the `@beta` tag during the M12 stabilization period (`1.0.0-beta.2` as of 2026-06-17). Plain `npm i -D @pcfworkbench/cli` works once we promote to `@latest`.
+>
+> **First run is slow.** The very first `npx pcfworkbench loop` (or `start` against an unbuilt control) downloads + bundles Fluent UI v9 — usually 60–80 seconds on a fresh machine. Subsequent runs are fast (5–15s). The default `loop` timeout is 3 minutes to cover this.
+>
 > The package lives in the `@pcfworkbench` org on npm so that the **PCF Workbench** brand owns the whole scope; the CLI is invoked as `pcfworkbench` regardless of the install path.
 
 ## Two commands
