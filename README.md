@@ -405,6 +405,15 @@ Entity data is keyed by entity logical name. Each array entry represents a recor
 
 ---
 
+## See also
+
+PCF Workbench focuses on **interactive dev + headless CI loop**. For complementary tooling in the PCF ecosystem:
+
+- **[`@shko.online/componentframework-mock`](https://github.com/Shko-Online/ComponentFramework-Mock)** by [Betim Beja](https://github.com/ShkoOnline) — a Jest / Vitest / Storybook mock library for unit-testing PCF controls programmatically. If you want `.test.ts` files that wire up `ComponentFrameworkMockGenerator` and assert on outputs, this is the tool. PCF Workbench doesn't try to replace this — the two are complementary: use the mock library for unit tests and stories, use PCF Workbench for the interactive harness, scenario capture, device emulation, AI build loop, and CI render gate. A serious PCF team will likely want both.
+- **[`pac pcf`](https://learn.microsoft.com/power-platform/developer/cli/reference/pcf)** (Power Platform CLI) — Microsoft's official scaffolder + builder. PCF Workbench runs against `pac pcf init` projects; we treat `pac` as the upstream source of truth for project layout.
+
+---
+
 ## Contributing
 
 Contributions are welcome. To get started:
