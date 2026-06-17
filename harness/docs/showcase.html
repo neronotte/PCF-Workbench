@@ -567,11 +567,11 @@ p{color:var(--neutral-30)}
         <button class="tab-btn" data-tab="clone-cmd">Clone (contribute)</button>
       </div>
       <div class="tab-panel active" data-panel="install-cmd">
-        <p style="margin-bottom:8px;font-size:.9rem;">One install per PCF project. Currently published under the <code>@beta</code> tag; the plain <code>@pcfworkbench/cli</code> install will work after M5 promotes <code>latest</code>.</p>
+        <p style="margin-bottom:8px;font-size:.9rem;">One install per PCF project.</p>
         <div class="code-block">
           <span class="code-label">Bash / PowerShell</span>
           <button class="code-copy" onclick="copyCode(this)">Copy</button>
-          <span class="keyword">npm</span> i <span class="flag">-D</span> @pcfworkbench/cli@beta
+          <span class="keyword">npm</span> i <span class="flag">-D</span> @pcfworkbench/cli
         </div>
         <p style="margin-top:8px;font-size:.82rem;color:var(--neutral-50);">First <code>loop</code> run on a fresh machine takes 60&ndash;80s while Fluent UI v9 caches; subsequent runs are 5&ndash;15s.</p>
       </div>
@@ -2482,6 +2482,26 @@ Perf:   firstUpdateView: 180ms ·
           <li class="done">Loop CLI hardening: fixed <code>page.goto</code> waiting on <code>networkidle</code> (broken under Vite HMR) &mdash; surfaced by the StarRating dogfood run</li>
         </ul>
       </div>
+
+      <div class="milestone-card shipped">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M12</span>npm Publish &mdash; <code>@pcfworkbench/cli</code></h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-m">M</span>
+            <span class="milestone-pill pill-shipped">Shipped</span>
+          </div>
+        </div>
+        <p class="ms-desc">First public npm release. Drops the clone-and-build-it dance &mdash; <code>npm i -D @pcfworkbench/cli</code> in any PCF project and you're ready to <code>npx pcfworkbench start</code> or <code>loop</code>. The <code>@pcfworkbench</code> org owns the whole scope so the brand is defended at the namespace level.</p>
+        <ul class="milestone-list">
+          <li class="done">Published as <strong><a href="https://www.npmjs.com/package/@pcfworkbench/cli">@pcfworkbench/cli</a></strong> on the public npm registry (the unhyphenated <code>pcfworkbench</code> bare name was blocked by npm's similar-name detection against a squatted package)</li>
+          <li class="done"><strong>Two CLI commands in one bin</strong>: <code>pcfworkbench start</code> (interactive harness UI) and <code>pcfworkbench loop</code> (headless build &rarr; render &rarr; report)</li>
+          <li class="done"><strong>Cross-platform staging builder</strong> (<code>scripts/build-publish.mjs</code>): esbuild bundles the CLI; <code>src/</code> + <code>index.html</code> ship as-is so Vite's <code>virtual:pcf-manifest</code> resolves at request time against the user's current PCF</li>
+          <li class="done"><strong>0 vulnerabilities</strong> in the published package's runtime deps (vite&nbsp;8 + esbuild&nbsp;0.28 pulled in to clear the GHSA-gv7w-rqvm-qjhr / GHSA-g7r4-m6w7-qqqr CVEs)</li>
+          <li class="done"><strong>3-minute default <code>loop</code> timeout</strong> covers the first-run Fluent UI v9 download (~60&ndash;80s); subsequent runs are 5&ndash;15s</li>
+          <li class="done">CI example workflow (<code>harness/docs/examples/pcf-loop.yml</code>) rewritten to use the published CLI &mdash; drops the clone-and-build-Workbench setup</li>
+          <li class="done">All user-facing docs (README, BUILDING.md, showcase, skills) lead with the npm install path; clone path moved to a "contribute" footnote</li>
+        </ul>
+      </div>
     </div>
   </div>
 </section>
@@ -2491,9 +2511,26 @@ Perf:   firstUpdateView: 180ms ·
   <div class="container">
     <div class="section-header reveal">
       <h2>What's next</h2>
-      <p>Perf budgets &amp; PR-time CI loop &mdash; turn the AI Build Loop into a hard quality gate.</p>
+      <p>Locking down the foundations now that the public release is out &mdash; unit tests for the pure-logic core, then perf budgets &amp; PR-time CI gating.</p>
     </div>
     <div class="milestone-grid reveal">
+
+      <div class="milestone-card next">
+        <div class="milestone-h">
+          <h3><span class="milestone-num">M11</span>Unit Tests for Pure-Logic Modules</h3>
+          <div class="milestone-pills">
+            <span class="milestone-size size-s">S</span>
+            <span class="milestone-pill pill-next">Up next</span>
+          </div>
+        </div>
+        <p class="ms-desc">Stand up Vitest inside <code>harness/</code> and write unit tests for the five modules where Playwright E2E coverage is expensive or impossible to reach: <code>scenario-store</code> (v1&rarr;v2 migration), <code>manifest-parser</code> (XML edge cases), <code>web-api</code> OData parser, <code>date-rebase</code>, <code>data-store</code>. Catches silent regressions the Conformance Tester grid wasn't built to surface. <code>DESIGN.md</code> + <code>PLAN.md</code> already drafted &mdash; awaiting sign-off on 5 open questions.</p>
+        <ul class="milestone-list">
+          <li>Vitest scaffold + canary test (<code>npm run test:run</code>)</li>
+          <li>~30&ndash;50 tests across 5 P1 modules; each has &ge; 1 explicit edge-case test</li>
+          <li>Coverage <em>reporting</em> only &mdash; no thresholds in P1 (premature gating)</li>
+          <li>Wired into CI alongside <code>typecheck</code>; runs in &lt;5s wall-clock locally</li>
+        </ul>
+      </div>
 
       <div class="milestone-card headline">
         <div class="milestone-h">

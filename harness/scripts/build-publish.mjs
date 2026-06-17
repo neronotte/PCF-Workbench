@@ -179,5 +179,6 @@ if (fs.existsSync(cliPath)) {
 console.log('\n[publish] Staging ready at:', stagingDir);
 console.log('[publish] Next:');
 console.log('  cd publish-staging && npm pack --dry-run    # inspect file list');
-console.log('  cd publish-staging && npm publish --tag beta # actual publish (M3)');
+console.log('  cd publish-staging && npm publish            # actual publish (latest)');
+console.log('  cd publish-staging && npm publish --tag beta # publish to beta channel instead');
 

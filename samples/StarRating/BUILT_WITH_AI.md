@@ -65,7 +65,7 @@ copilot
 Or just run the existing loop against this sample:
 
 ```powershell
-# After: npm i -D @pcfworkbench/cli@beta (in your PCF project)
+# After: npm i -D @pcfworkbench/cli (in your PCF project)
 npx pcfworkbench loop --path ./StarRating
 ```
 

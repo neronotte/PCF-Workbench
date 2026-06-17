@@ -29,7 +29,7 @@ Trigger on any of these intents:
 The harness ships on npm as `@pcfworkbench/cli`. If it's not already a devDep of the project:
 
 ```bash
-npm i -D @pcfworkbench/cli@beta
+npm i -D @pcfworkbench/cli
 ```
 
 Then:

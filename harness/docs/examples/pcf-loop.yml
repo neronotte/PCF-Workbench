@@ -38,9 +38,9 @@ env:
   PCF_PROJECT_DIR: '.'
   # Control dir (the one containing ControlManifest.Input.xml).
   PCF_CONTROL_DIR: './MyControl'
-  # Pin the published CLI version. Use 'beta' during the M12 stabilization
-  # window; switch to a specific version (e.g. '1.0.0') for production.
-  PCF_WORKBENCH_VERSION: 'beta'
+  # Pin the published CLI version. Use 'latest' for the current release (default)
+  # or pin to a specific version (e.g. '1.0.0') for reproducible CI.
+  PCF_WORKBENCH_VERSION: 'latest'
   # OPTIONAL: name of a scenario in test-scenarios.json to auto-load before
   # the control mounts. Without this the control renders with manifest
   # defaults (often blank) — which is rarely what you want to assert on.

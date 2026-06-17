@@ -1,6 +1,6 @@
 # PCF Workbench
 
-[![npm](https://img.shields.io/npm/v/%40pcfworkbench%2Fcli/beta.svg?label=%40pcfworkbench%2Fcli%40beta&logo=npm)](https://www.npmjs.com/package/@pcfworkbench/cli)
+[![npm](https://img.shields.io/npm/v/@pcfworkbench/cli.svg?logo=npm&label=%40pcfworkbench%2Fcli)](https://www.npmjs.com/package/@pcfworkbench/cli)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vitejs.dev/)
@@ -14,7 +14,7 @@ An enhanced development harness and testing framework for Power Apps Component F
 ## Install
 
 ```bash
-npm i -D @pcfworkbench/cli@beta
+npm i -D @pcfworkbench/cli
 ```
 
 Then in any PCF project:
@@ -30,7 +30,6 @@ npx pcfworkbench loop  --path ./MyControl
 `start` opens the harness at `http://127.0.0.1:8181`. Add `--workspace ./samples` instead of `--path` for gallery mode (multiple controls in one folder).
 `loop` is the CI / AI gate — exits 0 with a deterministic JSON report on success.
 
-> Currently published under the `@beta` tag during the M12 stabilization window. Plain `npm i -D @pcfworkbench/cli` will work once we promote to `@latest`.
 > First `loop` run on a fresh machine takes ~60–80s while Fluent UI v9 caches; subsequent runs are 5–15s.
 
 **Or clone to contribute:**
@@ -227,7 +226,7 @@ cp -R ./.copilot/skills/* ~/.copilot/skills/
 **As a user (recommended):**
 
 ```bash
-npm i -D @pcfworkbench/cli@beta
+npm i -D @pcfworkbench/cli
 npx pcfworkbench start --path ./MyControl
 # or
 npx pcfworkbench loop --path ./MyControl

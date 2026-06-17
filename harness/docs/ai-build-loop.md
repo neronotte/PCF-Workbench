@@ -7,7 +7,7 @@
 ## TL;DR
 
 ```bash
-# As a user (recommended) — after `npm i -D @pcfworkbench/cli@beta`:
+# As a user (recommended) — after `npm i -D @pcfworkbench/cli`:
 npx pcfworkbench loop --path <absolute-path-to-pcf-control>
 
 # In dev (cloned repo):

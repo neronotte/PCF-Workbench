@@ -2,7 +2,7 @@
 
 > A local development harness + AI build loop for **Power Apps Component Framework (PCF)** controls.
 
-[![npm version](https://img.shields.io/npm/v/@pcfworkbench/cli/beta.svg?label=npm%40beta)](https://npmjs.com/package/@pcfworkbench/cli)
+[![npm version](https://img.shields.io/npm/v/@pcfworkbench/cli.svg?logo=npm)](https://npmjs.com/package/@pcfworkbench/cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 PCF Workbench replaces `pcf-scripts start` with a richer dev loop. Build your PCF, run it locally against shimmed `ComponentFramework.Context` APIs, and iterate without a Dataverse round-trip — or hand the whole thing to an AI agent that drives `build → render → report` until your control passes.
@@ -10,11 +10,9 @@ PCF Workbench replaces `pcf-scripts start` with a richer dev loop. Build your PC
 ## Install
 
 ```bash
-npm i -D @pcfworkbench/cli@beta
+npm i -D @pcfworkbench/cli
 ```
 
-> Currently published under the `@beta` tag during the M12 stabilization period (`1.0.0-beta.2` as of 2026-06-17). Plain `npm i -D @pcfworkbench/cli` works once we promote to `@latest`.
->
 > **First run is slow.** The very first `npx pcfworkbench loop` (or `start` against an unbuilt control) downloads + bundles Fluent UI v9 — usually 60–80 seconds on a fresh machine. Subsequent runs are fast (5–15s). The default `loop` timeout is 3 minutes to cover this.
 >
 > The package lives in the `@pcfworkbench` org on npm so that the **PCF Workbench** brand owns the whole scope; the CLI is invoked as `pcfworkbench` regardless of the install path.

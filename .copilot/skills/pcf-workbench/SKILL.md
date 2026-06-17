@@ -28,7 +28,7 @@ This skill **does not write PCF control code** — use the `pcf-engineer` skill 
 ## LAUNCH MODES
 
 ### A. Interactive single-control via published CLI (preferred for end users)
-After `npm i -D @pcfworkbench/cli@beta` in the PCF project:
+After `npm i -D @pcfworkbench/cli` in the PCF project:
 ```powershell
 npx pcfworkbench start --path .\MyControl
 # Gallery mode across many controls:
@@ -48,7 +48,7 @@ npx vite --port 8181 --host 127.0.0.1
 - The PCF mounts directly in the page (no iframe). For Playwright, use top-level `page.locator`.
 
 ### C. Headless build→render→report loop (the AI iteration loop)
-End-user (after `npm i -D @pcfworkbench/cli@beta`):
+End-user (after `npm i -D @pcfworkbench/cli`):
 ```powershell
 npx pcfworkbench loop --path .\MyControl --out .\pcf-loop-reports
 ```

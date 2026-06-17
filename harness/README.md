@@ -19,7 +19,7 @@ PCF_CONTROL_PATH="../BookingStatusTransitionControl/BookingStatusTransitionContr
 # Via CLI (dev / cloned repo)
 npm run harness -- start --path ../BookingStatusTransitionControl/BookingStatusTransitionControl --port 8181
 
-# Via CLI (published package — `npm i -D @pcfworkbench/cli@beta` in the PCF project first)
+# Via CLI (published package — `npm i -D @pcfworkbench/cli` in the PCF project first)
 npx pcfworkbench start --path ./BookingStatusTransitionControl
 ```
 

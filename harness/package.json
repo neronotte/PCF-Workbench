@@ -1,6 +1,6 @@
 {
   "name": "@pcfworkbench/cli",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0",
   "description": "PCF dev harness + AI build loop for Power Apps Component Framework controls. Run your PCFs locally against shimmed ComponentFramework.Context APIs without a Dataverse round-trip.",
   "type": "module",
   "license": "MIT",
@@ -44,8 +44,7 @@
     "LICENSE"
   ],
   "publishConfig": {
-    "access": "public",
-    "tag": "beta"
+    "access": "public"
   },
   "scripts": {
     "dev": "vite",
