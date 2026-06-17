@@ -76,6 +76,9 @@ harness/pcf-loop-reports/
 samples/*/loop-report/
 samples/MAILoopDemo/out/
 
+# M11 — Vitest coverage reports
+harness/coverage/
+
 # M12 — npm publish staging (recreated by `npm run build:publish`)
 harness/publish-staging/
 
