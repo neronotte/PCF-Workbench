@@ -2,16 +2,16 @@
 
 > **Status:** Draft for review · **Author:** AI-coauthored (Copilot + jaduples) · **Last updated:** 2026-06-16
 
-Publish PCF Workbench to npm as a single package called **`pcfworkbench`** (no hyphen) so users can install and run it without cloning this repo. Ships **two CLI commands** in one package: `npx pcfworkbench loop` (headless CI) and `npx pcfworkbench start` (full harness UI launched into a browser). Bin alias `pcf-harness` retained for back-compat with existing `harness/bin/pcf-harness.js` callers.
+Publish PCF Workbench to npm as a scoped package **`@pcfworkbench/cli`** so users can install and run it without cloning this repo. We own the whole `@pcfworkbench` npm org so the brand can't be squatted at the scope level. Ships **two CLI commands** in one package: `npx pcfworkbench loop` (headless CI) and `npx pcfworkbench start` (full harness UI launched into a browser). The CLI bin name stays unscoped (`pcfworkbench`) so user invocations are short.
 
 ---
 
 ## 1. Purpose & non-goals
 
 **Purpose**
-- Make adoption a one-liner: `npm i -D pcfworkbench` in any PCF project, then `npx pcfworkbench start`.
+- Make adoption a one-liner: `npm i -D @pcfworkbench/cli` in any PCF project, then `npx pcfworkbench start`.
 - Match the workflow CI runs already use today (`npm run harness -- loop`) without forcing a repo clone.
-- Take the **`pcfworkbench`** name on npm before another conflicting package gets traction. The hyphenated `pcf-workbench` is already squatted by an unrelated 12-version package; we settled on the unhyphenated form (see session log 2026-06-15).
+- Own the **`@pcfworkbench` npm org** to defend the brand at the scope level. (Decided 2026-06-17 after the unscoped `pcfworkbench` publish was rejected — npm's similar-name detection blocks any close variation of the squatted `pcf-workbench`.)
 - Preserve the existing brand: README / showcase / UI / tooltips all continue to read **"PCF Workbench"**. Only the npm identifier and install instructions change.
 
 **Non-goals**
@@ -149,15 +149,17 @@ These all need their install instructions / brand text refreshed when the publis
 
 ---
 
-## 8. Defending against future name collisions
+## 8. Defending the brand on npm
 
-After publish, take three defensive moves:
+The `@pcfworkbench` org is our brand defence — owning the scope means **only members of the `@pcfworkbench` org can publish anything under `@pcfworkbench/*`**. No defensive reservations of bare names needed (and per the bin-aliasing decision in §3, we don't squat names that aren't ours).
 
-1. **Reserve neighbouring names** as redirect/deprecated stubs pointing at the canonical name:
-   - `pcf-workbench-cli`, `pcf-bench`, `pcfworkbench-cli` → publish empty packages with `"deprecated": "Use pcfworkbench instead — see https://npmjs.com/package/pcfworkbench"` in `package.json`.
-   - Costs ~10 minutes; prevents a repeat of the squatting situation we just hit.
-2. **Claim the GitHub org / handle parity** — `github.com/pcfworkbench` if available. Defensive only.
-3. **Domain check** — `pcfworkbench.dev` or `.io`. If we want a marketing site later, lock now. (Not on the M12 critical path — defer.)
+Two follow-ups, both side-tasks (don't block M12):
+1. **GitHub org parity** — `github.com/pcfworkbench` if available, matching the npm org. Useful if we ever split the repo or want a brand-named GitHub-Pages site.
+2. **Domain** — `pcfworkbench.dev` / `.io`. Defer until there's a real marketing site to host.
+
+What we explicitly do NOT do:
+- Reserve `pcf-workbench-cli`, `pcf-bench`, `pcfworkbench-cli` or any other bare-name variant. Those are names someone else might legitimately want for a different tool. Squatting them is the move the incumbent pulled on us.
+- File a trademark / dispute against the incumbent `pcf-workbench`. Decided 2026-06-15 — not worth the time; scope ownership is the better defence.
 
 ---
 
@@ -168,17 +170,16 @@ After publish, take three defensive moves:
 3. **Browser auto-open on `start`.** Does `pcfworkbench start` open the default browser, or just print the URL? Vite has `--open` for this. **Recommendation:** auto-open by default; `--no-open` flag for headless / SSH cases.
 4. **Telemetry / first-run notice.** Do we want a `Welcome to PCF Workbench v1.0.0-beta.1 — open https://… for docs` first-run notice, or stay silent? **Recommendation:** silent; respect user's terminal.
 5. **`postinstall` hooks.** Should we run anything on install (e.g., `playwright install chromium` for `loop` to work)? **Recommendation:** NO `postinstall`. Detect missing Chromium at `loop` runtime and emit a one-line "run `npx playwright install chromium` and retry" message. `postinstall` hooks are a security smell and slow `npm i` to a crawl.
-6. **Defensive package reservations.** Three names is what I proposed; we could go wider (10+) or narrower (just `pcf-workbench-cli`). **Recommendation:** the three listed. Wider feels like squatting in reverse.
+6. **~~Defensive package reservations.~~** *Resolved 2026-06-17: NO defensive reservations.* The `@pcfworkbench` npm org is the brand defence — no need to squat bare-name variants. Same anti-squatting principle as the bin-alias decision.
 7. **GitHub org name `pcfworkbench`.** Worth grabbing? Costs nothing. **Recommendation:** yes, grab it as a side task; don't block M12.
 
 ---
 
 ## 10. Success criteria
 
-- `npm i -D pcfworkbench@beta` succeeds on a fresh machine.
+- `npm i -D @pcfworkbench/cli@beta` succeeds on a fresh machine.
 - `npx pcfworkbench start --path ./StarRating/StarRating` boots the UI and loads the control end-to-end.
 - `npx pcfworkbench loop --path ./StarRating/StarRating` exits 0 with a `report.json` matching the in-repo schema.
-- `npx pcf-harness loop` (the alias) works identically.
 - Repo `README.md` and `BUILDING.md` updated with the install path.
 - Skill files reference the npm install path as an alternative.
 - Tarball size <10 MB.

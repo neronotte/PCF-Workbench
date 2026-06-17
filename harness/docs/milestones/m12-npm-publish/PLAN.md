@@ -76,23 +76,23 @@ Todos:
 **Goal:** Real npm publish under the `beta` dist-tag. Real install on a different machine works.
 
 Todos:
+- [ ] **Create the npm org `pcfworkbench`** at https://www.npmjs.com/org/create. Pick the **Free** plan (sufficient for public packages). Add yourself as the sole owner. This is a one-time prerequisite — without it, `npm publish --access public` for `@pcfworkbench/cli` will fail with 403.
 - [ ] Run `npm whoami` — confirm we're logged in as the right user. If not, `npm login`.
 - [ ] Create npm 2FA token if one isn't already in place. (Required for publish under default org settings.)
-- [ ] From `publish-staging/`, run `npm publish --tag beta --access public`. (Or from `harness/` if `publishConfig` is wired to point at staging.)
-- [ ] Verify on npmjs.com: package page renders the `README.publish.md`, version `1.0.0-beta.1`, install command shown is `npm i -D pcfworkbench@beta`.
+- [ ] From `publish-staging/`, run `npm publish --tag beta --access public`.
+- [ ] Verify on npmjs.com: package page renders the `README.publish.md`, version `1.0.0-beta.1`, install command shown is `npm i -D @pcfworkbench/cli@beta`.
 - [ ] **Dogfood install** on a clean folder (ideally a different machine, or at minimum a totally fresh directory):
   - `mkdir C:\Temp\pcfworkbench-test && cd C:\Temp\pcfworkbench-test`
-  - `npm init -y && npm i -D pcfworkbench@beta`
+  - `npm init -y && npm i -D @pcfworkbench/cli@beta`
   - `npx pcfworkbench --help` — works
   - `npx pcfworkbench start --path C:\Temp\some-pcf-control` — UI boots
   - `npx pcfworkbench loop --path C:\Temp\some-pcf-control` — produces a green report
 - [ ] If anything breaks during dogfood: bump `1.0.0-beta.2`, fix, republish, retry.
-- [ ] Reserve defensive names per DESIGN.md §8: publish empty `pcf-workbench-cli`, `pcf-bench`, `pcfworkbench-cli` with `deprecated` field set.
 
 **Acceptance gate (M3):**
-- `npm view pcfworkbench@beta` returns version `1.0.0-beta.x`.
+- `npm view @pcfworkbench/cli@beta` returns version `1.0.0-beta.x`.
 - Fresh-machine dogfood test passes both `start` and `loop`.
-- Three defensive names reserved on npm with deprecation notices pointing at the canonical name.
+- The `@pcfworkbench` npm org exists and you're the sole owner.
 
 ---
 
