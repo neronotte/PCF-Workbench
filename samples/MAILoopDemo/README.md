@@ -2,7 +2,7 @@
 
 This folder is a tutorial fixture for the
 [AI-Assisted PCF Build Loop](../../harness/docs/ai-build-loop.md). It
-ships **three real reports** captured from `pcf-harness loop` runs:
+ships **three real reports** captured from `pcfworkbench loop` runs:
 
 | Status | Report | Screenshot | Source control |
 | --- | --- | --- | --- |

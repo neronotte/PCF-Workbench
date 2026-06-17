@@ -2,14 +2,15 @@ name: PCF Build Loop
 
 # ---------------------------------------------------------------------------
 # PCF Workbench AI Build Loop — copy this file into your PCF project at
-# .github/workflows/pcf-loop.yml and adjust the three variables under `env:`.
+# .github/workflows/pcf-loop.yml and adjust the variables under `env:`.
 #
 # What it does on every PR (and push to main):
-#   1. Builds your PCF control with `npm run build`.
-#   2. Clones PCF-Workbench, runs `pcf-harness loop` against the built bundle.
-#   3. Uploads report.json + screenshot.png as a workflow artifact.
-#   4. Posts a sticky comment on the PR with pass/fail + perf-budget summary.
-#   5. Fails the workflow (red ❌) if the loop reports `warn` or `fail`.
+#   1. Installs @pcfworkbench/cli from npm (no repo clone needed).
+#   2. Builds your PCF control with `npm run build`.
+#   3. Runs `npx pcfworkbench loop` against the built bundle.
+#   4. Uploads report.json + screenshot.png as a workflow artifact.
+#   5. Posts a sticky comment on the PR with pass/fail + perf-budget summary.
+#   6. Fails the workflow (red ❌) if the loop reports `warn` or `fail`.
 #
 # Full reference: https://github.com/jaduplesms/PCF-Workbench/blob/main/harness/docs/ai-build-loop.md
 # ---------------------------------------------------------------------------
@@ -21,7 +22,6 @@ on:
       - '**/*.ts'
       - '**/*.tsx'
       - '**/*.css'
-      - '**/data.json'
       - '**/test-scenarios.json'
       - '.github/workflows/pcf-loop.yml'
   push:
@@ -33,14 +33,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # ── EDIT THESE THREE ───────────────────────────────────────────────────
+  # ── EDIT THESE ─────────────────────────────────────────────────────────
   # Project root that contains package.json with `npm run build`.
   PCF_PROJECT_DIR: '.'
   # Control dir (the one containing ControlManifest.Input.xml).
   PCF_CONTROL_DIR: './MyControl'
-  # Pin a known-good Workbench commit (or use 'main'). Pinning protects you
-  # from upstream changes; bump deliberately.
-  PCF_WORKBENCH_REF: 'main'
+  # Pin the published CLI version. Use 'beta' during the M12 stabilization
+  # window; switch to a specific version (e.g. '1.0.0') for production.
+  PCF_WORKBENCH_VERSION: 'beta'
   # OPTIONAL: name of a scenario in test-scenarios.json to auto-load before
   # the control mounts. Without this the control renders with manifest
   # defaults (often blank) — which is rarely what you want to assert on.
@@ -73,29 +73,24 @@ jobs:
         working-directory: ${{ env.PCF_PROJECT_DIR }}
         run: npm ci
 
+      - name: Install @pcfworkbench/cli
+        working-directory: ${{ env.PCF_PROJECT_DIR }}
+        run: npm i -D @pcfworkbench/cli@${{ env.PCF_WORKBENCH_VERSION }}
+
       - name: Build PCF control
         working-directory: ${{ env.PCF_PROJECT_DIR }}
         run: npm run build
 
-      - name: Clone PCF Workbench
-        run: |
-          git clone --depth=1 --branch "${PCF_WORKBENCH_REF}" \
-            https://github.com/jaduplesms/PCF-Workbench /tmp/pcfwb
-
-      - name: Install Workbench deps
-        working-directory: /tmp/pcfwb/harness
-        run: npm ci
-
       - name: Install Playwright Chromium
-        working-directory: /tmp/pcfwb/harness
+        working-directory: ${{ env.PCF_PROJECT_DIR }}
         run: npx playwright install --with-deps chromium
 
       - name: Run AI build loop
         id: loop
-        working-directory: /tmp/pcfwb/harness
+        working-directory: ${{ env.PCF_PROJECT_DIR }}
         run: |
-          npm run harness -- loop \
-            --path "${GITHUB_WORKSPACE}/${PCF_CONTROL_DIR}" \
+          npx pcfworkbench loop \
+            --path "${PCF_CONTROL_DIR}" \
             --skip-build \
             --out "${GITHUB_WORKSPACE}/pcf-loop-reports" \
             ${PCF_SCENARIO:+--scenario "${PCF_SCENARIO}"}

@@ -396,7 +396,7 @@ export function pcfPlugin(): Plugin {
   let serverRef: ViteDevServer | null = null;
 
   return {
-    name: 'pcf-harness',
+    name: 'pcfworkbench',
 
     config() {
       const controlPath = process.env.PCF_CONTROL_PATH;

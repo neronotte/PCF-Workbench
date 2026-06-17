@@ -78,7 +78,7 @@
   <h2><span class="num">2</span>Screenshot</h2>
   <div class="screenshot">
     <img src="./__visual__/screenshot.png" alt="StarRating rendered in PCF Workbench &mdash; 5 outline stars on a default form">
-    <div class="caption">Headless render captured by <code>pcf-harness loop</code>. Default state, no rating set. See <a href="./__visual__/report.json">report.json</a> for the full lifecycle / perf / leak report.</div>
+    <div class="caption">Headless render captured by <code>pcfworkbench loop</code>. Default state, no rating set. See <a href="./__visual__/report.json">report.json</a> for the full lifecycle / perf / leak report.</div>
   </div>
 
   <h2><span class="num">3</span>How to use</h2>
@@ -90,7 +90,7 @@ maxStars   &mdash; total stars rendered (default 5; valid range 1&ndash;20)
 allowClear &mdash; if true, clicking the selected star (or pressing 0) clears to 0</code></pre>
     <p style="margin-top: 14px;"><strong>3. Test locally first.</strong> Drop the control into PCF Workbench before importing to Dataverse:</p>
     <pre><code>cd harness
-npx tsx bin/pcf-harness.ts loop --path ..\samples\StarRating\StarRating</code></pre>
+npx pcfworkbench loop --path ./StarRating</code></pre>
     <p style="margin-top: 14px;">Expected: <code style="color: var(--success);">[summary] PASS &mdash; control rendered cleanly</code>, exit 0, screenshot + report under <code>./pcf-loop-reports/</code>.</p>
   </div>
 
@@ -103,7 +103,7 @@ npx tsx bin/pcf-harness.ts loop --path ..\samples\StarRating\StarRating</code></
     <div class="meta"><div class="label">Bundle size</div><div class="value">~16 KiB minified</div></div>
     <div class="meta"><div class="label">Manifest version</div><div class="value">1.0.0</div></div>
     <div class="meta"><div class="label">Scaffolding</div><div class="value">pac pcf init &middot; pcf-scripts</div></div>
-    <div class="meta"><div class="label">Validation</div><div class="value">pcf-harness loop (Playwright)</div></div>
+    <div class="meta"><div class="label">Validation</div><div class="value">pcfworkbench loop (Playwright)</div></div>
   </div>
   <p style="margin-top: 18px;">No 3rd-party runtime dependencies beyond Fluent UI v9 (platform-library) and React (platform-library). Both are provided by the Dynamics 365 host runtime &mdash; they do <em>not</em> ship inside the bundle.</p>
 

@@ -12,7 +12,7 @@ All source, configs, and scripts live under `harness/`. Always `cd harness` firs
 - `npm run dev` — start Vite on port 8181
 - `npm run typecheck` — `tsc --noEmit`; this is the canonical pre-PR check (there is no test suite or linter configured)
 - `npm run build` — `tsc -b && vite build` (production bundle of the harness itself)
-- `npm run harness` — runs `bin/pcf-harness.ts` via tsx (CLI entry exposed as `pcf-harness` bin)
+- `npm run harness` — runs `bin/pcfworkbench.ts` via tsx (CLI entry exposed as `pcfworkbench` bin on npm install)
 
 Launching against a target control workspace is driven by env vars, not CLI args:
 

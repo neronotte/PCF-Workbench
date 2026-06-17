@@ -1,14 +1,14 @@
 /**
  * Test bridge — installs `window.__pcfwbHarnessReport()` and
  * `window.__pcfwbHarnessReady` so external drivers (Playwright, the
- * `pcf-harness loop` CLI, AI build-loop agents) can read a stable
+ * `pcfworkbench loop` CLI, AI build-loop agents) can read a stable
  * JSON snapshot of harness state without scraping the DOM.
  *
  * This is a read-only window into the Zustand store. Calling the
  * function never mutates state.
  *
  * The shape returned here is the authoritative input to the MAI
- * `pcf-harness loop` report. If you change it, update
+ * `pcfworkbench loop` report. If you change it, update
  * `harness/docs/ai-loop-report.schema.json` in the same commit.
  */
 

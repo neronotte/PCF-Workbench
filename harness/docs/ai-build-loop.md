@@ -7,8 +7,13 @@
 ## TL;DR
 
 ```bash
+# As a user (recommended) — after `npm i -D @pcfworkbench/cli@beta`:
+npx pcfworkbench loop --path <absolute-path-to-pcf-control>
+
+# In dev (cloned repo):
 cd harness
 npm run harness -- loop --path <absolute-path-to-pcf-control>
+
 # → writes ./pcf-loop-reports/report.json + screenshot.png
 ```
 
@@ -21,7 +26,7 @@ sources, re-run. Loop until green.
 
 ```
    ┌──────────────────────────────────────────────────────┐
-   │            pcf-harness loop --path <dir>             │
+   │            pcfworkbench loop --path <dir>            │
    └──────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -109,13 +114,14 @@ A short decision table the agent can follow when `status !== 'pass'`:
 ## CLI reference
 
 ```text
-pcf-harness loop --path <dir>
+pcfworkbench loop --path <dir>
   --out <dir>          Where to write report.json + screenshot.png
                        (default: ./pcf-loop-reports)
   --skip-build         Reuse existing out/controls/<Name>/bundle.js
   --timeout <ms>       Max ms to wait for the first updateView
-                       (default: 60000)
+                       (default: 180000 — covers first-run Fluent UI download)
   --headed             Run Chromium in headed mode for debugging
+  --scenario <name>    Apply a saved scenario via the ?scenario= URL param
 ```
 
 Exit codes: `0` on `pass`, `1` on `warn` or `fail`.
@@ -191,7 +197,7 @@ onwards:
 1. Workflow triggers when a PR touches `**/*.ts`, `**/*.tsx`,
    `**/ControlManifest.Input.xml`, `**/*.css`, `**/data.json`, or
    `**/test-scenarios.json`.
-2. It builds your control, clones Workbench, runs `pcf-harness loop`
+2. It builds your control, runs `pcfworkbench loop` against the bundle
    with `--scenario "$PCF_SCENARIO"` if set.
 3. `report.json` + `screenshot.png` are uploaded as the
    `pcf-loop-reports` artifact (30-day retention by default).

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/jaduplesms/PCF-Workbench/harness/docs/ai-loop-report.schema.json",
   "title": "PCF Workbench AI Build Loop Report",
-  "description": "Deterministic JSON report emitted by `pcf-harness loop`. Agents can diff successive reports to detect regressions and decide on remediation. Path fields use OS-native separators (forward slashes on POSIX, backslashes on Windows) — agents should normalise before comparison.",
+  "description": "Deterministic JSON report emitted by `pcfworkbench loop`. Agents can diff successive reports to detect regressions and decide on remediation. Path fields use OS-native separators (forward slashes on POSIX, backslashes on Windows) — agents should normalise before comparison.",
   "type": "object",
   "required": ["schemaVersion", "runId", "capturedAt", "control", "build", "harness", "summary"],
   "additionalProperties": false,

@@ -1,13 +1,46 @@
 # PCF Workbench
 
+[![npm](https://img.shields.io/npm/v/%40pcfworkbench%2Fcli/beta.svg?label=%40pcfworkbench%2Fcli%40beta&logo=npm)](https://www.npmjs.com/package/@pcfworkbench/cli)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-6-646cff?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Fluent UI](https://img.shields.io/badge/Fluent_UI-v9-0078d4?logo=microsoft&logoColor=white)](https://react.fluentui.dev/)
-[![Zustand](https://img.shields.io/badge/Zustand-5-orange)](https://zustand-demo.pmnd.rs/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An enhanced development harness and testing framework for Power Apps Component Framework (PCF) controls. Browse, test, and debug your PCF controls in a rich local environment with device emulation, network conditioning, performance monitoring, and lifecycle analysis -- all without deploying to Dataverse.
+
+---
+
+## Install
+
+```bash
+npm i -D @pcfworkbench/cli@beta
+```
+
+Then in any PCF project:
+
+```bash
+# Interactive — boot the harness UI in your browser
+npx pcfworkbench start --path ./MyControl
+
+# Headless — run one build → render → report cycle and exit
+npx pcfworkbench loop  --path ./MyControl
+```
+
+`start` opens the harness at `http://127.0.0.1:8181`. Add `--workspace ./samples` instead of `--path` for gallery mode (multiple controls in one folder).
+`loop` is the CI / AI gate — exits 0 with a deterministic JSON report on success.
+
+> Currently published under the `@beta` tag during the M12 stabilization window. Plain `npm i -D @pcfworkbench/cli` will work once we promote to `@latest`.
+> First `loop` run on a fresh machine takes ~60–80s while Fluent UI v9 caches; subsequent runs are 5–15s.
+
+**Or clone to contribute:**
+
+```bash
+git clone https://github.com/jaduplesms/PCF-Workbench.git
+cd PCF-Workbench/harness
+npm install
+npm run dev
+```
 
 ---
 
@@ -159,7 +192,7 @@ Gallery cards display the total `out/` directory size for each built control, wi
 
 ## Build PCFs with AI (Copilot CLI Skills)
 
-PCF Workbench ships two [GitHub Copilot CLI](https://github.com/github/copilot-cli) **skills** that turn the harness into an end-to-end AI dev loop — not just a tester. Clone the repo and the skills auto-load whenever you run `copilot` from inside it.
+PCF Workbench ships two [GitHub Copilot CLI](https://github.com/github/copilot-cli) **skills** that turn the harness into an end-to-end AI dev loop — not just a tester. The skills auto-load when you run `copilot` inside a clone of this repo (or after you copy them into your user-scoped skills folder).
 
 | Skill | What it does | Triggers on |
 |---|---|---|
@@ -182,60 +215,49 @@ cp -R ./.copilot/skills/* ~/.copilot/skills/
 
 ---
 
-## Quick Start
+## Quick Start (deep dive)
 
 ### Prerequisites
 
 - Node.js 18+
-- A workspace containing one or more PCF control projects (each with a `ControlManifest.Input.xml` and a compiled `out/` directory)
+- A built PCF control — `out/controls/<Name>/bundle.js` must exist before the harness can load it (`npm run build` in your PCF project)
 
-### Install
+### Two install paths
+
+**As a user (recommended):**
+
+```bash
+npm i -D @pcfworkbench/cli@beta
+npx pcfworkbench start --path ./MyControl
+# or
+npx pcfworkbench loop --path ./MyControl
+```
+
+**As a contributor (clone the repo):**
 
 ```bash
 git clone https://github.com/jaduplesms/PCF-Workbench.git
 cd PCF-Workbench/harness
 npm install
+npm run dev
 ```
 
-> **No build step required.** Vite compiles TypeScript on-the-fly — just install and run.
-
-### Gallery Mode
-
-Browse all controls in a workspace directory:
+Then set the target control via env vars and visit `http://localhost:8181`:
 
 **Bash / Git Bash:**
 ```bash
-cd PCF-Workbench/harness
 PCF_WORKSPACE_ROOT="/path/to/your/pcf-controls" npx vite --port 8181
-```
-
-**PowerShell:**
-```powershell
-cd PCFBuilderFramework\harness
-$env:PCF_WORKSPACE_ROOT = "C:\path\to\your\pcf-controls"
-npx vite --port 8181
-```
-
-### Single Control Mode
-
-Open a specific control directly:
-
-**Bash / Git Bash:**
-```bash
-cd PCF-Workbench/harness
+# or
 PCF_CONTROL_PATH="/path/to/MyControl/MyControl" npx vite --port 8181
 ```
 
 **PowerShell:**
 ```powershell
-cd PCFBuilderFramework\harness
-$env:PCF_CONTROL_PATH = "C:\path\to\MyControl\MyControl"
+$env:PCF_WORKSPACE_ROOT = "C:\path\to\your\pcf-controls"
 npx vite --port 8181
 ```
 
-The harness opens at `http://localhost:8181`.
-
-> **Note:** Controls must be built (`npm run build` in the PCF project) before they can be loaded. The harness runs the compiled `bundle.js` from the `out/` directory, not the TypeScript source.
+> The harness runs the compiled `bundle.js` from `out/`, never the user's TypeScript source. Run `npm run build` in the PCF project first.
 
 ---
 

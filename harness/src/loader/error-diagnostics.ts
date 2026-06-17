@@ -8,7 +8,7 @@
  * Used by:
  *   - ControlViewport's error MessageBar (shown when isLoaded === false &&
  *     error !== null), so users without F12 still see actionable hints.
- *   - bin/pcf-harness.ts loop CLI's --explain flag, which writes the
+ *   - bin/pcfworkbench.ts loop CLI's --explain flag, which writes the
  *     explanation into report.json next to the raw message.
  *
  * Add new rules below as new failure modes surface from third-party PCFs.

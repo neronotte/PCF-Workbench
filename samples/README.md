@@ -67,7 +67,7 @@ The worked example for **M10.P3** of the PCF Workbench roadmap. A 0–5 star fie
 
 ```powershell
 cd harness
-npx tsx bin/pcf-harness.ts loop --path ..\samples\StarRating\StarRating
+npx pcfworkbench loop --path ./StarRating
 ```
 
 Expected: `[summary] PASS — control rendered cleanly`, exit 0.

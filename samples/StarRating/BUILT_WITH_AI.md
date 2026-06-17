@@ -37,9 +37,9 @@ That was it. The skills did the rest:
 
 - **M1** — manifest replaced with `value` / `maxStars` / `allowClear`, `HelloWorld.tsx` swapped for `StarRating.tsx` skeleton, `index.ts` wired with React root + `notifyOutputChanged` + dirty-flag pattern. `npm run build` → 8.4 KiB bundle, 0 TS errors. **Gate: pass.**
 - **M2 + M3** (collapsed into one prompt-less iteration once M1 was clean) — full rendering, hover preview, WAI-ARIA radiogroup keyboard pattern, `isAuthoringMode` preview, Fluent v9 tokens. Bundle grew to 16 KiB. **Gate: pass.**
-- **M4** — `data.json` + 6-scenario `test-scenarios.json` covering default-empty, rated-3, clamp-high, invalid-max, disabled, authoring-mode. Headless loop (`npx pcf-harness loop`) ran clean: 0 console errors, 0 page errors, 0 leaks, 1 render, 16 DOM nodes, budget pass. **Gate: pass.**
+- **M4** — `data.json` + 6-scenario `test-scenarios.json` covering default-empty, rated-3, clamp-high, invalid-max, disabled, authoring-mode. Headless loop (`npx pcfworkbench loop`) ran clean: 0 console errors, 0 page errors, 0 leaks, 1 render, 16 DOM nodes, budget pass. **Gate: pass.**
 
-Along the way the AI **caught and fixed a real harness bug** — `pcf-harness loop` used `page.goto(..., { waitUntil: 'networkidle' })` which never resolves under Vite HMR. Switched to `'load'` + the existing `__pcfwbHarnessReady` flag as the readiness signal. That's the kind of bug a planning-first / report-driven loop surfaces naturally.
+Along the way the AI **caught and fixed a real harness bug** — `pcfworkbench loop` originally used `page.goto(..., { waitUntil: 'networkidle' })` which never resolves under Vite HMR. Switched to `'load'` + the existing `__pcfwbHarnessReady` flag as the readiness signal. That's the kind of bug a planning-first / report-driven loop surfaces naturally.
 
 ---
 
@@ -48,7 +48,7 @@ Along the way the AI **caught and fixed a real harness bug** — `pcf-harness lo
 1. **Two short prompts** got us a production-shaped PCF (manifest, lifecycle, a11y, edge cases, scenarios, headless validation).
 2. **The plan is the spec.** When the AI strayed, the response was "check the plan", not "regenerate from scratch".
 3. **Headless validation closes the loop.** No human eyeballed the rendered output until M4 was already green — we were verifying *behavior*, not *appearance*.
-4. **The harness is a CI gate, not a debugger.** `pcf-harness loop` exits non-zero on render failure, console errors, leak count over budget, or perf budget violations. Drop it in `.github/workflows/pcf-loop.yml` and you have PR-time validation.
+4. **The harness is a CI gate, not a debugger.** `pcfworkbench loop` exits non-zero on render failure, console errors, leak count over budget, or perf budget violations. Drop it in `.github/workflows/pcf-loop.yml` and you have PR-time validation.
 
 ---
 
@@ -65,8 +65,8 @@ copilot
 Or just run the existing loop against this sample:
 
 ```powershell
-cd harness
-npx tsx bin/pcf-harness.ts loop --path ..\samples\StarRating\StarRating
+# After: npm i -D @pcfworkbench/cli@beta (in your PCF project)
+npx pcfworkbench loop --path ./StarRating
 ```
 
 Expected: `[summary] PASS — control rendered cleanly`, exit 0, JSON report + screenshot in `./pcf-loop-reports/`.

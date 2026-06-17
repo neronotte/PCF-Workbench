@@ -1,6 +1,6 @@
 ---
 name: pcf-build-loop
-description: "AI-assisted PCF build loop powered by PCF Workbench. Use when iterating on a Power Apps Component Framework control without a Dataverse org. Runs build + headless harness + Playwright drive + structured JSON report + screenshot via one command. TRIGGER: fix this PCF, iterate on this control, make this PCF render, ControlManifest.Input.xml, pcf-harness, PCF Workbench, debug PCF locally."
+description: "AI-assisted PCF build loop powered by PCF Workbench. Use when iterating on a Power Apps Component Framework control without a Dataverse org. Runs build + headless harness + Playwright drive + structured JSON report + screenshot via one command. TRIGGER: fix this PCF, iterate on this control, make this PCF render, ControlManifest.Input.xml, pcfworkbench, PCF Workbench, debug PCF locally."
 user-invocable: true
 argument-hint: "[fix|iterate|render] <path-to-pcf-control-dir>"
 ---
@@ -9,7 +9,7 @@ argument-hint: "[fix|iterate|render] <path-to-pcf-control-dir>"
 
 > Drop-in skill / system-prompt fragment for Copilot CLI, Claude, or any
 > other coding agent. Teaches the agent to drive PCF Workbench's
-> `pcf-harness loop` CLI end-to-end and iterate on a PCF control until it
+> `pcfworkbench loop` CLI end-to-end and iterate on a PCF control until it
 > renders cleanly.
 
 ---
@@ -26,24 +26,33 @@ Trigger on any of these intents:
 
 ## What you can run
 
+The harness ships on npm as `@pcfworkbench/cli`. If it's not already a devDep of the project:
+
+```bash
+npm i -D @pcfworkbench/cli@beta
+```
+
+Then:
+
 ```bash
 # One full loop: build + headless run + report.
-npx pcf-harness loop --path <absolute-path-to-pcf-control-dir>
+npx pcfworkbench loop --path <absolute-path-to-pcf-control-dir>
 
 # Reuse an existing build (faster when iterating on harness wiring only).
-npx pcf-harness loop --path <dir> --skip-build
+npx pcfworkbench loop --path <dir> --skip-build
 
-# Longer timeout for heavy controls.
-npx pcf-harness loop --path <dir> --timeout 120000
+# Longer timeout for heavy controls (default 180000ms = 3 min covers
+# first-run Fluent UI download).
+npx pcfworkbench loop --path <dir> --timeout 300000
 
 # Custom output directory.
-npx pcf-harness loop --path <dir> --out ./reports/run-$(date +%s)
+npx pcfworkbench loop --path <dir> --out ./reports/run-$(date +%s)
 ```
 
 Exit code: `0` on pass, `1` on warn or fail. Output: `<out>/report.json`
 and `<out>/screenshot.png`.
 
-If `pcf-harness` isn't on PATH, run from the workbench checkout:
+If you're inside a clone of the Workbench repo (contributor path), the dev equivalent is:
 
 ```bash
 cd <pcf-workbench>/harness

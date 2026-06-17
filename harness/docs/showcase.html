@@ -556,44 +556,53 @@ p{color:var(--neutral-30)}
   <div class="container">
     <div class="section-header reveal">
       <h2><span class="section-number">0</span>Quick Start</h2>
-      <p>Two environment variables decide which mode the harness runs in. No config files. No build step &mdash; Vite compiles TypeScript on the fly.</p>
+      <p>Install the published CLI as a devDep in any PCF project. Two subcommands, no config files. (Or clone the repo if you want to contribute.)</p>
     </div>
 
     <div class="reveal">
       <div class="tab-strip" data-tabs="qs">
-        <button class="tab-btn active" data-tab="gallery-cmd">Gallery Mode</button>
-        <button class="tab-btn" data-tab="single-cmd">Single Control</button>
-        <button class="tab-btn" data-tab="ps-cmd">PowerShell</button>
+        <button class="tab-btn active" data-tab="install-cmd">Install</button>
+        <button class="tab-btn" data-tab="start-cmd">Start (UI)</button>
+        <button class="tab-btn" data-tab="loop-cmd">Loop (headless)</button>
+        <button class="tab-btn" data-tab="clone-cmd">Clone (contribute)</button>
       </div>
-      <div class="tab-panel active" data-panel="gallery-cmd">
-        <p style="margin-bottom:8px;font-size:.9rem;">Browse every control in a workspace with card layout, search, build badges, and package size tracking.</p>
+      <div class="tab-panel active" data-panel="install-cmd">
+        <p style="margin-bottom:8px;font-size:.9rem;">One install per PCF project. Currently published under the <code>@beta</code> tag; the plain <code>@pcfworkbench/cli</code> install will work after M5 promotes <code>latest</code>.</p>
+        <div class="code-block">
+          <span class="code-label">Bash / PowerShell</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+          <span class="keyword">npm</span> i <span class="flag">-D</span> @pcfworkbench/cli@beta
+        </div>
+        <p style="margin-top:8px;font-size:.82rem;color:var(--neutral-50);">First <code>loop</code> run on a fresh machine takes 60&ndash;80s while Fluent UI v9 caches; subsequent runs are 5&ndash;15s.</p>
+      </div>
+      <div class="tab-panel" data-panel="start-cmd">
+        <p style="margin-bottom:8px;font-size:.9rem;">Launch the interactive harness UI in your browser. Pass <code>--path</code> for single-control mode or <code>--workspace</code> to browse a folder of controls.</p>
+        <div class="code-block">
+          <span class="code-label">Bash / PowerShell</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+          <span class="comment"># Single control</span><br>
+          <span class="keyword">npx</span> pcfworkbench start <span class="flag">--path</span> ./MyControl<br><br>
+          <span class="comment"># Gallery mode &mdash; browse all controls in a folder</span><br>
+          <span class="keyword">npx</span> pcfworkbench start <span class="flag">--workspace</span> ./samples
+        </div>
+      </div>
+      <div class="tab-panel" data-panel="loop-cmd">
+        <p style="margin-bottom:8px;font-size:.9rem;">Headless build &rarr; render &rarr; report cycle. Exits 0 on success with a deterministic <code>report.json</code> + screenshot. The AI / CI gate.</p>
+        <div class="code-block">
+          <span class="code-label">Bash / PowerShell</span>
+          <button class="code-copy" onclick="copyCode(this)">Copy</button>
+          <span class="keyword">npx</span> pcfworkbench loop <span class="flag">--path</span> ./MyControl <span class="flag">--out</span> ./reports
+        </div>
+      </div>
+      <div class="tab-panel" data-panel="clone-cmd">
+        <p style="margin-bottom:8px;font-size:.9rem;">Want to hack on the harness itself? Clone the repo and run the dev workflow directly.</p>
         <div class="code-block">
           <span class="code-label">Bash</span>
           <button class="code-copy" onclick="copyCode(this)">Copy</button>
-          <span class="comment"># Gallery mode &mdash; browse all controls</span><br>
+          <span class="keyword">git</span> clone https://github.com/jaduplesms/PCF-Workbench.git<br>
           <span class="keyword">cd</span> PCF-Workbench/harness<br>
-          <span class="var">PCF_WORKSPACE_ROOT</span>=<span class="string">"/path/to/pcf-controls"</span> <span class="keyword">npx</span> vite <span class="flag">--port</span> <span class="string">8181</span>
-        </div>
-      </div>
-      <div class="tab-panel" data-panel="single-cmd">
-        <p style="margin-bottom:8px;font-size:.9rem;">Load a single control directly for focused development and testing.</p>
-        <div class="code-block">
-          <span class="code-label">Bash</span>
-          <button class="code-copy" onclick="copyCode(this)">Copy</button>
-          <span class="comment"># Single control mode</span><br>
-          <span class="keyword">cd</span> PCF-Workbench/harness<br>
-          <span class="var">PCF_CONTROL_PATH</span>=<span class="string">"/path/to/MyControl/MyControl"</span> <span class="keyword">npx</span> vite <span class="flag">--port</span> <span class="string">8181</span>
-        </div>
-      </div>
-      <div class="tab-panel" data-panel="ps-cmd">
-        <p style="margin-bottom:8px;font-size:.9rem;">PowerShell syntax for setting environment variables.</p>
-        <div class="code-block">
-          <span class="code-label">PowerShell</span>
-          <button class="code-copy" onclick="copyCode(this)">Copy</button>
-          <span class="comment"># Gallery mode (PowerShell)</span><br>
-          <span class="keyword">cd</span> PCF-Workbench\harness<br>
-          <span class="var">$env:PCF_WORKSPACE_ROOT</span> = <span class="string">"C:\path\to\pcf-controls"</span><br>
-          <span class="keyword">npx</span> vite <span class="flag">--port</span> <span class="string">8181</span>
+          <span class="keyword">npm</span> install<br>
+          <span class="keyword">npm</span> run dev
         </div>
       </div>
     </div>
@@ -2201,7 +2210,7 @@ Copy-Item &lt;workbench&gt;\harness\docs\ai-loop-skill.md `
       <div>
         <h3 style="font-size:1.15rem;margin-bottom:8px">What the agent does</h3>
         <ol style="font-size:.88rem;color:var(--neutral-30);line-height:1.7;padding-left:20px;margin-top:8px">
-          <li>Runs <code>npx pcf-harness loop --path &lt;your-control&gt;</code></li>
+          <li>Runs <code>npx pcfworkbench loop --path &lt;your-control&gt;</code></li>
           <li>Parses <code>report.json</code> against the published schema</li>
           <li>If <code>summary.status === "pass"</code> &mdash; reports success and stops</li>
           <li>If <code>fail</code> / <code>warn</code> &mdash; reads <code>lifecycle.events</code>, <code>consoleErrors</code>, <code>leaks</code>, <code>webApi.errorCount</code> to localise the bug</li>
@@ -2238,7 +2247,7 @@ Copy-Item &lt;workbench&gt;\harness\docs\ai-loop-skill.md `
   <div class="container">
     <div class="why-hero reveal">
       <h2>Run it in GitHub Actions <span class="badge badge-new">PR-time gate</span></h2>
-      <p>The same <code>pcf-harness loop</code> command runs unattended in CI. A ready-to-use workflow at <a href="https://github.com/jaduplesms/PCF-Workbench/blob/main/harness/docs/examples/pcf-loop.yml"><code>harness/docs/examples/pcf-loop.yml</code></a> turns every pull request into a render-and-render-clean check &mdash; broken PCFs are caught before merge, not after a user reports a blank tile in production.</p>
+      <p>The same <code>pcfworkbench loop</code> command runs unattended in CI. A ready-to-use workflow at <a href="https://github.com/jaduplesms/PCF-Workbench/blob/main/harness/docs/examples/pcf-loop.yml"><code>harness/docs/examples/pcf-loop.yml</code></a> turns every pull request into a render-and-render-clean check &mdash; broken PCFs are caught before merge, not after a user reports a blank tile in production.</p>
     </div>
   </div>
 </section>
@@ -2271,7 +2280,7 @@ git add test-scenarios.json
 <span class="comment"># in .github/workflows/pcf-loop.yml, set:</span>
 <span class="comment">env:</span>
 <span class="comment">  PCF_SCENARIO: 'ci-smoke'</span></pre>
-        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px">The workflow auto-passes <code>--scenario "$PCF_SCENARIO"</code> to <code>pcf-harness loop</code>, which appends <code>?scenario=ci-smoke</code> to the harness URL. Property values, page entity, network, and device preset are all applied before the control mounts — exactly as if you'd clicked "Load" in the Scenarios panel.</p>
+        <p style="font-size:.82rem;color:var(--neutral-40);margin-top:12px">The workflow auto-passes <code>--scenario "$PCF_SCENARIO"</code> to <code>pcfworkbench loop</code>, which appends <code>?scenario=ci-smoke</code> to the harness URL. Property values, page entity, network, and device preset are all applied before the control mounts — exactly as if you'd clicked "Load" in the Scenarios panel.</p>
 
         <h3 style="font-size:1.15rem;margin-bottom:8px;margin-top:32px">3. Open a pull request</h3>
         <p style="font-size:.92rem;color:var(--neutral-30);margin-top:0">The workflow auto-triggers when a PR touches <code>**/*.ts</code>, <code>**/*.tsx</code>, <code>**/ControlManifest.Input.xml</code>, <code>**/*.css</code>, or <code>**/test-scenarios.json</code>. <code>workflow_dispatch</code> is also wired so you can run it on demand from the Actions tab.</p>
@@ -2286,7 +2295,7 @@ git add test-scenarios.json
           <li>Checks out your PCF and clones Workbench at <code>PCF_WORKBENCH_REF</code></li>
           <li>Caches npm + Playwright browser binaries (~30s first run, ~5s after)</li>
           <li>Builds your control with <code>npm run build</code></li>
-          <li>Runs <code>npx pcf-harness loop --skip-build --path &lt;control&gt; --scenario "$PCF_SCENARIO"</code></li>
+          <li>Runs <code>npx pcfworkbench loop --skip-build --path &lt;control&gt; --scenario "$PCF_SCENARIO"</code></li>
           <li>Harness auto-applies the scenario before mount (property values, page entity, network, device)</li>
           <li>Uploads <code>report.json</code> + <code>screenshot.png</code> as the <code>pcf-loop-reports</code> artifact (30-day retention)</li>
           <li>Posts a sticky PR comment (updated on every push) with a one-table summary</li>
@@ -2313,7 +2322,7 @@ Perf:   firstUpdateView: 180ms ·
     </div>
 
     <div class="reveal" style="margin-top:48px;padding:20px 24px;background:var(--neutral-95);border-radius:var(--radius-m);font-size:.88rem;color:var(--neutral-30)">
-      <strong>Same loop, same JSON, same answer.</strong> A green Workbench loop on your laptop is the same green loop in CI &mdash; if it passes locally with <code>npx pcf-harness loop</code>, the GitHub Actions run will too. No CI-only flakiness, no environment drift.
+      <strong>Same loop, same JSON, same answer.</strong> A green Workbench loop on your laptop is the same green loop in CI &mdash; if it passes locally with <code>npx pcfworkbench loop</code>, the GitHub Actions run will too. No CI-only flakiness, no environment drift.
     </div>
   </div>
 </section>
@@ -2427,9 +2436,9 @@ Perf:   firstUpdateView: 180ms ·
             <span class="milestone-pill pill-shipped">Shipped</span>
           </div>
         </div>
-        <p class="ms-desc">First half of <strong>Scenario Runner + Playwright</strong>: a one-command <code>pcf-harness loop</code> CLI that wraps build &rarr; headless harness &rarr; Playwright drive &rarr; deterministic JSON report. Built so AI coding agents can iterate on a PCF unattended (build &rarr; run &rarr; screen &rarr; analyse &rarr; refactor) without a Dataverse org. The published JSON schema is the contract agents read.</p>
+        <p class="ms-desc">First half of <strong>Scenario Runner + Playwright</strong>: a one-command <code>pcfworkbench loop</code> CLI that wraps build &rarr; headless harness &rarr; Playwright drive &rarr; deterministic JSON report. Built so AI coding agents can iterate on a PCF unattended (build &rarr; run &rarr; screen &rarr; analyse &rarr; refactor) without a Dataverse org. The published JSON schema is the contract agents read.</p>
         <ul class="milestone-list">
-          <li class="done"><code>npx pcf-harness loop --path &lt;control&gt;</code> CLI (build + Vite + Playwright + report in-process)</li>
+          <li class="done"><code>npx pcfworkbench loop --path &lt;control&gt;</code> CLI (build + Vite + Playwright + report in-process)</li>
           <li class="done">Read-only <code>window.__pcfwbHarnessReport()</code> bridge for headless drivers</li>
           <li class="done">Stable JSON report: lifecycle events, console errors, resource leaks, WebAPI calls, render perf, screenshot</li>
           <li class="done">Published JSON Schema (<code>ai-loop-report.schema.json</code>) as the contract for agents</li>

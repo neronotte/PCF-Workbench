@@ -263,7 +263,7 @@ function extractErrors(stdout: string, stderr: string): string[] {
     .filter(Boolean);
 }
 
-/** Walk up to find package.json (mirrors bin/pcf-harness.ts findProjectRoot). */
+/** Walk up to find package.json (mirrors bin/pcfworkbench.ts findProjectRoot). */
 export function findProjectRootForBuild(controlPath: string): string | null {
   let dir = path.resolve(controlPath);
   for (let i = 0; i < 5; i++) {

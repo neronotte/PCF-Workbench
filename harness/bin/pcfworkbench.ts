@@ -308,7 +308,7 @@ interface BuildResult {
 
 async function runLoop(opts: LoopOpts): Promise<number> {
   const t0 = Date.now();
-  console.log(`\n  pcf-harness loop`);
+  console.log(`\n  pcfworkbench loop`);
   console.log(`  Control: ${opts.controlPath}`);
   console.log(`  Out:     ${opts.outDir}\n`);
 
@@ -347,7 +347,7 @@ async function runLoop(opts: LoopOpts): Promise<number> {
   }
 
   /* --- 3. Playwright drive -------------------------------------- */
-  // Lazy-import to keep `pcf-harness --path` startup fast.
+  // Lazy-import to keep `pcfworkbench --path` startup fast.
   const { chromium } = await import('@playwright/test');
   const browser = await chromium.launch({ headless: !opts.headed });
   const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });

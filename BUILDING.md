@@ -8,8 +8,14 @@
 ## TL;DR
 
 ```bash
-# 1. Scaffold
+# 0. Install once per machine
+npm i -g @github/copilot                       # GitHub Copilot CLI
+dotnet tool install --global Microsoft.PowerApps.CLI.Tool   # pac
+
+# 1. Scaffold the PCF
 pac pcf init --namespace YourCo --name MyControl --template field --framework react --run-npm-install
+cd MyControl
+npm i -D @pcfworkbench/cli@beta                # the harness
 
 # 2. Plan with AI — co-author DESIGN.md + PLAN.md, sign off, THEN build
 copilot
@@ -17,6 +23,7 @@ copilot
 
 # 3. The loop runs itself
 #    pcf-engineer writes the code per the plan → pcf-workbench builds, renders, reports → AI fixes → repeat
+#    Headless gate: npx pcfworkbench loop --path ./MyControl
 ```
 
 ---
@@ -75,6 +82,41 @@ Use it for:
 ## End-to-end workflow
 
 ### 0. One-time setup
+
+**Pick one of two install paths.**
+
+#### A) As a user (recommended)
+
+```powershell
+# Power Platform CLI (Microsoft)
+dotnet tool install --global Microsoft.PowerApps.CLI.Tool
+
+# GitHub Copilot CLI
+npm install -g @github/copilot
+
+# PCF Workbench (the harness) — installed per-project as a devDep
+# Run this inside any PCF project after `pac pcf init`:
+npm i -D @pcfworkbench/cli@beta
+```
+
+The Copilot CLI skills (`pcf-engineer`, `pcf-workbench`) live in this repo's `.copilot/skills/` folder. They auto-load when you run `copilot` from inside a clone — for users who only installed via npm, copy them into your user-scoped skills folder once:
+
+```powershell
+# Windows
+$tmp = New-TemporaryFile | %{ Remove-Item $_; $_.FullName }
+git clone --depth 1 https://github.com/jaduplesms/PCF-Workbench.git $tmp
+Copy-Item -Recurse -Force "$tmp\.copilot\skills\*" "$env:USERPROFILE\.copilot\skills\"
+Remove-Item -Recurse -Force $tmp
+```
+
+```bash
+# macOS / Linux
+tmp=$(mktemp -d) && git clone --depth 1 https://github.com/jaduplesms/PCF-Workbench.git "$tmp" \
+  && cp -R "$tmp/.copilot/skills/"* ~/.copilot/skills/ \
+  && rm -rf "$tmp"
+```
+
+#### B) As a contributor (clone the repo)
 
 ```powershell
 # Power Platform CLI (Microsoft)

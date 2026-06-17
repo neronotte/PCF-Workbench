@@ -1,6 +1,6 @@
 ---
 name: pcf-workbench
-description: "Run, diagnose, and iterate on Power Apps Component Framework (PCF) controls locally with the PCF Workbench harness. Replaces `pcf-scripts start` with a richer dev loop: gallery discovery, device emulation, network conditioning, WebAPI mocking from data.json, scenarios, lifecycle/leak tracking, and a headless build→render→report loop for AI-assisted iteration. ALWAYS use this skill for ANY PCF development work (alongside the pcf-engineer skill for code authoring/review) — the headless loop is the acceptance gate after any non-trivial code change. TRIGGER: PCF, PCF control, PCF component, Power Apps Component Framework, code component, PCF Workbench, pcf-harness, run pcf, test pcf locally, harness, pcf gallery, pcf loop, debug pcf control, pcf-scripts start replacement, build pcf, validate pcf, ControlManifest."
+description: "Run, diagnose, and iterate on Power Apps Component Framework (PCF) controls locally with the PCF Workbench harness. Replaces `pcf-scripts start` with a richer dev loop: gallery discovery, device emulation, network conditioning, WebAPI mocking from data.json, scenarios, lifecycle/leak tracking, and a headless build→render→report loop for AI-assisted iteration. ALWAYS use this skill for ANY PCF development work (alongside the pcf-engineer skill for code authoring/review) — the headless loop is the acceptance gate after any non-trivial code change. TRIGGER: PCF, PCF control, PCF component, Power Apps Component Framework, code component, PCF Workbench, pcfworkbench, run pcf, test pcf locally, harness, pcf gallery, pcf loop, debug pcf control, pcf-scripts start replacement, build pcf, validate pcf, ControlManifest."
 user-invocable: true
 argument-hint: "[run|gallery|loop|diagnose] [control-path-or-workspace]"
 ---
@@ -27,14 +27,17 @@ This skill **does not write PCF control code** — use the `pcf-engineer` skill 
 
 ## LAUNCH MODES
 
-### A. Interactive single-control via CLI bin
-From inside `harness/`:
+### A. Interactive single-control via published CLI (preferred for end users)
+After `npm i -D @pcfworkbench/cli@beta` in the PCF project:
 ```powershell
-npm run harness -- start --path ..\samples\ConformanceTester\ConformanceTester --port 8181
+npx pcfworkbench start --path .\MyControl
+# Gallery mode across many controls:
+npx pcfworkbench start --workspace .\samples
 ```
-Or the installed bin form (once linked): `pcf-harness start --path <dir>`.
 
-### B. Interactive via env vars + raw Vite (preferred for ad-hoc demos)
+In dev (cloned repo) the equivalent is `npm run harness -- start --path ..\samples\ConformanceTester\ConformanceTester --port 8181`.
+
+### B. Interactive via env vars + raw Vite (preferred for ad-hoc demos in dev)
 ```powershell
 cd harness
 $env:PCF_CONTROL_PATH = "..\samples\ConformanceTester\ConformanceTester"
@@ -45,13 +48,18 @@ npx vite --port 8181 --host 127.0.0.1
 - The PCF mounts directly in the page (no iframe). For Playwright, use top-level `page.locator`.
 
 ### C. Headless build→render→report loop (the AI iteration loop)
+End-user (after `npm i -D @pcfworkbench/cli@beta`):
+```powershell
+npx pcfworkbench loop --path .\MyControl --out .\pcf-loop-reports
+```
+In dev (cloned repo):
 ```powershell
 cd harness
 npm run harness -- loop --path ..\samples\ConformanceTester\ConformanceTester --out .\pcf-loop-reports
 ```
 - Default writes `report.json` + `screenshot.png` to `./pcf-loop-reports/`.
 - `--skip-build` reuses an existing `out/` bundle (faster iteration).
-- `--timeout <ms>` (default 60000) and `--headed` (debug visually) are available.
+- `--timeout <ms>` (default 180000 = 3 min — covers first-run Fluent UI download) and `--headed` (debug visually) are available.
 - This is the canonical "did my change work?" check for autonomous edits.
 
 ## STANDARD WORKFLOWS
@@ -83,7 +91,7 @@ This is the harness's own regression gate; useful as a smoke test after changing
 3. `cd harness; $env:HARNESS_URL="http://127.0.0.1:<port>"; npx playwright test --reporter=list`
 4. Baseline JSON + screenshot land in `harness/__visual__/conformance-<phase>.{json,png}`.
 
-**First-load auto-generate dialog must be suppressed in automation.** When the harness opens a control with no saved scenarios it pops a "Generate starter scenarios?" dialog whose backdrop intercepts clicks and stalls headless runs. Suppress it via `page.addInitScript` setting `localStorage['pcf-workbench-suppress-autogen-all'] = '1'` (the `pcf-harness loop` bin and `conformance.spec.ts` already do this — copy the pattern for any new spec or external Playwright driver). Per-control opt-out also exists via the "Don't show this again" checkbox on the dialog (`pcf-workbench-suppress-autogen-${controlId}`).
+**First-load auto-generate dialog must be suppressed in automation.** When the harness opens a control with no saved scenarios it pops a "Generate starter scenarios?" dialog whose backdrop intercepts clicks and stalls headless runs. Suppress it via `page.addInitScript` setting `localStorage['pcf-workbench-suppress-autogen-all'] = '1'` (the `pcfworkbench loop` bin and `conformance.spec.ts` already do this — copy the pattern for any new spec or external Playwright driver). Per-control opt-out also exists via the "Don't show this again" checkbox on the dialog (`pcf-workbench-suppress-autogen-${controlId}`).
 
 ### Workflow 5 — Test a specific saved scenario via the harness
 

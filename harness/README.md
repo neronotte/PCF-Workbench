@@ -16,8 +16,11 @@ Opens a gallery showing all PCF controls in the workspace with metadata, badges,
 # Via environment variable
 PCF_CONTROL_PATH="../BookingStatusTransitionControl/BookingStatusTransitionControl" npx vite --port 8181
 
-# Via CLI
-node bin/pcf-harness.js --path ../BookingStatusTransitionControl/BookingStatusTransitionControl --port 8181
+# Via CLI (dev / cloned repo)
+npm run harness -- start --path ../BookingStatusTransitionControl/BookingStatusTransitionControl --port 8181
+
+# Via CLI (published package — `npm i -D @pcfworkbench/cli@beta` in the PCF project first)
+npx pcfworkbench start --path ./BookingStatusTransitionControl
 ```
 
 ### Prerequisites
@@ -154,7 +157,7 @@ Place these in your PCF control directory (alongside `ControlManifest.Input.xml`
 
 ```
 harness/
-  bin/pcf-harness.ts          # CLI entry point
+  bin/pcfworkbench.ts          # CLI entry point (published bin: `pcfworkbench`)
   src/
     App.tsx                    # Gallery or Harness mode router
     ui/
