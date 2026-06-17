@@ -22,7 +22,7 @@ export class ConformanceTester implements ComponentFramework.ReactControl<IInput
 
     public updateView(context: ComponentFramework.Context<IInputs>): React.ReactElement {
         return React.createElement(ConformanceGrid, {
-            context: context as ComponentFramework.Context<unknown>,
+            context: context,
             writeOutput: (name, value) => {
                 (this.pendingOutputs as Record<string, unknown>)[name] = value;
             },
