@@ -22,12 +22,36 @@ function delay(ms: number): Promise<void> {
  * Parse a single OData condition into a predicate function.
  */
 function parseSingleCondition(expr: string): ((e: Record<string, any>) => boolean) | null {
-  // Strip balanced outer parens (e.g. when this condition came from splitting
-  // a parenthesized OR group like `(field eq A or field eq B)` — each side
-  // arrives with a leftover `(` or `)` attached).
+  // Strip outer parens carefully:
+  //  (a) Asymmetric leftovers from splitting a parenthesized OR group like
+  //      `(field eq A or field eq B)` — each side arrives with one excess
+  //      `(` or `)` attached. Only strip when overall paren counts are
+  //      unbalanced (i.e. truly leftover halves), not when balanced like
+  //      `contains(name,'foo')`.
+  //  (b) Balanced wrapping parens around the entire expression, e.g.
+  //      `(a eq 1 and b eq 2)`.
   let trimmed = expr.trim();
-  while (trimmed.startsWith('(')) trimmed = trimmed.slice(1).trimStart();
-  while (trimmed.endsWith(')')) trimmed = trimmed.slice(0, -1).trimEnd();
+  let openCount = (trimmed.match(/\(/g) || []).length;
+  let closeCount = (trimmed.match(/\)/g) || []).length;
+  while (trimmed.startsWith('(') && openCount > closeCount) {
+    trimmed = trimmed.slice(1).trimStart();
+    openCount--;
+  }
+  while (trimmed.endsWith(')') && closeCount > openCount) {
+    trimmed = trimmed.slice(0, -1).trimEnd();
+    closeCount--;
+  }
+  while (trimmed.startsWith('(') && trimmed.endsWith(')')) {
+    let depth = 0;
+    let wrapsAll = true;
+    for (let i = 0; i < trimmed.length; i++) {
+      if (trimmed[i] === '(') depth++;
+      else if (trimmed[i] === ')') depth--;
+      if (depth === 0 && i < trimmed.length - 1) { wrapsAll = false; break; }
+    }
+    if (!wrapsAll) break;
+    trimmed = trimmed.slice(1, -1).trim();
+  }
 
   // contains(field,'value')
   const containsMatch = trimmed.match(/^contains\((\w+),\s*'([^']*)'\)$/i);
@@ -124,8 +148,10 @@ function parseSingleCondition(expr: string): ((e: Record<string, any>) => boolea
 /**
  * Parse a basic OData $filter string into a predicate function.
  * Supports: and, or, eq, ne, eq null, contains, startswith, endswith
+ *
+ * Exported for unit testing (M11.M4). Pure function — no store coupling.
  */
-function parseFilter(filter: string | undefined): (entity: Record<string, any>) => boolean {
+export function parseFilter(filter: string | undefined): (entity: Record<string, any>) => boolean {
   if (!filter) return () => true;
 
   // Split on top-level ' and ' first
@@ -152,12 +178,14 @@ function parseFilter(filter: string | undefined): (entity: Record<string, any>) 
   return (entity) => andPredicates.every(p => p(entity));
 }
 
-function parseSelect(select: string | undefined): string[] | null {
+/** Exported for unit testing (M11.M4). Pure. */
+export function parseSelect(select: string | undefined): string[] | null {
   if (!select) return null;
   return select.split(',').map(s => s.trim());
 }
 
-function applySelect(entity: Record<string, any>, columns: string[] | null): Record<string, any> {
+/** Exported for unit testing (M11.M4). Pure. */
+export function applySelect(entity: Record<string, any>, columns: string[] | null): Record<string, any> {
   if (!columns) return { ...entity };
   const result: Record<string, any> = {};
   for (const col of columns) {
