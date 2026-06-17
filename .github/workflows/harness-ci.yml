@@ -1,0 +1,40 @@
+name: Harness CI
+
+# Typecheck + unit tests for the harness package itself. Runs on every push
+# and PR that touches harness sources. Scoped to harness/ so changes to
+# samples/ or top-level docs don't trigger.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'harness/**'
+      - '.github/workflows/harness-ci.yml'
+  pull_request:
+    paths:
+      - 'harness/**'
+      - '.github/workflows/harness-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: harness
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: harness/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:run

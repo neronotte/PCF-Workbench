@@ -184,6 +184,29 @@ harness/
                                # control switching, bundle watching, thumbnail saving
 ```
 
+## Contributing — running the test suite
+
+The harness has a Vitest unit suite covering the pure-logic modules
+(scenario store, manifest parser, OData parser, date rebaser, data
+store). From `harness/`:
+
+```bash
+npm install
+npm run typecheck    # tsc --noEmit — the canonical pre-PR gate
+npm run test:run     # vitest run (one-shot)
+npm run test         # vitest watch (default for local dev)
+npm run test:coverage # v8 coverage report (report-only, no thresholds)
+```
+
+Tests live next to the source as `*.test.ts`. Conventions:
+- No `vi.mock` — exercise modules directly with real fixtures
+- No snapshots — assertions are explicit
+- Store-coupled paths get `describe.todo` markers for a future pass
+- New modules adding pure logic should ship with tests
+
+CI runs `npm run typecheck` and `npm run test:run` on every PR that
+touches `harness/**` (`.github/workflows/harness-ci.yml`).
+
 ## Roadmap
 
 ### Completed
