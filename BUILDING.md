@@ -15,7 +15,8 @@ dotnet tool install --global Microsoft.PowerApps.CLI.Tool   # pac
 # 1. Scaffold the PCF
 pac pcf init --namespace YourCo --name MyControl --template field --framework react --run-npm-install
 cd MyControl
-npm i -D @pcfworkbench/cli                     # the harness
+# (PCF Workbench is invoked via `npx @pcfworkbench/cli` — no install step needed.
+#  If you'd prefer to pin it in package.json, run `npm i -D @pcfworkbench/cli` once.)
 
 # 2. Plan with AI — co-author DESIGN.md + PLAN.md, sign off, THEN build
 copilot
@@ -23,7 +24,7 @@ copilot
 
 # 3. The loop runs itself
 #    pcf-engineer writes the code per the plan → pcf-workbench builds, renders, reports → AI fixes → repeat
-#    Headless gate: npx pcfworkbench loop --path ./MyControl
+#    Headless gate: npx @pcfworkbench/cli loop --path ./MyControl
 ```
 
 ---
@@ -94,9 +95,9 @@ dotnet tool install --global Microsoft.PowerApps.CLI.Tool
 # GitHub Copilot CLI
 npm install -g @github/copilot
 
-# PCF Workbench (the harness) — installed per-project as a devDep
-# Run this inside any PCF project after `pac pcf init`:
-npm i -D @pcfworkbench/cli
+# PCF Workbench (the harness) — no install step needed; invoke via npx.
+# If you want to pin it in your PCF project's package.json instead, run:
+#   npm i -D @pcfworkbench/cli
 ```
 
 The Copilot CLI skills (`pcf-engineer`, `pcf-workbench`) live in this repo's `.copilot/skills/` folder. They auto-load when you run `copilot` from inside a clone — for users who only installed via npm, copy them into your user-scoped skills folder once:

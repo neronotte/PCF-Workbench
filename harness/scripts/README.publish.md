@@ -7,15 +7,20 @@
 
 PCF Workbench replaces `pcf-scripts start` with a richer dev loop. Build your PCF, run it locally against shimmed `ComponentFramework.Context` APIs, and iterate without a Dataverse round-trip — or hand the whole thing to an AI agent that drives `build → render → report` until your control passes.
 
-## Install
+## Two commands
 
 ```bash
-npm i -D @pcfworkbench/cli
+# Interactive — boot the harness UI in your browser
+npx @pcfworkbench/cli start --path ./MyControl
+
+# Headless — run one build → render → report cycle and exit
+npx @pcfworkbench/cli loop  --path ./MyControl
 ```
 
-> **First run is slow.** The very first `npx pcfworkbench loop` (or `start` against an unbuilt control) downloads + bundles Fluent UI v9 — usually 60–80 seconds on a fresh machine. Subsequent runs are fast (5–15s). The default `loop` timeout is 3 minutes to cover this.
->
-> The package lives in the `@pcfworkbench` org on npm so that the **PCF Workbench** brand owns the whole scope; the CLI is invoked as `pcfworkbench` regardless of the install path.
+No install step required — `npx` fetches and caches the package automatically. If you'd rather pin it in your project's `package.json` (recommended for CI / reproducible builds), run `npm i -D @pcfworkbench/cli` once.
+
+`start` opens the harness at `http://127.0.0.1:8181`. Add `--workspace ./samples` instead of `--path` for gallery mode (multiple controls in one folder).
+`loop` is the CI / AI gate — exits 0 with a deterministic JSON report on success.
 
 ## Two commands
 

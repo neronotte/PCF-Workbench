@@ -26,7 +26,13 @@ Trigger on any of these intents:
 
 ## What you can run
 
-The harness ships on npm as `@pcfworkbench/cli`. If it's not already a devDep of the project:
+The harness ships on npm as `@pcfworkbench/cli`. You can run it directly via `npx` with no install step:
+
+```bash
+npx @pcfworkbench/cli loop --path <absolute-path-to-pcf-control-dir>
+```
+
+Or pin it in the project's `package.json` first (recommended for CI / reproducible builds):
 
 ```bash
 npm i -D @pcfworkbench/cli
@@ -48,6 +54,8 @@ npx pcfworkbench loop --path <dir> --timeout 300000
 # Custom output directory.
 npx pcfworkbench loop --path <dir> --out ./reports/run-$(date +%s)
 ```
+
+(All four examples above also work with `npx @pcfworkbench/cli loop ...` if you skipped the install step.)
 
 Exit code: `0` on pass, `1` on warn or fail. Output: `<out>/report.json`
 and `<out>/screenshot.png`.

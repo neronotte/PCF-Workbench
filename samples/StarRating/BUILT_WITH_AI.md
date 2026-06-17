@@ -65,8 +65,8 @@ copilot
 Or just run the existing loop against this sample:
 
 ```powershell
-# After: npm i -D @pcfworkbench/cli (in your PCF project)
-npx pcfworkbench loop --path ./StarRating
+# Zero install — npx fetches @pcfworkbench/cli automatically:
+npx @pcfworkbench/cli loop --path ./StarRating
 ```
 
 Expected: `[summary] PASS — control rendered cleanly`, exit 0, JSON report + screenshot in `./pcf-loop-reports/`.

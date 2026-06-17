@@ -7,7 +7,10 @@
 ## TL;DR
 
 ```bash
-# As a user (recommended) — after `npm i -D @pcfworkbench/cli`:
+# As a user (recommended) — zero install, npx fetches the package:
+npx @pcfworkbench/cli loop --path <absolute-path-to-pcf-control>
+
+# Or after `npm i -D @pcfworkbench/cli` for pinned versions:
 npx pcfworkbench loop --path <absolute-path-to-pcf-control>
 
 # In dev (cloned repo):

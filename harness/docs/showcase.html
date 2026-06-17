@@ -567,10 +567,13 @@ p{color:var(--neutral-30)}
         <button class="tab-btn" data-tab="clone-cmd">Clone (contribute)</button>
       </div>
       <div class="tab-panel active" data-panel="install-cmd">
-        <p style="margin-bottom:8px;font-size:.9rem;">One install per PCF project.</p>
+        <p style="margin-bottom:8px;font-size:.9rem;">Zero-install &mdash; run via <code>npx</code>. npm caches the package after first run, so subsequent invocations are instant.</p>
         <div class="code-block">
           <span class="code-label">Bash / PowerShell</span>
           <button class="code-copy" onclick="copyCode(this)">Copy</button>
+          <span class="comment"># From inside your PCF project (or any folder):</span><br>
+          <span class="keyword">npx</span> @pcfworkbench/cli start <span class="flag">--path</span> ./MyControl<br><br>
+          <span class="comment"># Or pin it as a devDep if you want lockfile control:</span><br>
           <span class="keyword">npm</span> i <span class="flag">-D</span> @pcfworkbench/cli
         </div>
         <p style="margin-top:8px;font-size:.82rem;color:var(--neutral-50);">First <code>loop</code> run on a fresh machine takes 60&ndash;80s while Fluent UI v9 caches; subsequent runs are 5&ndash;15s.</p>
@@ -581,9 +584,9 @@ p{color:var(--neutral-30)}
           <span class="code-label">Bash / PowerShell</span>
           <button class="code-copy" onclick="copyCode(this)">Copy</button>
           <span class="comment"># Single control</span><br>
-          <span class="keyword">npx</span> pcfworkbench start <span class="flag">--path</span> ./MyControl<br><br>
+          <span class="keyword">npx</span> @pcfworkbench/cli start <span class="flag">--path</span> ./MyControl<br><br>
           <span class="comment"># Gallery mode &mdash; browse all controls in a folder</span><br>
-          <span class="keyword">npx</span> pcfworkbench start <span class="flag">--workspace</span> ./samples
+          <span class="keyword">npx</span> @pcfworkbench/cli start <span class="flag">--workspace</span> ./samples
         </div>
       </div>
       <div class="tab-panel" data-panel="loop-cmd">
@@ -591,7 +594,7 @@ p{color:var(--neutral-30)}
         <div class="code-block">
           <span class="code-label">Bash / PowerShell</span>
           <button class="code-copy" onclick="copyCode(this)">Copy</button>
-          <span class="keyword">npx</span> pcfworkbench loop <span class="flag">--path</span> ./MyControl <span class="flag">--out</span> ./reports
+          <span class="keyword">npx</span> @pcfworkbench/cli loop <span class="flag">--path</span> ./MyControl <span class="flag">--out</span> ./reports
         </div>
       </div>
       <div class="tab-panel" data-panel="clone-cmd">

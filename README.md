@@ -13,18 +13,27 @@ An enhanced development harness and testing framework for Power Apps Component F
 
 ## Install
 
+Two paths — pick one:
+
 ```bash
+# A) Zero-install, one command (recommended for trying it out)
+npx @pcfworkbench/cli start --path ./MyControl
+
+# B) Pin as a devDep (recommended for projects that want lockfile control)
 npm i -D @pcfworkbench/cli
+npx pcfworkbench start --path ./MyControl
 ```
+
+Both forms work. `npx @pcfworkbench/cli ...` downloads + caches the package on first run; subsequent `npx` invocations reuse the cache. The shortened `npx pcfworkbench` form only works after option B's explicit install.
 
 Then in any PCF project:
 
 ```bash
 # Interactive — boot the harness UI in your browser
-npx pcfworkbench start --path ./MyControl
+npx @pcfworkbench/cli start --path ./MyControl
 
 # Headless — run one build → render → report cycle and exit
-npx pcfworkbench loop  --path ./MyControl
+npx @pcfworkbench/cli loop  --path ./MyControl
 ```
 
 `start` opens the harness at `http://127.0.0.1:8181`. Add `--workspace ./samples` instead of `--path` for gallery mode (multiple controls in one folder).

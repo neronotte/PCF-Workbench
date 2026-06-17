@@ -28,12 +28,14 @@ This skill **does not write PCF control code** — use the `pcf-engineer` skill 
 ## LAUNCH MODES
 
 ### A. Interactive single-control via published CLI (preferred for end users)
-After `npm i -D @pcfworkbench/cli` in the PCF project:
+Zero install — run via `npx`:
 ```powershell
-npx pcfworkbench start --path .\MyControl
+npx @pcfworkbench/cli start --path .\MyControl
 # Gallery mode across many controls:
-npx pcfworkbench start --workspace .\samples
+npx @pcfworkbench/cli start --workspace .\samples
 ```
+
+Or pin as a devDep first (`npm i -D @pcfworkbench/cli`) then use the shorter `npx pcfworkbench start ...` form.
 
 In dev (cloned repo) the equivalent is `npm run harness -- start --path ..\samples\ConformanceTester\ConformanceTester --port 8181`.
 
@@ -48,10 +50,11 @@ npx vite --port 8181 --host 127.0.0.1
 - The PCF mounts directly in the page (no iframe). For Playwright, use top-level `page.locator`.
 
 ### C. Headless build→render→report loop (the AI iteration loop)
-End-user (after `npm i -D @pcfworkbench/cli`):
+End-user (zero install):
 ```powershell
-npx pcfworkbench loop --path .\MyControl --out .\pcf-loop-reports
+npx @pcfworkbench/cli loop --path .\MyControl --out .\pcf-loop-reports
 ```
+Or after `npm i -D @pcfworkbench/cli`: `npx pcfworkbench loop --path .\MyControl --out .\pcf-loop-reports`
 In dev (cloned repo):
 ```powershell
 cd harness
