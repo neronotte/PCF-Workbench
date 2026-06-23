@@ -8,7 +8,7 @@ import { createFormattingShim } from './formatting';
 import { createUserSettingsShim } from './user-settings';
 import { createOrgSettingsShim } from './org-settings';
 import { createUtilsShim } from './utils';
-import { createResourcesShim } from './resources';
+import { createResourcesShim, lookupResxString } from './resources';
 import { createWebApiShim } from './web-api';
 import { pushDialog, type OpenFormDialogRequest } from './dialog-bus';
 import { createFluentDesignShim } from './fluent-design';
@@ -168,6 +168,7 @@ function buildDatasetColumns(
   resolvedEntity: string,
   getEntityData: (entityType: string) => Record<string, any>[],
   typeGroups: Record<string, string[]>,
+  getLcid: () => number,
 ) {
   if (ds.columns && ds.columns.length > 0) {
     return ds.columns.map((col, idx) => {
@@ -178,9 +179,15 @@ function buildDatasetColumns(
       if (col.ofTypeGroup && typeGroups[col.ofTypeGroup]?.length) {
         ofType = typeGroups[col.ofTypeGroup][0];
       }
+      // Resolve the display-name-key through RESX so the control shows the
+      // friendly localised label ("Quantity") instead of the raw key
+      // ("CC_ProductDataSet_Quantity"). Falls back to the key when no
+      // matching RESX entry exists.
+      const dnk = col.displayNameKey;
+      const displayName = dnk ? lookupResxString(dnk, getLcid()) : col.name;
       return {
         name: col.name,
-        displayName: col.displayNameKey || col.name,
+        displayName,
         dataType: mapOfTypeToDataType(ofType),
         alias: col.name,
         order: idx,
@@ -404,7 +411,7 @@ function buildDataSet(
     },
     records,
     sortedRecordIds: sortedIds,
-    columns: buildDatasetColumns(ds, resolvedEntity, getEntityData, typeGroups),
+    columns: buildDatasetColumns(ds, resolvedEntity, getEntityData, typeGroups, () => getState().userLanguageId),
     refresh: () => {
       // Capture any control-side mutations to sorting back into store, then trigger updateView.
       getState().setDatasetSorting(ds.name, liveSorting.map(s => ({ name: s.name, sortDirection: s.sortDirection })));

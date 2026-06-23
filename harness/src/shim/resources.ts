@@ -9,6 +9,25 @@ export function setResxStrings(strings: Record<number, Record<string, string>>):
   resxByLcid = strings;
 }
 
+/** Module-level lookup helper — same fallback chain as the shim's getString
+ *  (active LCID → 1033 → bucket 0 → any bucket → bare key). Exposed so other
+ *  shims (dataset columns, formContext) can resolve display-name-keys without
+ *  pulling in the full resources shim factory. */
+export function lookupResxString(id: string, lcid: number): string {
+  const tryBucket = (l: number) => resxByLcid[l]?.[id];
+  const hit = tryBucket(lcid)
+    ?? tryBucket(1033)
+    ?? tryBucket(0)
+    ?? (() => {
+      for (const l of Object.keys(resxByLcid).map(Number)) {
+        const v = resxByLcid[l]?.[id];
+        if (v !== undefined) return v;
+      }
+      return undefined;
+    })();
+  return hit ?? id;
+}
+
 /** List of LCIDs that have at least one string loaded. Used by the harness UI
  *  to indicate which locales are actually localized for the current control. */
 export function getLoadedResxLcids(): number[] {
@@ -125,19 +144,7 @@ export function createResourcesShim(getState: () => HarnessStore) {
     getString(id: string): string {
       // Lookup priority: current userLanguageId → 1033 (en-US) → bucket 0
       // (default / no LCID detected) → first available bucket → bare key.
-      const lcid = getState().userLanguageId;
-      const tryBucket = (l: number) => resxByLcid[l]?.[id];
-      const hit = tryBucket(lcid)
-        ?? tryBucket(1033)
-        ?? tryBucket(0)
-        ?? (() => {
-          for (const l of Object.keys(resxByLcid).map(Number)) {
-            const v = resxByLcid[l]?.[id];
-            if (v !== undefined) return v;
-          }
-          return undefined;
-        })();
-      return hit ?? id;
+      return lookupResxString(id, getState().userLanguageId);
     },
   };
 }
