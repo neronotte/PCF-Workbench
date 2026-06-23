@@ -348,7 +348,7 @@ describe('parseManifest — data-sets', () => {
     const m = parseManifest(xml(`
       <data-set name="records" display-name-key="Records" />
     `));
-    expect(m.dataSets).toEqual([{ name: 'records', displayNameKey: 'Records' }]);
+    expect(m.dataSets).toEqual([{ name: 'records', displayNameKey: 'Records', columns: [] }]);
   });
 
   it('parses multiple data-sets', () => {
@@ -367,6 +367,42 @@ describe('parseManifest — data-sets', () => {
   it('returns empty dataSets array when none declared', () => {
     const m = parseManifest(empty());
     expect(m.dataSets).toEqual([]);
+  });
+
+  it('parses <property-set> children into dataSets[].columns with ofType', () => {
+    const m = parseManifest(xml(`
+      <data-set name="productDataSet" display-name-key="Products">
+        <property-set name="Name" display-name-key="Name" of-type="SingleLine.Text" usage="bound" required="true"/>
+        <property-set name="EstimateUnitAmount" display-name-key="Estimate" of-type="Currency" usage="bound" required="true"/>
+        <property-set name="LineStatus" display-name-key="Status" of-type="OptionSet" usage="bound" required="true"/>
+        <property-set name="Unit" display-name-key="Unit" of-type="Lookup.Simple" usage="bound" required="true"/>
+      </data-set>
+    `));
+    expect(m.dataSets).toHaveLength(1);
+    const cols = m.dataSets[0].columns;
+    expect(cols.map(c => c.name)).toEqual(['Name', 'EstimateUnitAmount', 'LineStatus', 'Unit']);
+    expect(cols.map(c => c.ofType)).toEqual(['SingleLine.Text', 'Currency', 'OptionSet', 'Lookup.Simple']);
+    expect(cols.every(c => c.usage === 'bound' && c.required === true)).toBe(true);
+  });
+
+  it('parses <property-set of-type-group=…> for type-group-bound columns', () => {
+    const m = parseManifest(xml(`
+      <type-group name="configColumnTypes">
+        <type>SingleLine.Text</type>
+        <type>Currency</type>
+      </type-group>
+      <data-set name="productDataSet" display-name-key="Products">
+        <property-set name="ConfigColumn1" display-name-key="Cfg1" of-type-group="configColumnTypes" usage="bound" required="false"/>
+      </data-set>
+    `));
+    const col = m.dataSets[0].columns[0];
+    expect(col.ofTypeGroup).toBe('configColumnTypes');
+    expect(col.required).toBe(false);
+  });
+
+  it('keeps dataSets[].columns as empty array when no property-sets declared', () => {
+    const m = parseManifest(xml(`<data-set name="records" display-name-key="Records"/>`));
+    expect(m.dataSets[0].columns).toEqual([]);
   });
 });
 

@@ -16,6 +16,15 @@ export interface ManifestConfig {
 export interface ManifestDataSet {
   name: string;
   displayNameKey: string;
+  /**
+   * Dataset column descriptors parsed from `<property-set>` children. Each
+   * entry mirrors a top-level ManifestProperty: it carries `ofType` (or
+   * `ofTypeGroup`), required flag, and display keys. The dataset shim uses
+   * these to build `dataset.columns[].dataType` so controls receive real
+   * type metadata (Currency / OptionSet / Lookup.Simple / FP / …) instead
+   * of the data-key-inferred `string` fallback.
+   */
+  columns: ManifestProperty[];
 }
 
 export interface ManifestProperty {

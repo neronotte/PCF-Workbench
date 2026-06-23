@@ -4,37 +4,38 @@ import type { ManifestConfig, ManifestProperty, EnumValue, FeatureUsage, Manifes
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
-  isArray: (name) => ['property', 'data-set', 'uses-feature', 'code', 'css', 'img', 'platform-library', 'resx', 'value', 'type-group', 'type'].includes(name),
+  isArray: (name) => ['property', 'property-set', 'data-set', 'uses-feature', 'code', 'css', 'img', 'platform-library', 'resx', 'value', 'type-group', 'type'].includes(name),
 });
+
+/** Parse a single <property> or <property-set> element into a ManifestProperty. */
+function mapProperty(p: any): ManifestProperty {
+  let enumValues: EnumValue[] | undefined;
+  if (p.value && Array.isArray(p.value)) {
+    enumValues = p.value.map((v: any) => ({
+      name: v['@_name'],
+      displayNameKey: v['@_display-name-key'] ?? v['@_name'],
+      value: typeof v['#text'] !== 'undefined' ? String(v['#text']) : v['@_name'],
+    }));
+  }
+  return {
+    name: p['@_name'],
+    displayNameKey: p['@_display-name-key'] ?? p['@_name'],
+    descriptionKey: p['@_description-key'] ?? '',
+    ofType: p['@_of-type'] ?? 'Property',
+    ofTypeGroup: p['@_of-type-group'] ?? undefined,
+    usage: p['@_usage'] ?? 'bound',
+    required: p['@_required'] === 'true',
+    defaultValue: p['@_default-value'] ?? undefined,
+    enumValues,
+  };
+}
 
 /** Parse a ControlManifest.Input.xml string into a ManifestConfig. */
 export function parseManifest(xmlContent: string): ManifestConfig {
   const parsed = parser.parse(xmlContent);
   const control = parsed.manifest.control;
 
-  const properties: ManifestProperty[] = (control.property ?? []).map((p: any) => {
-    // Parse <value> children for Enum properties
-    let enumValues: EnumValue[] | undefined;
-    if (p.value && Array.isArray(p.value)) {
-      enumValues = p.value.map((v: any) => ({
-        name: v['@_name'],
-        displayNameKey: v['@_display-name-key'] ?? v['@_name'],
-        value: typeof v['#text'] !== 'undefined' ? String(v['#text']) : v['@_name'],
-      }));
-    }
-
-    return {
-      name: p['@_name'],
-      displayNameKey: p['@_display-name-key'] ?? p['@_name'],
-      descriptionKey: p['@_description-key'] ?? '',
-      ofType: p['@_of-type'] ?? 'Property',
-      ofTypeGroup: p['@_of-type-group'] ?? undefined,
-      usage: p['@_usage'] ?? 'bound',
-      required: p['@_required'] === 'true',
-      defaultValue: p['@_default-value'] ?? undefined,
-      enumValues,
-    };
-  });
+  const properties: ManifestProperty[] = (control.property ?? []).map((p: any) => mapProperty(p));
 
   // Parse type-group definitions
   const typeGroups: Record<string, string[]> = {};
@@ -82,6 +83,7 @@ export function parseManifest(xmlContent: string): ManifestConfig {
   const dataSets = (control['data-set'] ?? []).map((ds: any) => ({
     name: ds['@_name'],
     displayNameKey: ds['@_display-name-key'] ?? ds['@_name'],
+    columns: (ds['property-set'] ?? []).map((ps: any) => mapProperty(ps)),
   }));
 
   return {

@@ -156,6 +156,91 @@ function buildProperty(prop: ManifestProperty, rawValue: any, boundColumn?: stri
 }
 
 /**
+ * Build the `dataset.columns[]` array surfaced to the control. Prefers the
+ * `<property-set>` descriptors from the manifest (so controls receive real
+ * `dataType` values like 'Currency', 'OptionSet', 'Lookup.Simple') and
+ * falls back to the legacy data-key inference (everything `string`) only
+ * when the manifest declares no columns — preserves back-compat for
+ * controls authored without property-sets.
+ */
+function buildDatasetColumns(
+  ds: ManifestDataSet,
+  resolvedEntity: string,
+  getEntityData: (entityType: string) => Record<string, any>[],
+  typeGroups: Record<string, string[]>,
+) {
+  if (ds.columns && ds.columns.length > 0) {
+    return ds.columns.map((col, idx) => {
+      // Resolve `of-type-group` to the first declared type. Without form XML
+      // we can't know what the maker actually bound, so we use the type-group
+      // default and let the maker override via a future PropertyEditor binding.
+      let ofType = col.ofType;
+      if (col.ofTypeGroup && typeGroups[col.ofTypeGroup]?.length) {
+        ofType = typeGroups[col.ofTypeGroup][0];
+      }
+      return {
+        name: col.name,
+        displayName: col.displayNameKey || col.name,
+        dataType: mapOfTypeToDataType(ofType),
+        alias: col.name,
+        order: idx,
+        visualSizeFactor: 1,
+        isHidden: false,
+        isPrimary: col.name.toLowerCase() === 'id' || col.name.toLowerCase().endsWith('id'),
+        disableSorting: false,
+      };
+    });
+  }
+  // Legacy fallback — synthesise columns from the first record's keys.
+  const rows = getEntityData(resolvedEntity);
+  const first = rows[0] ?? {};
+  return Object.keys(first).map(name => ({
+    name,
+    displayName: name,
+    dataType: 'string',
+    alias: name,
+    order: -1,
+    visualSizeFactor: 1,
+    isHidden: false,
+    isPrimary: name.toLowerCase().endsWith('id'),
+    disableSorting: false,
+  }));
+}
+
+/**
+ * Map a PCF manifest `ofType` to the runtime `dataset.columns[].dataType`
+ * string that controls receive. Mirrors the values shipped by Dynamics for
+ * `dataset.columns[].dataType`. Returns the input verbatim when unknown so
+ * controls that switch on raw ofType strings still match.
+ */
+function mapOfTypeToDataType(ofType: string): string {
+  switch (ofType) {
+    case 'SingleLine.Text':
+    case 'SingleLine.Email':
+    case 'SingleLine.Phone':
+    case 'SingleLine.URL':
+    case 'SingleLine.TextArea':
+    case 'SingleLine.Ticker':
+      return ofType;
+    case 'Multiple': return 'Multiple';
+    case 'Whole.None': return 'Whole.None';
+    case 'FP': return 'FP';
+    case 'Decimal': return 'Decimal';
+    case 'Currency': return 'Currency';
+    case 'OptionSet': return 'OptionSet';
+    case 'MultiSelectOptionSet': return 'MultiSelectOptionSet';
+    case 'TwoOptions': return 'TwoOptions';
+    case 'DateAndTime.DateOnly': return 'DateAndTime.DateOnly';
+    case 'DateAndTime.DateAndTime': return 'DateAndTime.DateAndTime';
+    case 'Lookup.Simple': return 'Lookup.Simple';
+    case 'Lookup.Customer': return 'Lookup.Customer';
+    case 'Lookup.Owner': return 'Lookup.Owner';
+    case 'Lookup.Regarding': return 'Lookup.Regarding';
+    default: return ofType;
+  }
+}
+
+/**
  * Build a dataset shim that mimics ComponentFramework.PropertyTypes.DataSet.
  * Reads records from the entity data store using the dataset name as the entity type.
  */
@@ -163,6 +248,7 @@ function buildDataSet(
   ds: ManifestDataSet,
   getEntityData: (entityType: string) => Record<string, any>[],
   getState: () => HarnessStore,
+  typeGroups: Record<string, string[]> = {},
 ) {
   const refreshCallbacks: Array<() => void> = [];
 
@@ -318,17 +404,7 @@ function buildDataSet(
     },
     records,
     sortedRecordIds: sortedIds,
-    columns: Object.keys(sortedIds.length > 0 ? getEntityData(resolvedEntity)[0] ?? {} : {}).map(name => ({
-      name,
-      displayName: name,
-      dataType: 'string',
-      alias: name,
-      order: -1,
-      visualSizeFactor: 1,
-      isHidden: false,
-      isPrimary: name.toLowerCase().endsWith('id'),
-      disableSorting: false,
-    })),
+    columns: buildDatasetColumns(ds, resolvedEntity, getEntityData, typeGroups),
     refresh: () => {
       // Capture any control-side mutations to sorting back into store, then trigger updateView.
       getState().setDatasetSorting(ds.name, liveSorting.map(s => ({ name: s.name, sortDirection: s.sortDirection })));
@@ -458,7 +534,7 @@ function buildParameters(
     params[prop.name] = buildProperty(effectiveProp, resolved, boundColumn, getState().pageEntityTypeName);
   }
   for (const ds of manifest.dataSets) {
-    params[ds.name] = buildDataSet(ds, getEntityData, getState);
+    params[ds.name] = buildDataSet(ds, getEntityData, getState, manifest.typeGroups);
   }
   return params;
 }
@@ -626,7 +702,7 @@ export function rebuildParameters(
   // Rebuild datasets if data functions provided
   if (getEntityData && getState) {
     for (const ds of manifest.dataSets) {
-      context.parameters[ds.name] = buildDataSet(ds, getEntityData, getState);
+      context.parameters[ds.name] = buildDataSet(ds, getEntityData, getState, manifest.typeGroups);
     }
   }
   context.updatedProperties = updatedProperties ?? ['all'];
