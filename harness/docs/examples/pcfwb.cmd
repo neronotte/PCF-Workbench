@@ -60,22 +60,21 @@ if not defined TARGET (
     echo.
     echo [pcfwb] no --path arg; scanning for ControlManifest.Input.xml...
     for /r %%f in (ControlManifest.Input.xml) do (
-      echo %%f | findstr /v /i "\\node_modules\\ \\out\\ \\obj\\ \\bin\\ \\generated\\" >nul
-      if !errorlevel! equ 0 (
-        set "TARGET=%%~dpf"
-        REM strip trailing backslash for cleaner display
-        if "!TARGET:~-1!"=="\" set "TARGET=!TARGET:~0,-1!"
-        echo [pcfwb] found: !TARGET!
-        goto target_found
+      if not defined TARGET (
+        echo %%f | findstr /v /i "\\node_modules\\ \\out\\ \\obj\\ \\bin\\ \\generated\\" >nul && set "TARGET=%%~dpf"
       )
     )
-    echo.
-    echo [pcfwb] No ControlManifest.Input.xml found under "%CD%".
-    echo Pass the control directory explicitly:  pcfwb .\YourControl
-    echo Press any key to close this window...
-    pause >nul
-    exit /b 1
-    :target_found
+    if not defined TARGET (
+      echo.
+      echo [pcfwb] No ControlManifest.Input.xml found under "%CD%".
+      echo Pass the control directory explicitly:  pcfwb .\YourControl
+      echo Press any key to close this window...
+      pause >nul
+      exit /b 1
+    )
+    REM strip trailing backslash for cleaner display
+    if "!TARGET:~-1!"=="\" set "TARGET=!TARGET:~0,-1!"
+    echo [pcfwb] found: !TARGET!
   )
 )
 
