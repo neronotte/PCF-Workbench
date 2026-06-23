@@ -60,7 +60,7 @@ if not defined TARGET (
     echo.
     echo [pcfwb] no --path arg; scanning for ControlManifest.Input.xml...
     for /r %%f in (ControlManifest.Input.xml) do (
-      if not defined TARGET (
+      if not defined TARGET if exist "%%f" (
         echo %%f | findstr /v /i "\\node_modules\\ \\out\\ \\obj\\ \\bin\\ \\generated\\" >nul && set "TARGET=%%~dpf"
       )
     )
