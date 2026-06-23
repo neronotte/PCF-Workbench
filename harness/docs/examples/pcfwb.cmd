@@ -44,8 +44,19 @@ if not defined SKIP_BUILD (
 
 echo.
 echo [pcfwb] launching PCF Workbench against: %TARGET%
+echo         URL: http://127.0.0.1:8181
 echo         (Ctrl+C to stop)
 echo.
-call npx @pcfworkbench/cli@latest start --path "%TARGET%"
+call npx @pcfworkbench/cli@latest start --path "%TARGET%" --host 127.0.0.1
+set "EXITCODE=%ERRORLEVEL%"
+
+echo.
+if not "%EXITCODE%"=="0" (
+  echo [pcfwb] launcher exited with code %EXITCODE%.
+) else (
+  echo [pcfwb] launcher exited cleanly.
+)
+echo Press any key to close this window...
+pause >nul
 
 endlocal
