@@ -23,6 +23,7 @@ import { pcfPlugin } from '../src/vite-plugin/pcf-plugin';
 import { dataverseSecurity } from '../src/vite-plugin/dataverse-security';
 import { dataverseProxy } from '../src/vite-plugin/dataverse-proxy';
 import { fluentCdnPlugin } from '../src/vite-plugin/fluent-cdn';
+import { resolvePcfTarget, ResolveTargetError } from '../src/cli/resolve-target';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const harnessRoot = path.resolve(__dirname, '..');
@@ -72,32 +73,39 @@ program
 program
   .command('start', { isDefault: true })
   .description('Launch the interactive harness UI in your browser.')
-  .option('--path <dir>', 'Path to a single PCF control directory (containing ControlManifest.Input.xml)')
-  .option('--workspace <dir>', 'Path to a directory containing multiple PCF controls — opens gallery mode')
+  .argument(
+    '[path]',
+    'Path to a PCF control directory OR a workspace of controls. Auto-detected. Defaults to the current directory.',
+  )
+  .option('--path <dir>', '(Legacy) Path to a single PCF control directory. Prefer the positional [path] argument.')
+  .option('--workspace <dir>', '(Legacy) Path to a directory of controls — gallery mode. Prefer the positional [path] argument.')
   .option('--port <number>', 'Port to bind the dev server to', '8181')
   .option('--host <name>', 'Host to bind to', '127.0.0.1')
   .option('--no-open', 'Do not open the browser automatically')
   .option('--no-watch', 'Do not auto-spawn the build watcher (M9)')
-  .action(async (opts) => {
+  .action(async (positional: string | undefined, opts) => {
     const hasPath = typeof opts.path === 'string' && opts.path.length > 0;
     const hasWorkspace = typeof opts.workspace === 'string' && opts.workspace.length > 0;
+    const hasPositional = typeof positional === 'string' && positional.length > 0;
 
-    if (!hasPath && !hasWorkspace) {
-      console.error('Error: pass --path <control-dir> or --workspace <dir-with-controls>.');
-      process.exit(2);
-    }
+    // Mutual exclusion guards.
     if (hasPath && hasWorkspace) {
       console.error('Error: --path and --workspace are mutually exclusive.');
       process.exit(2);
     }
+    if (hasPositional && (hasPath || hasWorkspace)) {
+      console.error('Error: positional [path] cannot be combined with --path or --workspace.');
+      process.exit(2);
+    }
 
+    // Legacy flags first (back-compat — no auto-detect, behaves exactly as before).
     if (hasPath) {
       const controlPath = path.resolve(opts.path);
       assertControlDir(controlPath);
       process.env.PCF_CONTROL_PATH = controlPath;
       console.log(`\n  PCF Workbench`);
       console.log(`  Control: ${controlPath}`);
-    } else {
+    } else if (hasWorkspace) {
       const workspaceRoot = path.resolve(opts.workspace);
       if (!fs.existsSync(workspaceRoot) || !fs.statSync(workspaceRoot).isDirectory()) {
         console.error(`Error: workspace not found or not a directory: ${workspaceRoot}`);
@@ -106,6 +114,31 @@ program
       process.env.PCF_WORKSPACE_ROOT = workspaceRoot;
       console.log(`\n  PCF Workbench`);
       console.log(`  Workspace: ${workspaceRoot} (gallery mode)`);
+    } else {
+      // New default UX (issue #36): positional or cwd → auto-detect.
+      const input = hasPositional ? positional! : process.cwd();
+      try {
+        const target = resolvePcfTarget(input);
+        if (target.kind === 'control') {
+          process.env.PCF_CONTROL_PATH = target.path;
+          console.log(`\n  PCF Workbench`);
+          console.log(`  Control: ${target.path}  (auto-detected)`);
+        } else {
+          process.env.PCF_WORKSPACE_ROOT = target.path;
+          console.log(`\n  PCF Workbench`);
+          console.log(
+            `  Workspace: ${target.path}  (auto-detected, ${target.controls.length} control${target.controls.length === 1 ? '' : 's'}: ${target.controls.join(', ')})`,
+          );
+        }
+      } catch (e: any) {
+        if (e instanceof ResolveTargetError) {
+          console.error(`\n  Error: ${e.message}\n`);
+          console.error(`  Tip: cd into a PCF control directory and re-run, or pass a path explicitly:`);
+          console.error(`       pcfworkbench start ./MyControl\n`);
+          process.exit(1);
+        }
+        throw e;
+      }
     }
 
     if (opts.watch === false) process.env.PCF_NO_WATCH = '1';
@@ -142,15 +175,54 @@ program
 program
   .command('loop')
   .description('Run one build→render→report cycle and emit a JSON report.')
-  .requiredOption('--path <dir>', 'Path to the PCF control directory')
+  .argument('[path]', 'Path to the PCF control directory. Defaults to the current directory.')
+  .option('--path <dir>', '(Legacy) Path to the PCF control directory. Prefer the positional [path] argument.')
   .option('--out <dir>', 'Directory to write report.json + screenshot.png', './pcf-loop-reports')
   .option('--skip-build', 'Skip the npm run build step (use existing out/ bundle)', false)
   .option('--timeout <ms>', 'Max ms to wait for the control to render. Default 180000ms (3 min) — the first run on a fresh install downloads Fluent UI (~60–80s) on top of normal render time; subsequent runs are fast (~5–15s).', '180000')
   .option('--headed', 'Run Playwright in headed mode for debugging', false)
   .option('--scenario <name>', 'Load this saved test scenario before rendering (must exist in test-scenarios.json). Default: render with manifest defaults.')
-  .action(async (opts) => {
-    const controlPath = path.resolve(opts.path);
-    assertControlDir(controlPath);
+  .action(async (positional: string | undefined, opts) => {
+    const hasPath = typeof opts.path === 'string' && opts.path.length > 0;
+    const hasPositional = typeof positional === 'string' && positional.length > 0;
+
+    if (hasPositional && hasPath) {
+      console.error('Error: positional [path] cannot be combined with --path.');
+      process.exit(2);
+    }
+
+    let controlPath: string;
+    if (hasPath) {
+      controlPath = path.resolve(opts.path);
+      assertControlDir(controlPath);
+    } else {
+      const input = hasPositional ? positional! : process.cwd();
+      try {
+        const target = resolvePcfTarget(input);
+        if (target.kind !== 'control') {
+          console.error(
+            `\n  Error: ${target.path} looks like a workspace (${target.controls.length} controls). ` +
+              `'loop' targets a single control — pass the control directory explicitly:\n` +
+              `       pcfworkbench loop ./${target.controls[0] ?? 'MyControl'}\n`,
+          );
+          process.exit(2);
+        }
+        controlPath = target.path;
+        if (hasPositional || input !== process.cwd()) {
+          console.log(`[pcfworkbench loop] control: ${controlPath}`);
+        } else {
+          console.log(`[pcfworkbench loop] control: ${controlPath}  (auto-detected from cwd)`);
+        }
+      } catch (e: any) {
+        if (e instanceof ResolveTargetError) {
+          console.error(`\n  Error: ${e.message}\n`);
+          console.error(`  Tip: cd into a PCF control directory and re-run, or pass a path explicitly:`);
+          console.error(`       pcfworkbench loop ./MyControl\n`);
+          process.exit(1);
+        }
+        throw e;
+      }
+    }
     const outDir = path.resolve(opts.out);
     fs.mkdirSync(outDir, { recursive: true });
 

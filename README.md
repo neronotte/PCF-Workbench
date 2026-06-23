@@ -17,27 +17,34 @@ Two paths — pick one:
 
 ```bash
 # A) Zero-install, one command (recommended for trying it out)
-npx @pcfworkbench/cli start --path ./MyControl
+cd MyControl
+npx @pcfworkbench/cli start
 
 # B) Pin as a devDep (recommended for projects that want lockfile control)
 npm i -D @pcfworkbench/cli
-npx pcfworkbench start --path ./MyControl
+npx pcfworkbench start
 ```
 
 Both forms work. `npx @pcfworkbench/cli ...` downloads + caches the package on first run; subsequent `npx` invocations reuse the cache. The shortened `npx pcfworkbench` form only works after option B's explicit install.
 
-Then in any PCF project:
+Then in any PCF project (cwd auto-detected — control mode vs gallery mode picked from filesystem layout):
 
 ```bash
 # Interactive — boot the harness UI in your browser
-npx @pcfworkbench/cli start --path ./MyControl
+cd MyControl
+npx @pcfworkbench/cli start
+
+# Or pass an explicit path (positional)
+npx @pcfworkbench/cli start ./MyControl
 
 # Headless — run one build → render → report cycle and exit
-npx @pcfworkbench/cli loop  --path ./MyControl
+npx @pcfworkbench/cli loop ./MyControl
 ```
 
-`start` opens the harness at `http://127.0.0.1:8181`. Add `--workspace ./samples` instead of `--path` for gallery mode (multiple controls in one folder).
+`start` opens the harness at `http://127.0.0.1:8181`. Point it at a directory containing multiple PCF projects for gallery mode (auto-detected).
 `loop` is the CI / AI gate — exits 0 with a deterministic JSON report on success.
+
+> Legacy `--path <dir>` and `--workspace <dir>` flags still work for back-compat.
 
 > First `loop` run on a fresh machine takes ~60–80s while Fluent UI v9 caches; subsequent runs are 5–15s.
 
@@ -238,9 +245,10 @@ cp -R ./.copilot/skills/* ~/.copilot/skills/
 
 ```bash
 npm i -D @pcfworkbench/cli
-npx pcfworkbench start --path ./MyControl
+cd MyControl
+npx pcfworkbench start
 # or
-npx pcfworkbench loop --path ./MyControl
+npx pcfworkbench loop
 ```
 
 **As a contributor (clone the repo):**
