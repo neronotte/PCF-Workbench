@@ -39,7 +39,13 @@ const useStyles = makeStyles({
     flex: 1,
     display: 'flex',
     alignItems: 'flex-start',
-    justifyContent: 'center',
+    // `safe center` falls back to `flex-start` when the child overflows the
+    // wrapper — without this, plain `center` clips the child symmetrically
+    // and the user can't scroll to see either edge. Repro: switch from a
+    // narrow scenario (container 554) to a wide one (viewport 1280) and
+    // the control disappears behind the side panel. Bug: scenario-switch
+    // horizontal-clip.
+    justifyContent: 'safe center',
     backgroundColor: '#f0f0f0',
     overflow: 'auto',
     padding: '16px',

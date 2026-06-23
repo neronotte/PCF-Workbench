@@ -804,7 +804,10 @@ export async function captureAndSaveAsNewScenario(
   const snap = captureScenarioFromStore(uniqueName);
   const next = upsertScenario(list, snap);
   saveScenariosToStorage(controlId, next);
-  void saveScenariosToDisk(controlId, next);
+  const diskPath = await saveScenariosToDisk(controlId, next);
+  if (diskPath === null) {
+    console.warn('[scenario-store] captureAndSaveAsNewScenario: disk write failed; localStorage holds the change.');
+  }
   applyScenarioAsActive(controlId, snap);
   useHarnessStore.getState().bumpScenariosListVersion();
   return snap;

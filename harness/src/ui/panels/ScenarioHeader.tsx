@@ -257,11 +257,18 @@ export function ScenarioHeader({ controlId }: ScenarioHeaderProps) {
   const persistList = useCallback((next: TestScenario[]) => {
     setScenarios(next);
     saveScenariosToStorage(controlId, next);
-    // Best-effort round-trip to on-disk test-scenarios.json so changes
-    // persist across origins / browsers / coworkers. Failures are silent —
-    // localStorage remains the working source of truth for the session.
-    void saveScenariosToDisk(controlId, next);
-  }, [controlId]);
+    // Round-trip to on-disk test-scenarios.json so changes persist across
+    // origins / browsers / coworkers. If the disk write fails (dev server
+    // down, 4xx, network error) surface a flash — localStorage still holds
+    // the change so the session keeps working, but the user needs to know
+    // the file on disk is out of sync.
+    void (async () => {
+      const path = await saveScenariosToDisk(controlId, next);
+      if (path === null) {
+        flash('Saved to browser only — disk write failed (dev server?)', 'error');
+      }
+    })();
+  }, [controlId, flash]);
 
   /** Replace the current scenario on disk with whatever the store holds now. */
   const captureAndUpsertActive = useCallback((): TestScenario | null => {
