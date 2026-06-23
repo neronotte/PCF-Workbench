@@ -1,12 +1,18 @@
 /**
  * Re-auth banner shown when the Vite plugin proxy reports
- * `pac-reauth-required` or `pac-profile-missing` for the current org.
+ * `pac-reauth-required`, `pac-profile-missing`, or `pac-cache-corrupt`
+ * for the current org.
  *
  * The harness has no way to drive `pac auth create` itself (PAC owns the
  * interactive sign-in flow), so the banner is a click-to-copy instruction
  * + a "retry" button that simply clears the flag — the next live call will
- * trigger the proxy again. Rendered above the form chrome so it's visible
- * regardless of which side panel tab is active.
+ * trigger the proxy again. The kind discriminator picks between the two
+ * remediation flows:
+ *  - reauth: `pac auth create --url <org>` (one command)
+ *  - cache-corrupt: `pac auth clear` then `pac auth create --url <org>`
+ *
+ * Rendered above the form chrome so it's visible regardless of which side
+ * panel tab is active.
  */
 import { useState } from 'react';
 import { makeStyles, tokens, Button } from '@fluentui/react-components';
@@ -63,7 +69,10 @@ export function LiveReauthBanner() {
 
   if (!reauth) return null;
 
-  const command = `pac auth create --url ${reauth.org}`;
+  const isCacheCorrupt = reauth.kind === 'cache-corrupt';
+  const command = isCacheCorrupt
+    ? `pac auth clear; pac auth create --url ${reauth.org}`
+    : `pac auth create --url ${reauth.org}`;
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(command);
@@ -78,7 +87,14 @@ export function LiveReauthBanner() {
     <div className={styles.root} role="alert" data-test-id="live-reauth-banner">
       <span className={styles.badge}>PAC</span>
       <span className={styles.message}>
-        Re-authentication required for <strong>{reauth.org}</strong>. Run:
+        {isCacheCorrupt ? (
+          <>
+            PAC token cache has duplicate entries for <strong>{reauth.org}</strong>
+            {' '}(MSAL <code>multiple_matching_appMetadata</code>). Run:
+          </>
+        ) : (
+          <>Re-authentication required for <strong>{reauth.org}</strong>. Run:</>
+        )}
       </span>
       <code
         className={styles.command}

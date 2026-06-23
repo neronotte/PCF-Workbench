@@ -269,6 +269,30 @@ async function getPca(clientId: string, authority: string): Promise<PublicClient
   return pca;
 }
 
+/**
+ * Detect MSAL Node "cache is corrupt / ambiguous" errors. These manifest
+ * when PAC's token cache has multiple entries the lookup can't disambiguate
+ * (e.g. after a PAC version bump or repeated `pac auth create` runs against
+ * the same org). The only reliable fix is `pac auth clear`, since the bad
+ * appMetadata / token / account entries persist even after deleting the
+ * matching `pac auth` profile.
+ *
+ * Exported for unit testing. Pure function.
+ *
+ * See https://aka.ms/msal.js/errors#multiple_matching_appmetadata
+ */
+export function isMsalCacheCorruptError(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false;
+  const errorCode = (e as { errorCode?: unknown }).errorCode;
+  const message = (e as { message?: unknown }).message;
+  const codes = ['multiple_matching_appMetadata', 'multiple_matching_tokens', 'multiple_matching_accounts'];
+  if (typeof errorCode === 'string' && codes.includes(errorCode)) return true;
+  if (typeof message === 'string') {
+    for (const c of codes) if (message.includes(c)) return true;
+  }
+  return false;
+}
+
 let cachedClientId: string | null = null;
 async function detectClientId(): Promise<string> {
   if (cachedClientId) return cachedClientId;
@@ -336,6 +360,13 @@ export async function acquireDataverseToken(orgUrl: string): Promise<{
         { org: orgUrl },
       );
     }
+    if (isMsalCacheCorruptError(e)) {
+      throw new ProxyError(
+        'pac-cache-corrupt',
+        `PAC token cache has duplicate entries for ${orgUrl}. Run \`pac auth clear\` then \`pac auth create --url ${orgUrl}\`.`,
+        { org: orgUrl, msalCode: (e as { errorCode?: string }).errorCode },
+      );
+    }
     throw new ProxyError(
       'pac-token-failed',
       `acquireTokenSilent failed for ${orgUrl}: ${(e as Error).message}`,
@@ -375,6 +406,7 @@ export type ProxyErrorCode =
   | 'pac-profile-missing'
   | 'pac-reauth-required'
   | 'pac-token-failed'
+  | 'pac-cache-corrupt'
   | 'bad-org-url'
   | 'bad-request'
   | 'method-not-allowed'
@@ -403,6 +435,11 @@ function httpStatusFor(code: ProxyErrorCode): number {
     case 'pac-profile-missing':
       return 404;
     case 'pac-reauth-required':
+      return 401;
+    case 'pac-cache-corrupt':
+      // User action required (run `pac auth clear`); semantically the same
+      // bucket as reauth from a UX standpoint, so 401 keeps the client banner
+      // logic identical.
       return 401;
     case 'forbidden':
       return 403;

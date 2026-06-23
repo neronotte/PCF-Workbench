@@ -107,6 +107,16 @@ export interface PublicProfile {
 export interface PacReauthState {
   /** Org URL that needs `pac auth create --url <org>`. */
   org: string;
+  /**
+   * Which remediation the user needs to run. Drives the banner message and
+   * the suggested command.
+   *  - 'reauth' (default): refresh-token expired or profile missing — run
+   *    `pac auth create --url <org>`.
+   *  - 'cache-corrupt': MSAL token cache has duplicate entries — run
+   *    `pac auth clear` first (a fresh `pac auth create` alone won't help
+   *    because the corrupt appMetadata entry survives profile delete).
+   */
+  kind?: 'reauth' | 'cache-corrupt';
 }
 
 export interface DatasetSortStatus {

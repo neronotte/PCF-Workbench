@@ -74,7 +74,9 @@ async function parseError(res: Response): Promise<DvProxyError> {
 
 function maybeFlagReauth(err: DvProxyError, orgUrl: string): void {
   if (err.body.error === 'pac-reauth-required' || err.body.error === 'pac-profile-missing') {
-    useHarnessStore.getState().setPacReauthRequired({ org: orgUrl });
+    useHarnessStore.getState().setPacReauthRequired({ org: orgUrl, kind: 'reauth' });
+  } else if (err.body.error === 'pac-cache-corrupt') {
+    useHarnessStore.getState().setPacReauthRequired({ org: orgUrl, kind: 'cache-corrupt' });
   }
 }
 
