@@ -460,7 +460,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
                 <SlowLoadSpinner />
               </div>
             )}
-            <div ref={containerRef} className={mergeClasses(styles.controlContainer, isStale ? styles.staleControlContainer : undefined)} data-test-id="pcf-control-container" data-stale={isStale ? 'true' : undefined} style={isFullBleed ? {
+            <div ref={containerRef} className={mergeClasses(styles.controlContainer, isStale ? styles.staleControlContainer : undefined)} data-test-id="pcf-control-container" data-pcf-control-root="true" data-stale={isStale ? 'true' : undefined} style={isFullBleed ? {
               width: '100%',
               height: '100%',
               display: hostState.error ? 'none' : undefined,
