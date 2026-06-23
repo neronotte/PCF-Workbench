@@ -115,7 +115,11 @@ const useStyles = makeStyles({
   controlContainer: {
     width: '100%',
     minHeight: '48px',
-    overflow: 'auto',
+    // Was `auto` — but the user's control manages its own internal
+    // scrolling (virtualised lists, grid bodies, etc) so wrapping it
+    // in another scrollable div produced a redundant outer scrollbar
+    // stacked next to the control's own. Let the control own scroll.
+    overflow: 'hidden',
     height: '100%',
   },
   staleControlContainer: {
@@ -425,8 +429,13 @@ export function ControlViewport({ manifest, bundlePath, cssFiles }: Props) {
             flex: 1,
             minHeight: 0,
           } : {
-            width: viewportWidth,
-            height: viewportHeight,
+            // When the user pins a Custom Size, collapse the outer frame to
+            // it too — otherwise the frame stays at the (often larger)
+            // viewport dim and the control sits in a sea of empty white
+            // space with a confusing horizontal scrollbar.
+            // Bug: scenario-switch-empty-render (real cause).
+            width: containerWidth ?? viewportWidth,
+            height: containerHeight ?? viewportHeight,
           }}
         >
           <div className={styles.viewportNotifications}>
