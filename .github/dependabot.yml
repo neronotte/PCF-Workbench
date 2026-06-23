@@ -26,6 +26,17 @@ updates:
     labels:
       - dependencies
       - samples
+    # PCFs run against the platform's bundled React 16 (`external "Reactv16"`).
+    # Don't bump react/react-dom/@types past 16.x in sample controls.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /samples/MAILoopDemo
@@ -36,6 +47,15 @@ updates:
     labels:
       - dependencies
       - samples
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
