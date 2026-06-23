@@ -49,6 +49,7 @@ export class ControlHost {
     pageEntityTypeName: string;
     pageEntityRecordName: string;
     isFullscreen: boolean;
+    dataVersion: number;
   } | null = null;
 
   constructor(
@@ -235,6 +236,19 @@ export class ControlHost {
       result.push(s.isFullscreen ? 'fullscreen_open' : 'fullscreen_close');
     }
 
+    // dataVersion bumps whenever entity rows or dataset state change. Emit
+    // both the canonical 'records' token and each declared dataset name so
+    // controls that switch on either signal reset their internal state
+    // (scroll position, virtualised lists, etc) — without this, scenario
+    // switches leave the control rendering stale layout from the previous
+    // scenario's records. Bug: scenario-switch-empty-render.
+    if (s.dataVersion !== prev.dataVersion) {
+      result.push('records');
+      for (const ds of this.manifest.dataSets) {
+        if (!result.includes(ds.name)) result.push(ds.name);
+      }
+    }
+
     return result;
   }
 
@@ -250,6 +264,7 @@ export class ControlHost {
       pageEntityTypeName: s.pageEntityTypeName,
       pageEntityRecordName: s.pageEntityRecordName,
       isFullscreen: s.isFullscreen,
+      dataVersion: s.dataVersion,
     };
   }
 
