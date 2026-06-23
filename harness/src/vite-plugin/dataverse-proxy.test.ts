@@ -7,7 +7,7 @@
 // frustrating loop (running `pac auth create` repeatedly, the cache
 // stays corrupt, MSAL keeps throwing). Pure function, easy to lock.
 
-import { isMsalCacheCorruptError } from './dataverse-proxy';
+import { isMsalCacheCorruptError } from './msal-cache-detect';
 
 describe('isMsalCacheCorruptError', () => {
   it('returns false for null / undefined / non-objects', () => {

@@ -269,29 +269,10 @@ async function getPca(clientId: string, authority: string): Promise<PublicClient
   return pca;
 }
 
-/**
- * Detect MSAL Node "cache is corrupt / ambiguous" errors. These manifest
- * when PAC's token cache has multiple entries the lookup can't disambiguate
- * (e.g. after a PAC version bump or repeated `pac auth create` runs against
- * the same org). The only reliable fix is `pac auth clear`, since the bad
- * appMetadata / token / account entries persist even after deleting the
- * matching `pac auth` profile.
- *
- * Exported for unit testing. Pure function.
- *
- * See https://aka.ms/msal.js/errors#multiple_matching_appmetadata
- */
-export function isMsalCacheCorruptError(e: unknown): boolean {
-  if (!e || typeof e !== 'object') return false;
-  const errorCode = (e as { errorCode?: unknown }).errorCode;
-  const message = (e as { message?: unknown }).message;
-  const codes = ['multiple_matching_appMetadata', 'multiple_matching_tokens', 'multiple_matching_accounts'];
-  if (typeof errorCode === 'string' && codes.includes(errorCode)) return true;
-  if (typeof message === 'string') {
-    for (const c of codes) if (message.includes(c)) return true;
-  }
-  return false;
-}
+// The pure detector lives in its own file so unit tests can import it without
+// pulling in @azure/msal-node → keytar (libsecret on Linux CI).
+import { isMsalCacheCorruptError } from './msal-cache-detect';
+export { isMsalCacheCorruptError };
 
 let cachedClientId: string | null = null;
 async function detectClientId(): Promise<string> {
