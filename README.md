@@ -41,6 +41,8 @@ npx @pcfworkbench/cli loop  --path ./MyControl
 
 > First `loop` run on a fresh machine takes ~60–80s while Fluent UI v9 caches; subsequent runs are 5–15s.
 
+**Double-click launcher:** drop [`harness/docs/examples/pcfwb.cmd`](harness/docs/examples/pcfwb.cmd) into any PCF project root for a one-shot `build + start` Windows launcher (skip-build + sub-control flags supported).
+
 **Or clone to contribute:**
 
 ```bash
