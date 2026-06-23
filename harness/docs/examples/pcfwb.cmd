@@ -3,20 +3,29 @@ REM ============================================================================
 REM  pcfwb.cmd — one-shot launcher for PCF Workbench
 REM
 REM  Drop this file at the root of any PCF project (the folder that contains
-REM  pcfproj/package.json with the `npm run build` script). Double-click to
-REM  build the control and open it in PCF Workbench.
+REM  the .pcfproj / package.json with the `npm run build` script). Double-click
+REM  to build the control and open it in PCF Workbench.
 REM
-REM  Optional first arg overrides the control path (defaults to current dir):
-REM    pcfwb.cmd                       (build CWD, launch CWD)
-REM    pcfwb.cmd .\MyControl            (build CWD, launch ./MyControl)
-REM    pcfwb.cmd --skip-build .\MyCtrl  (skip build, just launch)
+REM  Behaviour:
+REM    - No args: build CWD, then auto-discover ControlManifest.Input.xml
+REM      (CWD itself or any sub-folder, excluding node_modules / out / obj).
+REM      Uses the first match. If you have multiple controls, pass the path
+REM      explicitly.
+REM    - Explicit path: skips auto-discovery, uses what you provided.
+REM    - --skip-build skips `npm run build` (fast re-launch).
+REM
+REM  Examples:
+REM    pcfwb                              auto-discover, build + launch
+REM    pcfwb --skip-build                 auto-discover, skip build
+REM    pcfwb .\MyControl                  build + launch ./MyControl
+REM    pcfwb --skip-build .\MyControl     skip build, launch ./MyControl
 REM ============================================================================
 
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 set "SKIP_BUILD="
-set "TARGET=."
+set "TARGET="
 
 :parse_args
 if "%~1"=="" goto args_done
@@ -36,9 +45,37 @@ if not defined SKIP_BUILD (
   call npm run build
   if errorlevel 1 (
     echo.
-    echo [pcfwb] build failed — aborting launch.
-    pause
+    echo [pcfwb] build failed -- aborting launch.
+    echo Press any key to close this window...
+    pause >nul
     exit /b 1
+  )
+)
+
+REM --- Auto-discover ControlManifest.Input.xml when no explicit path given ---
+if not defined TARGET (
+  if exist "ControlManifest.Input.xml" (
+    set "TARGET=."
+  ) else (
+    echo.
+    echo [pcfwb] no --path arg; scanning for ControlManifest.Input.xml...
+    for /r %%f in (ControlManifest.Input.xml) do (
+      echo %%f | findstr /v /i "\\node_modules\\ \\out\\ \\obj\\ \\bin\\ \\generated\\" >nul
+      if !errorlevel! equ 0 (
+        set "TARGET=%%~dpf"
+        REM strip trailing backslash for cleaner display
+        if "!TARGET:~-1!"=="\" set "TARGET=!TARGET:~0,-1!"
+        echo [pcfwb] found: !TARGET!
+        goto target_found
+      )
+    )
+    echo.
+    echo [pcfwb] No ControlManifest.Input.xml found under "%CD%".
+    echo Pass the control directory explicitly:  pcfwb .\YourControl
+    echo Press any key to close this window...
+    pause >nul
+    exit /b 1
+    :target_found
   )
 )
 
