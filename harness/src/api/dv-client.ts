@@ -654,6 +654,24 @@ export function __clearLiveViewsCache(): void {
   viewsInflight.clear();
 }
 
+/**
+ * Sync peek into the live-views cache. Returns the `ViewDefinition` matching
+ * `viewId` (e.g. `"savedquery:<guid>"` or `"userquery:<guid>"`) if any
+ * `(orgUrl, entity)` bucket has been populated by `liveListViews`, otherwise
+ * `undefined`. The dataset shim uses this synchronously inside
+ * `resolveViewForBinding` so that a selector-only binding can render
+ * immediately once the Data panel has populated the cache via a prior
+ * async fetch. Never triggers a fetch itself.
+ */
+export function getCachedLiveView(viewId: string): ViewDefinition | undefined {
+  if (!viewId) return undefined;
+  for (const list of viewsCache.values()) {
+    const hit = list.find(v => v.viewId === viewId);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Extracted-controls API (M9.P2 chunk 3)                                     */
 /* -------------------------------------------------------------------------- */

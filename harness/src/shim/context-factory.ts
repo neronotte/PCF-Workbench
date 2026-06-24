@@ -1,6 +1,8 @@
 import type { ManifestConfig, ManifestProperty, ManifestDataSet } from '../types/manifest';
-import type { DatasetBinding, ViewDefinition, ViewColumn } from '../types/dataset-binding';
+import type { DatasetBinding, ViewDefinition, ViewColumn, ViewSelector } from '../types/dataset-binding';
 import { isResolvedView, synthesizeDefaultView } from '../types/dataset-binding';
+import { fetchXmlToViewFragment } from '../lib/fetchxml-parser';
+import { getCachedLiveView } from '../api/dv-client';
 import type { HarnessStore } from '../store/harness-store';
 import { createClientShim } from './client';
 import { createDeviceShim } from './device';
@@ -281,13 +283,21 @@ function mapOfTypeToDataType(ofType: string): string {
 }
 
 /**
- * Resolve the binding's view to a concrete `ViewDefinition`. P1 only handles
- * embedded definitions; selectors (`viewId` / `viewFetchXml`) are deferred
- * to P5 when the live savedquery fetcher lands. When no resolvable view is
- * present, returns a synthesised default from the manifest columns so the
- * dataset still has a defined shape.
+ * Resolve the binding's view to a concrete `ViewDefinition`. Resolution
+ * order, all sync (no network):
+ *  1. Already a `ViewDefinition` — return as-is.
+ *  2. Selector with inline `viewFetchXml` — parse via the P5.0 FetchXML
+ *     parser into an ad-hoc view (entityType + columns + sort).
+ *  3. Selector with `viewId` — look up in `binding.views` library first
+ *     (in-scenario user-authored views always win), then fall back to the
+ *     live-views cache populated by `liveListViews` for `savedquery:` /
+ *     `userquery:` selectors. The Data panel triggers the async fetch
+ *     before activating the binding so the cache is warm by the time the
+ *     dataset shim runs.
+ *  4. No resolvable view — synthesise a default from manifest columns so
+ *     the dataset still has a defined shape.
  */
-function resolveViewForBinding(
+export function resolveViewForBinding(
   ds: ManifestDataSet,
   binding: DatasetBinding | undefined,
   fallbackEntity: string,
@@ -295,6 +305,36 @@ function resolveViewForBinding(
   if (binding && isResolvedView(binding.view)) {
     return binding.view;
   }
+
+  if (binding) {
+    const sel = binding.view as ViewSelector;
+
+    // 2. Inline FetchXML — parse to ad-hoc view.
+    if (sel.viewFetchXml) {
+      const fragment = fetchXmlToViewFragment(sel.viewFetchXml);
+      return {
+        viewId: sel.viewId ?? `inline-${ds.name}`,
+        displayName: 'Inline FetchXML',
+        entityType: fragment.entityType || fallbackEntity,
+        viewType: 'system',
+        columns: fragment.columns,
+        fetchXml: sel.viewFetchXml,
+      };
+    }
+
+    // 3a. Selector by viewId — check the binding's local `views` library.
+    if (sel.viewId && binding.views) {
+      const fromLib = binding.views.find(v => v.viewId === sel.viewId);
+      if (fromLib) return fromLib;
+    }
+
+    // 3b. Selector by viewId — check the live-views cache (P5.1).
+    if (sel.viewId) {
+      const live = getCachedLiveView(sel.viewId);
+      if (live) return live;
+    }
+  }
+
   return synthesizeDefaultView(
     ds.name,
     binding?.parentRecordRef?.entityType ?? fallbackEntity,
@@ -355,13 +395,19 @@ function buildDataSet(
 
   const binding = getState().datasetBindings[ds.name];
 
+  // Resolve the view ONCE up front so selector-only bindings (viewId /
+  // viewFetchXml) participate in the entity / sort fallback chain below.
+  // Pre-P5.2 this only ran after `getRecords` and the early `binding.view`
+  // checks silently saw the unresolved selector.
+  const earlyResolvedView = resolveViewForBinding(ds, binding, ds.name);
+
   function getRecords() {
     // P1: prefer the view's entityType (the maker's pin) before falling back
     // to the dataset name / pageContext / first non-empty key heuristic.
     let rawData: Record<string, any>[] = [];
     let resolvedEntity = ds.name;
 
-    const viewEntity = binding && isResolvedView(binding.view) ? binding.view.entityType : '';
+    const viewEntity = earlyResolvedView.entityType;
     if (viewEntity) {
       rawData = getEntityData(viewEntity);
       if (rawData.length > 0) resolvedEntity = viewEntity;
@@ -409,11 +455,9 @@ function buildDataSet(
     let working = [...rawData];
     const effectiveSorting = dsState.sorting.length > 0
       ? dsState.sorting
-      : (binding && isResolvedView(binding.view))
-        ? binding.view.columns
-            .filter(c => c.sortDirection === 'asc' || c.sortDirection === 'desc')
-            .map(c => ({ name: c.name, sortDirection: c.sortDirection === 'desc' ? 1 : 0 }))
-        : [];
+      : earlyResolvedView.columns
+          .filter(c => c.sortDirection === 'asc' || c.sortDirection === 'desc')
+          .map(c => ({ name: c.name, sortDirection: c.sortDirection === 'desc' ? 1 : 0 }));
     if (effectiveSorting.length > 0) {
       working.sort((a, b) => {
         for (const sort of effectiveSorting) {

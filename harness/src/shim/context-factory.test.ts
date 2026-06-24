@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { filterByParentFk, buildDatasetColumns } from './context-factory';
+import { filterByParentFk, buildDatasetColumns, resolveViewForBinding } from './context-factory';
 import type { ManifestDataSet } from '../types/manifest';
+import type { DatasetBinding, ViewDefinition } from '../types/dataset-binding';
+import { __clearLiveViewsCache } from '../api/dv-client';
 
 const PARENT = '11111111-1111-1111-1111-111111111111';
 const OTHER  = '22222222-2222-2222-2222-222222222222';
@@ -111,3 +113,84 @@ describe('buildDatasetColumns — columnBindings', () => {
     expect(nameCol.alias).toBe('product_name');
   });
 });
+
+describe('resolveViewForBinding (P5.2)', () => {
+  const ds: ManifestDataSet = {
+    name: 'productGrid',
+    columns: [{ name: 'Name' }, { name: 'Price' }],
+  } as unknown as ManifestDataSet;
+
+  const SIMPLE_FETCH = `<fetch><entity name="account">
+    <attribute name="name" />
+    <attribute name="revenue" />
+    <order attribute="name" descending="true" />
+  </entity></fetch>`;
+
+  function makeView(viewId: string, displayName: string, entityType = 'product'): ViewDefinition {
+    return {
+      viewId,
+      displayName,
+      entityType,
+      viewType: 'system',
+      columns: [{ name: 'Name' }],
+    };
+  }
+
+  it('returns a synthesised default when no binding is set', () => {
+    const view = resolveViewForBinding(ds, undefined, 'product');
+    expect(view.viewId).toBe('synthesized-productGrid');
+    expect(view.entityType).toBe('product');
+    expect(view.columns.map(c => c.name)).toEqual(['Name', 'Price']);
+  });
+
+  it('returns the inline ViewDefinition when binding.view is already resolved', () => {
+    const resolved = makeView('savedquery:abc', 'My View', 'product');
+    const binding: DatasetBinding = { host: 'homegrid', view: resolved };
+    expect(resolveViewForBinding(ds, binding, 'product')).toBe(resolved);
+  });
+
+  it('parses inline viewFetchXml into an ad-hoc view', () => {
+    const binding: DatasetBinding = {
+      host: 'homegrid',
+      view: { viewFetchXml: SIMPLE_FETCH },
+    };
+    const view = resolveViewForBinding(ds, binding, 'product');
+    expect(view.entityType).toBe('account');
+    expect(view.columns.map(c => c.name)).toEqual(['name', 'revenue']);
+    expect(view.columns[0].sortDirection).toBe('desc');
+    expect(view.fetchXml).toBe(SIMPLE_FETCH);
+    expect(view.viewId).toBe('inline-productGrid');
+  });
+
+  it('resolves selector viewId against binding.views library before anything else', () => {
+    const libView = makeView('savedquery:lib-1', 'From library');
+    const binding: DatasetBinding = {
+      host: 'homegrid',
+      view: { viewId: 'savedquery:lib-1' },
+      views: [libView, makeView('savedquery:lib-2', 'Other')],
+    };
+    expect(resolveViewForBinding(ds, binding, 'product')).toBe(libView);
+  });
+
+  it('falls back to synthesised view when selector viewId matches nothing', () => {
+    __clearLiveViewsCache();
+    const binding: DatasetBinding = {
+      host: 'homegrid',
+      view: { viewId: 'savedquery:missing' },
+    };
+    const view = resolveViewForBinding(ds, binding, 'product');
+    expect(view.viewId).toBe('synthesized-productGrid');
+  });
+
+  it('prefers library hit over fallback even when live cache is empty', () => {
+    __clearLiveViewsCache();
+    const libView = makeView('userquery:p1', 'Personal pick');
+    const binding: DatasetBinding = {
+      host: 'homegrid',
+      view: { viewId: 'userquery:p1' },
+      views: [libView],
+    };
+    expect(resolveViewForBinding(ds, binding, 'product').viewId).toBe('userquery:p1');
+  });
+});
+
