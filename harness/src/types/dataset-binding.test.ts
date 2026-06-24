@@ -3,6 +3,8 @@ import {
   synthesizeDefaultView,
   synthesizeDefaultBinding,
   isResolvedView,
+  ensureViewsLibrary,
+  generateViewId,
   type DatasetBinding,
   type ViewSelector,
   type ViewDefinition,
@@ -92,5 +94,45 @@ describe('DatasetBinding shape', () => {
     };
     expect(b.relationshipName).toBe('account_contact_n_n');
     expect(isResolvedView(b.view)).toBe(false);
+  });
+});
+
+describe('ensureViewsLibrary', () => {
+  it('seeds views: [view] when missing and view is resolved', () => {
+    const view = synthesizeDefaultView('grid', 'account', ['name']);
+    const b: DatasetBinding = { host: 'homegrid', view };
+    const next = ensureViewsLibrary(b);
+    expect(next.views).toEqual([view]);
+  });
+
+  it('returns the binding untouched when views already populated', () => {
+    const v1 = synthesizeDefaultView('grid', 'account', ['name']);
+    const v2 = { ...v1, viewId: 'v2', displayName: 'V2' };
+    const b: DatasetBinding = { host: 'homegrid', view: v1, views: [v1, v2] };
+    expect(ensureViewsLibrary(b)).toBe(b);
+  });
+
+  it('leaves selector-only bindings alone (P5 will hydrate)', () => {
+    const sel: ViewSelector = { viewId: 'savedquery:abc' };
+    const b: DatasetBinding = { host: 'homegrid', view: sel };
+    const next = ensureViewsLibrary(b);
+    expect(next.views).toBeUndefined();
+  });
+});
+
+describe('generateViewId', () => {
+  it('includes the dataset name and a unique tail', () => {
+    const a = generateViewId('grid');
+    const b = generateViewId('grid');
+    expect(a).toMatch(/^view-grid-\d+-[a-z0-9]+$/);
+    expect(a).not.toBe(b);
+  });
+});
+
+describe('synthesizeDefaultBinding (multi-view)', () => {
+  it('seeds views: [view] so the picker always has at least one entry', () => {
+    const b = synthesizeDefaultBinding('grid', 'account', ['name']);
+    expect(b.views).toHaveLength(1);
+    expect(b.views?.[0]).toEqual(b.view);
   });
 });

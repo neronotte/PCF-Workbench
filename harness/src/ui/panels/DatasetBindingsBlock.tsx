@@ -3,17 +3,20 @@ import {
   makeStyles, tokens, Button, Badge,
   Radio, RadioGroup, Dropdown, Option, Input, Label, Switch,
   Tooltip,
+  Menu, MenuTrigger, MenuPopover, MenuList, MenuItemRadio, MenuDivider, MenuItem,
 } from '@fluentui/react-components';
 import {
   Add16Regular, Delete16Regular, ReOrderDotsVertical16Regular,
-  Edit16Regular,
+  Edit16Regular, ChevronDown16Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore } from '../../store/harness-store';
 import type { ManifestDataSet, ManifestProperty } from '../../types/manifest';
 import type {
   DatasetBinding, DatasetHostType, ViewDefinition, ViewColumn,
 } from '../../types/dataset-binding';
-import { isResolvedView, synthesizeDefaultView } from '../../types/dataset-binding';
+import {
+  isResolvedView, synthesizeDefaultView, ensureViewsLibrary, generateViewId,
+} from '../../types/dataset-binding';
 import { lookupResxString } from '../../shim/resources';
 
 const useStyles = makeStyles({
@@ -192,14 +195,23 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
   // default so the UI never has to deal with `undefined`. P0's apply path
   // also synthesises this, but the harness can render before the first
   // scenario apply (gallery mode, fresh control), so we guard here too.
-  const effective: DatasetBinding = binding ?? {
+  // `ensureViewsLibrary` upgrades legacy bindings (pre multi-view) so the
+  // picker always has at least one entry.
+  const effective: DatasetBinding = ensureViewsLibrary(binding ?? {
     host: 'homegrid',
     view: synthesizeDefaultView(ds.name, ds.name, ds.columns.map(c => c.name)),
-  };
+  });
 
   const resolvedView: ViewDefinition = isResolvedView(effective.view)
     ? effective.view
     : synthesizeDefaultView(ds.name, ds.name, ds.columns.map(c => c.name));
+
+  // View library — always non-empty after ensureViewsLibrary. Selector-only
+  // bindings (no resolved view yet) fall back to a single-entry list with
+  // the resolved fallback so the dropdown still renders something selectable.
+  const viewLibrary: ViewDefinition[] = effective.views && effective.views.length > 0
+    ? effective.views
+    : [resolvedView];
 
   const candidateLookups = useMemo(() => lookupCandidates(ds, typeGroups), [ds, typeGroups]);
 
@@ -208,11 +220,62 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
   }, [setDatasetBinding, ds.name, effective]);
 
   const updateView = useCallback((nextView: Partial<ViewDefinition>) => {
+    const merged: ViewDefinition = { ...resolvedView, ...nextView };
+    // Keep `views` in sync: if the active view is in the library, update its
+    // entry; otherwise append (covers the migration case where library was
+    // bootstrapped from a different reference). Match by viewId.
+    const libSource = effective.views && effective.views.length > 0
+      ? effective.views
+      : [resolvedView];
+    const idx = libSource.findIndex(v => v.viewId === merged.viewId);
+    const nextViews = idx >= 0
+      ? libSource.map((v, i) => i === idx ? merged : v)
+      : [...libSource, merged];
     setDatasetBinding(ds.name, {
       ...effective,
-      view: { ...resolvedView, ...nextView },
+      view: merged,
+      views: nextViews,
     });
   }, [setDatasetBinding, ds.name, effective, resolvedView]);
+
+  const selectView = useCallback((viewId: string) => {
+    const next = viewLibrary.find(v => v.viewId === viewId);
+    if (!next) return;
+    setDatasetBinding(ds.name, { ...effective, view: next });
+  }, [setDatasetBinding, ds.name, effective, viewLibrary]);
+
+  const addView = useCallback(() => {
+    const n = viewLibrary.length + 1;
+    const cloned: ViewDefinition = {
+      ...resolvedView,
+      viewId: generateViewId(ds.name),
+      displayName: `View ${n}`,
+      // Clone column array so edits don't leak into the source view.
+      columns: resolvedView.columns.map(c => ({ ...c })),
+    };
+    setDatasetBinding(ds.name, {
+      ...effective,
+      view: cloned,
+      views: [...viewLibrary, cloned],
+    });
+    // Auto-open the column editor so the user can immediately customise.
+    setEditingColumns(true);
+  }, [viewLibrary, resolvedView, setDatasetBinding, ds.name, effective]);
+
+  const deleteView = useCallback(() => {
+    if (viewLibrary.length <= 1) return; // never strand the binding without a view
+    const remaining = viewLibrary.filter(v => v.viewId !== resolvedView.viewId);
+    const nextActive = remaining[0];
+    setDatasetBinding(ds.name, {
+      ...effective,
+      view: nextActive,
+      views: remaining,
+    });
+  }, [viewLibrary, resolvedView, setDatasetBinding, ds.name, effective]);
+
+  const renameView = useCallback((displayName: string) => {
+    updateView({ displayName });
+  }, [updateView]);
 
   const onHostChange = useCallback((host: DatasetHostType) => {
     const next: DatasetBinding = { ...effective, host };
@@ -272,8 +335,13 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
   }, [resolvedView.columns, updateView]);
 
   const resetView = useCallback(() => {
-    updateView(synthesizeDefaultView(ds.name, resolvedView.entityType, ds.columns.map(c => c.name)));
-  }, [ds.columns, ds.name, resolvedView.entityType, updateView]);
+    // Preserve viewId + displayName so the library entry is updated in place
+    // (updateView matches by viewId). Only columns are reset to "all visible,
+    // unsorted, default widths" — the user explicitly asked for "Reset columns".
+    updateView({
+      columns: ds.columns.map(c => ({ name: c.name })),
+    });
+  }, [ds.columns, updateView]);
 
   return (
     <div className={styles.card} data-test-id={`dataset-binding-card-${ds.name}`}>
@@ -401,6 +469,17 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
       <div className={styles.row}>
         <div className={styles.inlineRow}>
           <Label size="small" style={{ flex: 1 }}>View</Label>
+          <Tooltip content="Add a new view (clones the active one)" relationship="label">
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<Add16Regular />}
+              onClick={addView}
+              data-test-id={`dataset-binding-add-view-${ds.name}`}
+            >
+              Add view
+            </Button>
+          </Tooltip>
           <Tooltip content={editingColumns ? 'Done editing columns' : 'Edit columns'} relationship="label">
             <Button
               appearance="subtle"
@@ -414,21 +493,47 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
         <Dropdown
           value={resolvedView.displayName}
           selectedOptions={[resolvedView.viewId]}
-          onOptionSelect={() => {/* single view today; M2 will list named views */}}
+          onOptionSelect={(_, d) => { if (d.optionValue) selectView(d.optionValue); }}
           data-test-id={`dataset-binding-view-${ds.name}`}
         >
-          <Option value={resolvedView.viewId}>{resolvedView.displayName}</Option>
+          {viewLibrary.map(v => (
+            <Option key={v.viewId} value={v.viewId}>{v.displayName}</Option>
+          ))}
         </Dropdown>
         <span className={styles.hint}>
-          {resolvedView.columns.length} of {ds.columns.length} columns visible.
+          {resolvedView.columns.length} of {ds.columns.length} columns visible
+          {viewLibrary.length > 1 ? ` • ${viewLibrary.length} views in library` : ''}.
         </span>
       </div>
 
       {editingColumns && (
         <div className={styles.row} data-test-id={`dataset-binding-column-editor-${ds.name}`}>
+          <div className={styles.inlineRow}>
+            <Label size="small" style={{ width: 80 }}>View name</Label>
+            <Input
+              size="small"
+              value={resolvedView.displayName}
+              onChange={(_, d) => renameView(d.value)}
+              style={{ flex: 1 }}
+              data-test-id={`dataset-binding-view-name-${ds.name}`}
+            />
+            <Tooltip
+              content={viewLibrary.length <= 1 ? 'At least one view is required' : 'Delete this view'}
+              relationship="label"
+            >
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={<Delete16Regular />}
+                onClick={deleteView}
+                disabled={viewLibrary.length <= 1}
+                data-test-id={`dataset-binding-delete-view-${ds.name}`}
+              />
+            </Tooltip>
+          </div>
           <div className={styles.inlineRow} style={{ justifyContent: 'space-between' }}>
             <span className={styles.hint}>Drag rows by the grip to reorder. Click Sort to cycle ASC → DESC → off. Width in px.</span>
-            <Button appearance="subtle" size="small" onClick={resetView}>Reset</Button>
+            <Button appearance="subtle" size="small" onClick={resetView}>Reset columns</Button>
           </div>
           <div className={styles.columnEditor}>
             <div className={styles.columnHeaderRow}>
@@ -566,51 +671,108 @@ export function emitFocusDatasetBinding(datasetName: string): void {
 }
 
 /**
- * Form-chrome view pill. One pill per manifest dataset. Read-only: shows
- * "View: <displayName> ▾" and clicking jumps to the Data panel binding card.
- * Mirrors how UCI shows the maker-pinned view on a subgrid command bar.
+ * Form-chrome view pills. One entry per manifest dataset. The pill itself is
+ * a Fluent v9 Menu trigger that lists every view in the binding's library —
+ * picking one swaps `binding.view`. An adjacent edit icon does the deep-link
+ * jump to the Data panel binding card (the same focus event the pill used to
+ * fire when clicked).
  *
- * Designed to live inside the FormChrome command bar (or any host that
- * wants to surface the active view + offer a deep-link to configure it).
+ * Splitting "switch view" (cheap, common) from "edit columns" (rare, panel-
+ * level) mirrors how UCI's subgrid command bar separates the view selector
+ * dropdown from the "Edit columns" menu item.
  */
 export function DatasetViewPills() {
   const datasets = useHarnessStore(s => s.manifest?.dataSets ?? []);
   const bindings = useHarnessStore(s => s.datasetBindings);
+  const setDatasetBinding = useHarnessStore(s => s.setDatasetBinding);
   if (datasets.length === 0) return null;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }} data-test-id="form-chrome-view-pills">
       {datasets.map(ds => {
         const binding = bindings[ds.name];
-        const view = binding && isResolvedView(binding.view) ? binding.view : null;
-        const label = view?.displayName ?? 'Default view';
+        const activeView = binding && isResolvedView(binding.view) ? binding.view : null;
+        const library: ViewDefinition[] = binding?.views && binding.views.length > 0
+          ? binding.views
+          : (activeView ? [activeView] : []);
+        const label = activeView?.displayName ?? 'Default view';
         const host = binding?.host ?? 'homegrid';
+        const activeViewId = activeView?.viewId ?? '';
         return (
-          <button
+          <span
             key={ds.name}
-            type="button"
-            onClick={() => emitFocusDatasetBinding(ds.name)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}
             data-test-id={`form-chrome-view-pill-${ds.name}`}
-            title={`${ds.name} • host: ${host} • click to edit in Data panel`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '2px 8px',
-              borderRadius: 12,
-              border: `1px solid ${tokens.colorNeutralStroke2}`,
-              backgroundColor: tokens.colorNeutralBackground3,
-              color: tokens.colorNeutralForeground2,
-              fontSize: tokens.fontSizeBase200,
-              fontWeight: tokens.fontWeightRegular,
-              cursor: 'pointer',
-              lineHeight: 1.4,
-              fontFamily: 'inherit',
-            }}
           >
-            <span style={{ color: tokens.colorNeutralForeground3 }}>View:</span>
-            <span style={{ fontWeight: tokens.fontWeightSemibold, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-            <span style={{ color: tokens.colorNeutralForeground3 }}>▾</span>
-          </button>
+            <Menu
+              checkedValues={{ view: activeViewId ? [activeViewId] : [] }}
+              onCheckedValueChange={(_, data) => {
+                if (data.name !== 'view') return;
+                const nextId = data.checkedItems[0];
+                const nextView = library.find(v => v.viewId === nextId);
+                if (!binding || !nextView) return;
+                setDatasetBinding(ds.name, { ...binding, view: nextView });
+              }}
+            >
+              <MenuTrigger disableButtonEnhancement>
+                <button
+                  type="button"
+                  title={`${ds.name} • host: ${host} • switch view`}
+                  data-test-id={`form-chrome-view-pill-trigger-${ds.name}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    border: `1px solid ${tokens.colorNeutralStroke2}`,
+                    backgroundColor: tokens.colorNeutralBackground3,
+                    color: tokens.colorNeutralForeground2,
+                    fontSize: tokens.fontSizeBase200,
+                    fontWeight: tokens.fontWeightRegular,
+                    cursor: 'pointer',
+                    lineHeight: 1.4,
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span style={{ color: tokens.colorNeutralForeground3 }}>View:</span>
+                  <span style={{ fontWeight: tokens.fontWeightSemibold, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                  <ChevronDown16Regular />
+                </button>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {library.map(v => (
+                    <MenuItemRadio
+                      key={v.viewId}
+                      name="view"
+                      value={v.viewId}
+                      data-test-id={`form-chrome-view-menu-item-${ds.name}-${v.viewId}`}
+                    >
+                      {v.displayName}
+                    </MenuItemRadio>
+                  ))}
+                  <MenuDivider />
+                  <MenuItem
+                    icon={<Edit16Regular />}
+                    onClick={() => emitFocusDatasetBinding(ds.name)}
+                    data-test-id={`form-chrome-view-menu-edit-${ds.name}`}
+                  >
+                    Edit columns…
+                  </MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+            <Tooltip content="Edit columns in Data panel" relationship="label">
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={<Edit16Regular />}
+                onClick={() => emitFocusDatasetBinding(ds.name)}
+                aria-label={`Edit columns for ${ds.name}`}
+                data-test-id={`form-chrome-view-edit-${ds.name}`}
+              />
+            </Tooltip>
+          </span>
         );
       })}
     </div>

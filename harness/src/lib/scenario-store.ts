@@ -21,7 +21,7 @@
 
 import type { ManifestProperty, ManifestDataSet, ManifestConfig } from '../types/manifest';
 import type { DatasetBindingMap } from '../types/dataset-binding';
-import { synthesizeDefaultBinding } from '../types/dataset-binding';
+import { synthesizeDefaultBinding, ensureViewsLibrary } from '../types/dataset-binding';
 import { useHarnessStore, type NetworkMode } from '../store/harness-store';
 import {
   getEntityData,
@@ -786,7 +786,7 @@ export function applyDatasetBindings(explicit: DatasetBindingMap | undefined): v
   }
   if (explicit) {
     for (const [name, binding] of Object.entries(explicit)) {
-      merged[name] = binding;
+      merged[name] = ensureViewsLibrary(binding);
     }
   }
   s.replaceDatasetBindings(merged);

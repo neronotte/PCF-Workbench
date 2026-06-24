@@ -108,8 +108,16 @@ export interface DatasetBinding {
     recordName?: string;
   };
 
-  /** The view that drives columns / sort / live fetch. */
+  /** The active view that drives columns / sort / live fetch. When ``views``
+   *  is set, this MUST be one of the entries in ``views`` (matched by viewId).
+   *  Kept as a top-level field for back-compat with bindings authored before
+   *  the multi-view library existed. */
   view: ViewSelector | ViewDefinition;
+
+  /** Optional view library — additional views the user can switch between.
+   *  Migration default for legacy bindings is ``[view]`` so the picker always
+   *  has at least one entry. */
+  views?: ViewDefinition[];
 }
 
 /**
@@ -158,8 +166,35 @@ export function synthesizeDefaultBinding(
   entityType: string,
   columnNames: string[],
 ): DatasetBinding {
+  const view = synthesizeDefaultView(datasetName, entityType, columnNames);
   return {
     host: 'homegrid',
-    view: synthesizeDefaultView(datasetName, entityType, columnNames),
+    view,
+    views: [view],
   };
+}
+
+/**
+ * Migration helper — ensure ``binding.views`` is populated for older bindings
+ * that pre-date the multi-view library. When ``view`` is a resolved view,
+ * it becomes the sole entry of ``views``. Selector-only bindings (viewId
+ * pointer with no resolved columns yet) are left alone — they'll resolve at
+ * runtime via ``resolveViewForBinding`` and the picker can populate ``views``
+ * lazily once the live fetcher (P5) hydrates them.
+ */
+export function ensureViewsLibrary(binding: DatasetBinding): DatasetBinding {
+  if (binding.views && binding.views.length > 0) return binding;
+  if (!isResolvedView(binding.view)) return binding;
+  return { ...binding, views: [binding.view] };
+}
+
+/**
+ * Generate a stable-ish viewId for a freshly-cloned/added view. Uses the
+ * dataset name + a millisecond timestamp + a short random tail so two
+ * additions in the same tick don't collide. Not cryptographically unique —
+ * just unique enough for an in-memory library.
+ */
+export function generateViewId(datasetName: string): string {
+  const tail = Math.random().toString(36).slice(2, 7);
+  return `view-${datasetName}-${Date.now()}-${tail}`;
 }
