@@ -43,12 +43,20 @@ export function loadEntityData(data: Record<string, any[]>): void {
 }
 
 export function getEntityData(entityType: string): Record<string, any>[] {
-  // In live mode, prefer the cached page record for this entity type. If it
-  // hasn't been fetched yet (or fetch errored) the array is empty — bound
-  // properties resolve to null and the control re-renders once the fetch
-  // completes and bumps dataVersion.
+  // In live mode, the priority is:
+  //   1. liveFetchBuffer[entityType] — records pulled via webAPI multi-fetch
+  //      OR the new useLiveDatasetRecords hook (FetchXML-driven).
+  //   2. liveRecordCache[entityType] — the single page record fetched by
+  //      useLivePageRecord. Used as a fallback so a control that only needs
+  //      the parent record still works without any dataset binding.
+  // If neither is populated, the array is empty — bound props resolve to
+  // null and the control re-renders once a fetch lands and bumps dataVersion.
   const s = useHarnessStore.getState();
   if (s.dataSource === 'live') {
+    const buffer = s.liveFetchBuffer[entityType];
+    if (buffer && Object.keys(buffer).length > 0) {
+      return Object.values(buffer);
+    }
     const cached = s.liveRecordCache[entityType];
     return cached ? [cached] : [];
   }
@@ -56,10 +64,16 @@ export function getEntityData(entityType: string): Record<string, any>[] {
 }
 
 export function getEntityStoreKeys(): string[] {
-  // Live mode: surface entity names that currently have a cached record so
-  // dataset fallbacks can find them.
+  // Live mode: union of liveFetchBuffer entities (dataset records) and
+  // liveRecordCache entities (page records).
   const s = useHarnessStore.getState();
-  if (s.dataSource === 'live') return Object.keys(s.liveRecordCache);
+  if (s.dataSource === 'live') {
+    const keys = new Set<string>([
+      ...Object.keys(s.liveFetchBuffer),
+      ...Object.keys(s.liveRecordCache),
+    ]);
+    return Array.from(keys);
+  }
   return Object.keys(entityStore);
 }
 

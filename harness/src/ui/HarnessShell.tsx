@@ -27,6 +27,7 @@ import { AppNotificationBanner } from './AppNotificationBanner';
 import { LiveReauthBanner } from './LiveReauthBanner';
 import { CoveragePanel } from './panels/CoveragePanel';
 import { useLivePageRecord } from '../loader/use-live-page-record';
+import { useLiveDatasetRecords } from '../loader/use-live-dataset-records';
 import { isLiveBlocked, liveBlockReason } from '../lib/live-block';
 import { useBuildStatus } from '../store/build-watch-client';
 import type { ManifestConfig } from '../types/manifest';
@@ -257,6 +258,9 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
   // Auto-fetch the live page record when in Live mode. Re-runs on profile,
   // page id, or reloadEpoch change. See use-live-page-record for details.
   useLivePageRecord();
+  // Auto-fetch live dataset records for any binding whose resolved view
+  // carries FetchXML (live system/personal views). See use-live-dataset-records.
+  useLiveDatasetRecords();
 
   // When the user toggles Mock <-> Live, treat it as a profile switch and
   // re-init the control. Skip the very first render so we don't double-load

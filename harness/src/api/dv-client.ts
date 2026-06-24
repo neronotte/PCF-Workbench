@@ -224,6 +224,27 @@ export async function liveRetrieveMultiple(
   return adaptMultiResponse(raw);
 }
 
+/**
+ * Retrieve a list of records using a raw FetchXML string. Dataverse Web API
+ * supports `?fetchXml=<urlencoded>` on the entity set endpoint and returns
+ * the result in the same OData envelope as `liveRetrieveMultiple`.
+ *
+ * Used by `useLiveDatasetRecords` to hydrate the live dataset cache from
+ * whichever savedquery / userquery the maker selected in LiveViewsRow.
+ */
+export async function liveRetrieveByFetchXml(
+  orgUrl: string,
+  logicalEntity: string,
+  fetchXml: string,
+  maxPageSize?: number,
+): Promise<AdaptedMultiResponse> {
+  const setName = await resolveEntitySetName(orgUrl, logicalEntity);
+  const path = `/api/data/v9.2/${setName}?fetchXml=${encodeURIComponent(fetchXml)}`;
+  const prefer = maxPageSize ? `odata.maxpagesize=${maxPageSize}` : undefined;
+  const raw = await dvGet<ODataValueResponse>(orgUrl, path, prefer);
+  return adaptMultiResponse(raw);
+}
+
 export async function liveRetrieveSingle(
   orgUrl: string,
   logicalEntity: string,
