@@ -73,7 +73,7 @@ export function deriveColumnBindings(
   viewColumns: Array<{ name: string }>,
   existing?: Record<string, { field: string; ofType?: string }>,
 ): AutoDerivedBindings {
-  const out: Record<string, { field: string; ofType?: string }> = { ...(existing ?? {}) };
+  const out: Record<string, { field: string; ofType?: string }> = {};
   const matched: string[] = [];
   const unmatched: string[] = [];
 
@@ -81,16 +81,29 @@ export function deriveColumnBindings(
   const byExact = new Map<string, string>();        // lowercase → original
   const byNormalised = new Map<string, string>();   // normalised → original
   const bySubstring: Array<{ token: string; original: string }> = [];
+  // Set of every row key shape we'd expect to see — used to decide whether
+  // an existing user-set binding is still valid (e.g. an old mock binding
+  // pointing at a literal "Product" key won't be valid against a live view
+  // whose columns are msdyn_product / _msdyn_product_value).
+  const validRowKeys = new Set<string>();
   for (const vc of viewColumns) {
     byExact.set(vc.name.toLowerCase(), vc.name);
     const tok = normaliseToken(vc.name);
     if (tok && !byNormalised.has(tok)) byNormalised.set(tok, vc.name);
     bySubstring.push({ token: tok, original: vc.name });
+    validRowKeys.add(vc.name.toLowerCase());
+    validRowKeys.add(`_${vc.name.toLowerCase()}_value`);
+    validRowKeys.add(`_${vc.name.toLowerCase()}`);
+    validRowKeys.add(`${vc.name.toLowerCase()}id`);
   }
 
   for (const col of columns) {
-    // Don't override an existing user-set binding.
-    if (existing && existing[col.name]?.field) {
+    // Preserve an existing user-set binding ONLY when its field looks
+    // valid against the new view's columns. This stops stale mock-mode
+    // bindings (Product → "Product") from blocking live-mode derivation.
+    const prior = existing?.[col.name]?.field;
+    if (prior && validRowKeys.has(prior.toLowerCase())) {
+      out[col.name] = { ...existing![col.name] };
       matched.push(col.name);
       continue;
     }

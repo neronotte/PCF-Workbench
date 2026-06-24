@@ -48,13 +48,25 @@ describe('deriveColumnBindings', () => {
     expect(result.bindings.Foo).toBeUndefined();
   });
 
-  it('preserves existing user-set bindings', () => {
+  it('preserves existing user-set binding when its field is valid against the view', () => {
     const result = deriveColumnBindings(
       [col('Product', 'Lookup.Simple')],
       [{ name: 'msdyn_product' }],
-      { Product: { field: 'my_custom_field' } },
+      { Product: { field: '_msdyn_product_value' } },
     );
-    expect(result.bindings.Product).toEqual({ field: 'my_custom_field' });
+    expect(result.bindings.Product).toEqual({ field: '_msdyn_product_value' });
+  });
+
+  it('drops stale mock-mode binding when its field is not in the view', () => {
+    // Mock scenario had Product mapped to literal "Product" key; live view
+    // has msdyn_product. The stale binding should be replaced by the
+    // auto-derived live mapping.
+    const result = deriveColumnBindings(
+      [col('Product', 'Lookup.Simple')],
+      [{ name: 'msdyn_product' }],
+      { Product: { field: 'Product' } },
+    );
+    expect(result.bindings.Product).toEqual({ field: '_msdyn_product_value' });
   });
 
   it('handles common publisher prefixes (new_, cr123_)', () => {
