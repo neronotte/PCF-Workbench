@@ -1,4 +1,6 @@
 import type { ManifestConfig, ManifestProperty, ManifestDataSet } from '../types/manifest';
+import type { DatasetBinding, ViewDefinition, ViewColumn } from '../types/dataset-binding';
+import { isResolvedView, synthesizeDefaultView } from '../types/dataset-binding';
 import type { HarnessStore } from '../store/harness-store';
 import { createClientShim } from './client';
 import { createDeviceShim } from './device';
@@ -162,6 +164,12 @@ function buildProperty(prop: ManifestProperty, rawValue: any, boundColumn?: stri
  * falls back to the legacy data-key inference (everything `string`) only
  * when the manifest declares no columns — preserves back-compat for
  * controls authored without property-sets.
+ *
+ * When `view` is provided (P1+), columns are filtered + reordered to match
+ * the view's column list. View-column metadata (displayName override, width,
+ * sortDirection) layers on top of the manifest descriptor. Manifest columns
+ * NOT in the view are dropped — this mirrors UCI, where a view's column list
+ * is authoritative over the manifest's property-set superset.
  */
 function buildDatasetColumns(
   ds: ManifestDataSet,
@@ -169,34 +177,48 @@ function buildDatasetColumns(
   getEntityData: (entityType: string) => Record<string, any>[],
   typeGroups: Record<string, string[]>,
   getLcid: () => number,
+  view?: ViewDefinition,
 ) {
   if (ds.columns && ds.columns.length > 0) {
-    return ds.columns.map((col, idx) => {
-      // Resolve `of-type-group` to the first declared type. Without form XML
-      // we can't know what the maker actually bound, so we use the type-group
-      // default and let the maker override via a future PropertyEditor binding.
+    const manifestByName = new Map(ds.columns.map(c => [c.name, c] as const));
+    // P1: view-driven column list + order. Bindings supply the view; when no
+    // view is configured (or view has no columns), fall back to the manifest's
+    // full column set so legacy behaviour is preserved.
+    const viewColumns: ViewColumn[] = view?.columns?.length
+      ? view.columns
+      : ds.columns.map(c => ({ name: c.name }));
+
+    const out: any[] = [];
+    viewColumns.forEach((vc, idx) => {
+      const col = manifestByName.get(vc.name);
+      if (!col) return; // view referenced a column not in the manifest — skip
+      // Resolve `of-type-group` to the first declared type.
       let ofType = col.ofType;
       if (col.ofTypeGroup && typeGroups[col.ofTypeGroup]?.length) {
         ofType = typeGroups[col.ofTypeGroup][0];
       }
-      // Resolve the display-name-key through RESX so the control shows the
-      // friendly localised label ("Quantity") instead of the raw key
-      // ("CC_ProductDataSet_Quantity"). Falls back to the key when no
-      // matching RESX entry exists.
-      const dnk = col.displayNameKey;
-      const displayName = dnk ? lookupResxString(dnk, getLcid()) : col.name;
-      return {
+      // Display name precedence: view override > RESX-resolved manifest key > column name.
+      let displayName = vc.displayName;
+      if (!displayName) {
+        const dnk = col.displayNameKey;
+        displayName = dnk ? lookupResxString(dnk, getLcid()) : col.name;
+      }
+      const visualSizeFactor = typeof vc.width === 'number'
+        ? Math.max(0.1, vc.width / 100)
+        : 1;
+      out.push({
         name: col.name,
         displayName,
         dataType: mapOfTypeToDataType(ofType),
         alias: col.name,
         order: idx,
-        visualSizeFactor: 1,
+        visualSizeFactor,
         isHidden: false,
         isPrimary: col.name.toLowerCase() === 'id' || col.name.toLowerCase().endsWith('id'),
         disableSorting: false,
-      };
+      });
     });
+    return out;
   }
   // Legacy fallback — synthesise columns from the first record's keys.
   const rows = getEntityData(resolvedEntity);
@@ -248,6 +270,28 @@ function mapOfTypeToDataType(ofType: string): string {
 }
 
 /**
+ * Resolve the binding's view to a concrete `ViewDefinition`. P1 only handles
+ * embedded definitions; selectors (`viewId` / `viewFetchXml`) are deferred
+ * to P5 when the live savedquery fetcher lands. When no resolvable view is
+ * present, returns a synthesised default from the manifest columns so the
+ * dataset still has a defined shape.
+ */
+function resolveViewForBinding(
+  ds: ManifestDataSet,
+  binding: DatasetBinding | undefined,
+  fallbackEntity: string,
+): ViewDefinition {
+  if (binding && isResolvedView(binding.view)) {
+    return binding.view;
+  }
+  return synthesizeDefaultView(
+    ds.name,
+    binding?.parentRecordRef?.entityType ?? fallbackEntity,
+    (ds.columns ?? []).map(c => c.name),
+  );
+}
+
+/**
  * Build a dataset shim that mimics ComponentFramework.PropertyTypes.DataSet.
  * Reads records from the entity data store using the dataset name as the entity type.
  */
@@ -259,10 +303,24 @@ function buildDataSet(
 ) {
   const refreshCallbacks: Array<() => void> = [];
 
+  const binding = getState().datasetBindings[ds.name];
+
   function getRecords() {
-    // Try dataset name first (e.g. "bookingRecords")
-    let rawData = getEntityData(ds.name);
+    // P1: prefer the view's entityType (the maker's pin) before falling back
+    // to the dataset name / pageContext / first non-empty key heuristic.
+    let rawData: Record<string, any>[] = [];
     let resolvedEntity = ds.name;
+
+    const viewEntity = binding && isResolvedView(binding.view) ? binding.view.entityType : '';
+    if (viewEntity) {
+      rawData = getEntityData(viewEntity);
+      if (rawData.length > 0) resolvedEntity = viewEntity;
+    }
+    if (rawData.length === 0) {
+      // Try dataset name first (e.g. "bookingRecords")
+      rawData = getEntityData(ds.name);
+      resolvedEntity = ds.name;
+    }
     if (rawData.length === 0) {
       // Fallback: try pageEntityTypeName from store
       const pageEntity = getState().pageEntityTypeName;
@@ -281,12 +339,22 @@ function buildDataSet(
       }
     }
 
-    // Apply sorting from current dataset state
+    // Apply sorting from current dataset state, or fall back to the view's
+    // default sort (any view column with sortDirection set). UCI applies the
+    // view's default sort on first load; the harness mirrors that, then
+    // user/control interactions overwrite via setDatasetSorting.
     const dsState = getState().datasetState[ds.name] ?? defaultDatasetState();
     let working = [...rawData];
-    if (dsState.sorting.length > 0) {
+    const effectiveSorting = dsState.sorting.length > 0
+      ? dsState.sorting
+      : (binding && isResolvedView(binding.view))
+        ? binding.view.columns
+            .filter(c => c.sortDirection === 'asc' || c.sortDirection === 'desc')
+            .map(c => ({ name: c.name, sortDirection: c.sortDirection === 'desc' ? 1 : 0 }))
+        : [];
+    if (effectiveSorting.length > 0) {
       working.sort((a, b) => {
-        for (const sort of dsState.sorting) {
+        for (const sort of effectiveSorting) {
           const av = a[sort.name];
           const bv = b[sort.name];
           if (av === bv) continue;
@@ -350,6 +418,10 @@ function buildDataSet(
 
   const { records, sortedIds, totalAfterFilter, resolvedEntity } = getRecords();
   const dsState = getState().datasetState[ds.name] ?? defaultDatasetState();
+  // Resolve the view ONCE for this build cycle. Used to drive columns,
+  // getViewId, getTitle, and getTargetEntityType so the control sees a
+  // consistent view-shaped facade.
+  const resolvedView = resolveViewForBinding(ds, binding, resolvedEntity);
   // Mutable sorting array — controls may push/splice into it; refresh() captures back into store.
   const liveSorting: any[] = dsState.sorting.map(s => ({ ...s }));
   let liveFilter: any = dsState.filtering;
@@ -411,7 +483,7 @@ function buildDataSet(
     },
     records,
     sortedRecordIds: sortedIds,
-    columns: buildDatasetColumns(ds, resolvedEntity, getEntityData, typeGroups, () => getState().userLanguageId),
+    columns: buildDatasetColumns(ds, resolvedEntity, getEntityData, typeGroups, () => getState().userLanguageId, resolvedView),
     refresh: () => {
       // Capture any control-side mutations to sorting back into store, then trigger updateView.
       getState().setDatasetSorting(ds.name, liveSorting.map(s => ({ name: s.name, sortDirection: s.sortDirection })));
@@ -434,9 +506,9 @@ function buildDataSet(
         });
       });
     },
-    getTitle: () => ds.displayNameKey,
-    getViewId: () => '',
-    getTargetEntityType: () => resolvedEntity,
+    getTitle: () => resolvedView.displayName || ds.displayNameKey,
+    getViewId: () => resolvedView.viewId || '',
+    getTargetEntityType: () => resolvedView.entityType || resolvedEntity,
     addOnDatasetItemOpened: () => {},
     removeOnDatasetItemOpened: () => {},
     addColumn: () => {},
