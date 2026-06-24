@@ -407,31 +407,44 @@ function buildDataSet(
     let rawData: Record<string, any>[] = [];
     let resolvedEntity = ds.name;
 
-    const viewEntity = earlyResolvedView.entityType;
-    if (viewEntity) {
-      rawData = getEntityData(viewEntity);
-      if (rawData.length > 0) resolvedEntity = viewEntity;
-    }
-    if (rawData.length === 0) {
-      // Try dataset name first (e.g. "bookingRecords")
-      rawData = getEntityData(ds.name);
-      resolvedEntity = ds.name;
-    }
-    if (rawData.length === 0) {
-      // Fallback: try pageEntityTypeName from store
-      const pageEntity = getState().pageEntityTypeName;
-      if (pageEntity) {
-        rawData = getEntityData(pageEntity);
-        if (rawData.length > 0) resolvedEntity = pageEntity;
+    // Associated host: hard-pin to the relationship's child entity. Without
+    // this, an empty/in-flight child fetch falls through to `pageEntityType`
+    // below and the dataset silently renders the parent record as its rows
+    // (the parent is in the store from the live page-record fetch). Returning
+    // empty rows while the child fetch resolves matches UCI behaviour.
+    const associatedChildEntity = binding?.host === 'associated'
+      ? (binding.relationshipReferencingEntity ?? earlyResolvedView.entityType ?? '')
+      : '';
+    if (associatedChildEntity) {
+      rawData = getEntityData(associatedChildEntity);
+      resolvedEntity = associatedChildEntity;
+    } else {
+      const viewEntity = earlyResolvedView.entityType;
+      if (viewEntity) {
+        rawData = getEntityData(viewEntity);
+        if (rawData.length > 0) resolvedEntity = viewEntity;
       }
-    }
-    if (rawData.length === 0) {
-      // Fallback: use the first entity in the data store that has array records
-      // This handles data.json keyed by entity logical name (e.g. "bookableresourcebooking")
-      // when the dataset name is different (e.g. "bookingRecords")
-      for (const key of getEntityStoreKeys()) {
-        const data = getEntityData(key);
-        if (data.length > 0) { rawData = data; resolvedEntity = key; break; }
+      if (rawData.length === 0) {
+        // Try dataset name first (e.g. "bookingRecords")
+        rawData = getEntityData(ds.name);
+        resolvedEntity = ds.name;
+      }
+      if (rawData.length === 0) {
+        // Fallback: try pageEntityTypeName from store
+        const pageEntity = getState().pageEntityTypeName;
+        if (pageEntity) {
+          rawData = getEntityData(pageEntity);
+          if (rawData.length > 0) resolvedEntity = pageEntity;
+        }
+      }
+      if (rawData.length === 0) {
+        // Fallback: use the first entity in the data store that has array records
+        // This handles data.json keyed by entity logical name (e.g. "bookableresourcebooking")
+        // when the dataset name is different (e.g. "bookingRecords")
+        for (const key of getEntityStoreKeys()) {
+          const data = getEntityData(key);
+          if (data.length > 0) { rawData = data; resolvedEntity = key; break; }
+        }
       }
     }
 
