@@ -176,23 +176,18 @@ export function useLiveDatasetRecords() {
       void liveRetrieveByFetchXml(orgUrl, entityType, injectAllAttributes(view.fetchXml))
         .then(({ entities }) => {
           if (fetchId !== inflightRef.current[ds.name]) return; // stale
-          addLiveFetches(entityType, entities as Record<string, any>[]);
-          // Sample the first row's keys so the maker can see (in the log)
-          // every field that's available for property-set bindings. Helps
-          // debug "control returned null on .id.guid" crashes.
           const rowKeys = entities[0]
             ? Object.keys(entities[0]).filter(k => !k.startsWith('@'))
             : [];
-          addLogEntry({
-            category: 'data', method: 'live.datasetRecords.ok',
-            args: { dataset: ds.name, entityType, viewId, count: entities.length, sampleKeys: rowKeys.slice(0, 40) },
-          });
 
-          // Post-fetch auto-derive: the system view's <attribute> list often
-          // omits lookup columns (because the view shows the display name via
-          // <link-entity>), so derive-on-adopt couldn't map them. Now that
-          // we have the actual row keys (including `_<lookup>_value`), fill
-          // in any property-set that's still unbound.
+          // CRITICAL ordering: re-derive bindings FIRST, then publish rows.
+          // The system view's <attribute> list often omits lookup columns
+          // (the view shows the display name via <link-entity>), so the
+          // derive-on-adopt couldn't map them. If we land rows before
+          // fixing bindings, the React store update fires updateView while
+          // bindings still point at non-existent fields — record.getValue
+          // returns null, and the control crashes on .id.guid before we
+          // get a chance to fix the binding.
           if (ds.columns.length > 0 && rowKeys.length > 0) {
             const current = useHarnessStore.getState().datasetBindings[ds.name];
             const unboundColumns = ds.columns.filter(c => !current?.columnBindings?.[c.name]);
@@ -211,6 +206,13 @@ export function useLiveDatasetRecords() {
               }
             }
           }
+
+          // Now safe to publish the rows.
+          addLiveFetches(entityType, entities as Record<string, any>[]);
+          addLogEntry({
+            category: 'data', method: 'live.datasetRecords.ok',
+            args: { dataset: ds.name, entityType, viewId, count: entities.length, sampleKeys: rowKeys.slice(0, 40) },
+          });
         })
         .catch(err => {
           if (fetchId !== inflightRef.current[ds.name]) return; // stale
