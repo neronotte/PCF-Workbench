@@ -118,6 +118,28 @@ export interface DatasetBinding {
    *  Migration default for legacy bindings is ``[view]`` so the picker always
    *  has at least one entry. */
   views?: ViewDefinition[];
+
+  /** Per-property-set bindings: maker-style mapping from a manifest
+   *  ``<property-set>`` entry to the actual field on the dataset entity it
+   *  reads from. Only needed when:
+   *    - the property-set uses ``of-type-group`` (the maker MUST pick a
+   *      concrete type AND a backing field), OR
+   *    - the dataset records don't carry a key matching the property-set
+   *      name and need explicit re-mapping (e.g. real Dataverse data).
+   *
+   *  When absent for a property-set, the runtime falls back to the legacy
+   *  behaviour: read ``row[propertySetName]`` directly and pick the first
+   *  type from the type-group for ``ofType``. Authored in the Data panel's
+   *  binding card; surfaced from Properties via a deep-link.
+   */
+  columnBindings?: Record<string, {
+    /** Actual field name on the dataset row to read from. */
+    field: string;
+    /** Concrete type from the type-group (e.g. 'Currency', 'OptionSet').
+     *  Required for ``of-type-group`` property-sets; ignored when the
+     *  manifest already declares ``of-type``. */
+    ofType?: string;
+  }>;
 }
 
 /**

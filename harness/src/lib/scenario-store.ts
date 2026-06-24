@@ -683,12 +683,19 @@ export function applyScenarioToStore(scenario: TestScenario): void {
     if (scenario.network.customLatencyMs !== undefined) s.setCustomLatencyMs(scenario.network.customLatencyMs);
   }
 
-  if (scenario.device) {
-    if (scenario.device.preset !== undefined) s.setDevicePreset(scenario.device.preset);
-    if (scenario.device.containerWidth !== undefined) s.setContainerWidth(scenario.device.containerWidth);
-    if (scenario.device.containerHeight !== undefined) s.setContainerHeight(scenario.device.containerHeight);
-    if (scenario.device.host !== undefined) s.setHost(scenario.device.host);
-    if (scenario.device.isFullBleed !== undefined) s.setFullBleed(scenario.device.isFullBleed);
+  // Device — apply is always idempotent. Missing scenario.device or
+  // missing individual fields reset to harness defaults (desktop, fluid,
+  // Web host, not full-bleed). Without this, scenarios saved before device
+  // capture existed (or hand-edited JSON) would inherit whatever device
+  // state the previously-active scenario left behind, so switching A → B → A
+  // would not return A to the same visual state as a page refresh.
+  {
+    const d = scenario.device ?? {};
+    s.setDevicePreset(d.preset ?? 'desktop');
+    s.setContainerWidth(d.containerWidth ?? null);
+    s.setContainerHeight(d.containerHeight ?? null);
+    s.setHost(d.host ?? 'Web');
+    s.setFullBleed(d.isFullBleed ?? false);
   }
 
   if (scenario.userSettings) {

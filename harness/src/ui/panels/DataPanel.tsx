@@ -4,7 +4,7 @@ import {
   Radio, RadioGroup, Dropdown, Option, Spinner, Label, Input,
   TabList, Tab,
 } from '@fluentui/react-components';
-import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular, Add16Regular, Delete16Regular } from '@fluentui/react-icons';
+import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular, Add16Regular, Delete16Regular, ChevronDown16Regular, ChevronRight16Regular } from '@fluentui/react-icons';
 import { useHarnessStore, type DataSource, type PublicProfile } from '../../store/harness-store';
 import {
   loadEntityData, getEntityStoreKeys, getEntityData,
@@ -12,7 +12,7 @@ import {
 } from '../../store/data-store';
 import {
   getAllMetadata, setEntityMetadata, deleteEntityMetadata,
-  subscribeMetadata, getMetadataVersion,
+  subscribeMetadata, getMetadataVersion, getEntityMetadata, getEntityDisplayName,
   type EntityMetadata,
 } from '../../store/metadata-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
@@ -186,6 +186,15 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
   },
+  sectionBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '8px',
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
   pageCtxField: {
     display: 'flex',
     flexDirection: 'column',
@@ -269,49 +278,126 @@ const metadataSnapshotRef = (() => {
 
 function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
   const styles = useStyles();
+  const [open, setOpen] = useState(false);
   const dataSource = useHarnessStore(s => s.dataSource);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
   const pageEntityId = useHarnessStore(s => s.pageEntityId);
-  const pageEntityRecordName = useHarnessStore(s => s.pageEntityRecordName);
   const setPageEntityTypeName = useHarnessStore(s => s.setPageEntityTypeName);
   const setPageEntityId = useHarnessStore(s => s.setPageEntityId);
   const setPageEntityRecordName = useHarnessStore(s => s.setPageEntityRecordName);
   const livePageRecordError = useHarnessStore(s => s.livePageRecordError);
 
-  // In Mock mode the entity-type list comes from data.json; in Live mode
-  // it's free-text (any logical name resolvable via EntityDefinitions).
-  const showDropdown = dataSource === 'mock' && mockTableNames.length > 0;
+  // Tick on data-store mutations so the record picker repopulates when the
+  // user loads / edits data on the Mock data sub-panel without leaving the tab.
+  const dataVersion = useHarnessStore(s => s.dataVersion);
+  // Tick on metadata-store mutations so friendly entity / column names refresh
+  // when metadata.json is (re)loaded.
+  useSyncExternalStore(subscribeMetadata, getMetadataVersion);
+
   const isLive = dataSource === 'live';
+  const showDropdown = dataSource === 'mock' && mockTableNames.length > 0;
+
+  // Friendly entity label: "Display Name (logical_name)" when metadata is
+  // available; otherwise just the logical name. Keeps the dropdown scannable
+  // for makers who think in friendly names but preserves the logical name as
+  // the source-of-truth for control-side lookups.
+  const entityLabel = useCallback((logical: string) => {
+    const display = getEntityDisplayName(logical);
+    return display && display !== logical ? `${display} (${logical})` : logical;
+  }, []);
+
+  // Records for the currently-selected entity (Mock only). Each entry exposes
+  // a primary-id (GUID), an optional primary-name (from metadata's
+  // primaryNameAttribute, falling back to row.name/Name), and a display label
+  // combining the two for the dropdown. Empty array in Live mode (handled
+  // separately via the Live record fetch).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const recordCandidates = useCallback(() => {
+    if (!pageEntityTypeName || isLive) return [];
+    const meta = getEntityMetadata(pageEntityTypeName);
+    const rows = getEntityData(pageEntityTypeName);
+    // Best-effort PK column: metadata's PrimaryIdAttribute → "<entity>id" →
+    // first key ending in "id" → first key. Matches dataset shim's fallback
+    // chain so the picker IDs the same record the runtime will resolve.
+    const idGuesses = [
+      meta?.primaryIdAttribute,
+      `${pageEntityTypeName}id`,
+      'id',
+    ].filter(Boolean) as string[];
+    const nameGuesses = [
+      meta?.primaryNameAttribute,
+      'name', 'Name', 'fullname', 'msdyn_name',
+    ].filter(Boolean) as string[];
+    return rows.map((r, idx) => {
+      let id = '';
+      for (const k of idGuesses) { if (r[k] != null) { id = String(r[k]); break; } }
+      if (!id) {
+        const fallbackKey = Object.keys(r).find(k => k.toLowerCase().endsWith('id'));
+        id = fallbackKey ? String(r[fallbackKey]) : `(row ${idx + 1})`;
+      }
+      let name = '';
+      for (const k of nameGuesses) { if (r[k] != null) { name = String(r[k]); break; } }
+      return { id, name, label: name ? `${name} — ${id}` : id };
+    });
+  }, [pageEntityTypeName, isLive, dataVersion]);
+
+  const records = recordCandidates();
+
+  const onEntityChange = useCallback((logical: string) => {
+    setPageEntityTypeName(logical);
+    // Switching entity invalidates the previously-selected record. Auto-pick
+    // the first record (if any) so the panel never sits in a "type set but no
+    // record" state — most makers want SOME record selected immediately.
+    setPageEntityId('');
+    setPageEntityRecordName('');
+  }, [setPageEntityTypeName, setPageEntityId, setPageEntityRecordName]);
+
+  const onRecordChange = useCallback((id: string) => {
+    setPageEntityId(id);
+    // Derive entityRecordName from the picked record's primary-name column so
+    // contextInfo.entityRecordName always matches what the row actually says.
+    // Eliminates the legacy "Entity record name" text field (which let the
+    // two go out of sync).
+    const picked = records.find(r => r.id === id);
+    setPageEntityRecordName(picked?.name ?? '');
+  }, [records, setPageEntityId, setPageEntityRecordName]);
 
   return (
     <div className={styles.pageCtxBlock} data-test-id="page-context-block">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setOpen(o => !o)}
+        role="button"
+        aria-expanded={open}
+        data-test-id="page-context-toggle"
+      >
+        {open ? <ChevronDown16Regular /> : <ChevronRight16Regular />}
         <span
           className={styles.header}
-          title="Page context — set the entity type and record ID the control thinks it is hosted on"
+          title="Page context — set the entity and record the control thinks it is hosted on"
         >
           Page context
         </span>
-        <span className={styles.info} style={{ marginLeft: 'auto' }}>
-          context.page / context.mode.contextInfo
-        </span>
       </div>
-      <div className={styles.pageCtxField}>
+      {open && (
+        <>
+          <div className={styles.pageCtxField}>
         <div className={styles.pageCtxLabel}>
-          <span>Entity type name</span>
+          <span>Entity</span>
           <span className={styles.pageCtxHint}>page.entityTypeName</span>
         </div>
         {showDropdown ? (
           <Dropdown
             size="small"
-            placeholder="Select entity type"
+            placeholder="Select entity"
             selectedOptions={pageEntityTypeName ? [pageEntityTypeName] : []}
-            value={pageEntityTypeName}
-            onOptionSelect={(_, d) => setPageEntityTypeName(d.optionValue ?? '')}
+            value={pageEntityTypeName ? entityLabel(pageEntityTypeName) : ''}
+            onOptionSelect={(_, d) => onEntityChange(d.optionValue ?? '')}
+            data-test-id="page-context-entity-type"
           >
             <Option value="" text="">— None —</Option>
             {mockTableNames.map(t => (
-              <Option key={t} value={t} text={t}>{t}</Option>
+              <Option key={t} value={t} text={entityLabel(t)}>{entityLabel(t)}</Option>
             ))}
           </Dropdown>
         ) : (
@@ -319,48 +405,59 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
             size="small"
             placeholder={isLive ? 'e.g. contact' : 'e.g. msdyn_workorderservicetask'}
             value={pageEntityTypeName}
-            onChange={(_, d) => setPageEntityTypeName(d.value)}
+            onChange={(_, d) => onEntityChange(d.value)}
+            data-test-id="page-context-entity-type"
           />
         )}
       </div>
       <div className={styles.pageCtxField}>
         <div className={styles.pageCtxLabel}>
-          <span>Entity ID</span>
+          <span>Record</span>
           <span className={styles.pageCtxHint}>page.entityId</span>
         </div>
-        <Input
-          size="small"
-          placeholder="Record GUID"
-          value={pageEntityId}
-          onChange={(_, d) => setPageEntityId(d.value)}
-          data-test-id="page-context-entity-id"
-        />
+        {!isLive && records.length > 0 ? (
+          <>
+            <Dropdown
+              size="small"
+              placeholder="Select record"
+              selectedOptions={pageEntityId ? [pageEntityId] : []}
+              value={pageEntityId ? (records.find(r => r.id === pageEntityId)?.name || records.find(r => r.id === pageEntityId)?.id || pageEntityId) : ''}
+              onOptionSelect={(_, d) => onRecordChange(d.optionValue ?? '')}
+              data-test-id="page-context-entity-id"
+            >
+              <Option value="" text="">— None —</Option>
+              {records.map(r => (
+                <Option key={r.id} value={r.id} text={r.name || r.id}>{r.name || r.id}</Option>
+              ))}
+            </Dropdown>
+            {pageEntityId && (
+              <span className={styles.pageCtxHint} style={{ marginTop: 2, fontFamily: 'monospace' }}>
+                {pageEntityId}
+              </span>
+            )}
+          </>
+        ) : (
+          <Input
+            size="small"
+            placeholder={isLive ? 'Record GUID' : (pageEntityTypeName ? 'No records loaded for this entity' : 'Select an entity first')}
+            value={pageEntityId}
+            onChange={(_, d) => onRecordChange(d.value)}
+            disabled={!isLive && !pageEntityTypeName}
+            data-test-id="page-context-entity-id"
+          />
+        )}
         {isLive && livePageRecordError && pageEntityTypeName && pageEntityId && (
           <MessageBar intent="error" data-test-id="page-context-error" style={{ marginTop: 4 }}>
             <MessageBarBody>{livePageRecordError}</MessageBarBody>
           </MessageBar>
         )}
       </div>
-      <div className={styles.pageCtxField}>
-        <div className={styles.pageCtxLabel}>
-          <span>Entity record name</span>
-          <span className={styles.pageCtxHint}>
-            {isLive ? 'auto-derived from PrimaryNameAttribute' : 'contextInfo.entityRecordName'}
-          </span>
-        </div>
-        <Input
-          size="small"
-          placeholder={isLive ? 'Populates after successful fetch' : 'Record name'}
-          value={pageEntityRecordName}
-          onChange={(_, d) => setPageEntityRecordName(d.value)}
-          readOnly={isLive}
-          disabled={isLive}
-        />
-      </div>
       {isLive && pageEntityTypeName && pageEntityId && !livePageRecordError && (
         <div className={styles.info} style={{ marginTop: 4 }}>
           Auto-fetches from Dataverse on Reload.
         </div>
+      )}
+        </>
       )}
     </div>
   );
@@ -867,6 +964,20 @@ export function DataPanel() {
   const [editJson, setEditJson] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [mockOpen, setMockOpen] = useState(false);
+  const [bindingsOpen, setBindingsOpen] = useState(false);
+
+  // Cross-panel deep-link: when the form-chrome view-pill "Edit columns"
+  // button (or the Properties panel "Edit on Data tab" button) fires
+  // `pcfwb:focus-dataset-binding`, auto-expand the Dataset bindings section
+  // so the binding card the listener scrolls to is actually visible. The
+  // event also triggers the tab switch (HarnessShell) and the per-card
+  // scroll-into-view (DatasetBindingsBlock).
+  useEffect(() => {
+    const handler = () => setBindingsOpen(true);
+    window.addEventListener('pcfwb:focus-dataset-binding', handler);
+    return () => window.removeEventListener('pcfwb:focus-dataset-binding', handler);
+  }, []);
 
   // Subscribe to metadata-store mutations (live fetches, scenario apply,
   // user edits) via useSyncExternalStore. Snapshot is keyed by the version
@@ -921,10 +1032,17 @@ export function DataPanel() {
   const entityRows: EntityRow[] = (() => {
     const map = new Map<string, EntityRow>();
     for (const t of tables) {
+      // Without a schema, fall back to the union of keys across actual rows
+      // (stripping OData annotation suffixes) so the badge reflects what
+      // the data ACTUALLY has — "0 col" with non-empty rows was misleading.
+      const inferredCols = new Set<string>();
+      for (const r of t.records) for (const k of Object.keys(r)) {
+        if (!k.includes('@')) inferredCols.add(k);
+      }
       map.set(t.name, {
         name: t.name,
         recordCount: t.records.length,
-        columnCount: 0,
+        columnCount: inferredCols.size,
         hasData: true,
         hasSchema: false,
       });
@@ -1136,13 +1254,42 @@ export function DataPanel() {
         {dataSource === 'mock' && <PendingLiveCaptureBanner />}
       </div>
 
-      <PageContextBlock mockTableNames={tables.map(t => t.name)} />
+      {/* Visual order via flex `order` (parent styles.root is flex-column):
+          0 Data source · 1 Mock Data · 2 Page context · 3 Dataset bindings */}
 
-      <DatasetBindingsBlock />
+      <div className={styles.sectionBlock} style={{ order: 3 }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => setBindingsOpen(o => !o)}
+          role="button"
+          aria-expanded={bindingsOpen}
+          data-test-id="dataset-bindings-toggle"
+        >
+          {bindingsOpen ? <ChevronDown16Regular /> : <ChevronRight16Regular />}
+          <span
+            className={styles.header}
+            title="Dataset bindings — map manifest data-sets to mock entities, views, and property-set fields"
+          >
+            Dataset bindings
+          </span>
+        </div>
+        {bindingsOpen && <DatasetBindingsBlock />}
+      </div>
+
+      <div style={{ order: 2 }}>
+        <PageContextBlock mockTableNames={tables.map(t => t.name)} />
+      </div>
 
       {dataSource === 'mock' && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className={styles.sectionBlock} style={{ order: 1 }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}
+            onClick={() => setMockOpen(o => !o)}
+            role="button"
+            aria-expanded={mockOpen}
+            data-test-id="mock-data-toggle"
+          >
+            {mockOpen ? <ChevronDown16Regular /> : <ChevronRight16Regular />}
             <span
               className={styles.header}
               title="Mock data — edit records that flow into context.webAPI; save the scenario to persist changes"
@@ -1153,7 +1300,7 @@ export function DataPanel() {
               appearance="subtle"
               icon={<ArrowClockwise24Regular />}
               size="small"
-              onClick={() => { void resetToActiveScenario(); }}
+              onClick={(e) => { e.stopPropagation(); void resetToActiveScenario(); }}
               disabled={!activeScenarioName}
               title={activeScenarioName
                 ? `Reset to "${activeScenarioName}" — discard unsaved edits and reload the scenario's records`
@@ -1161,6 +1308,7 @@ export function DataPanel() {
             />
           </div>
 
+          {mockOpen && (<>
           <Checkbox
             checked={rebaseEnabled}
             onChange={(_, d) => setRebaseEnabled(!!d.checked)}
@@ -1214,11 +1362,22 @@ export function DataPanel() {
                   data-test-id={`entity-node-${row.name}`}
                   title={`${meta?.displayName ?? row.name}${meta?.primaryIdAttribute ? ` · pk: ${meta.primaryIdAttribute}` : ''}`}
                 >
-                  <span className={styles.tableName}>{row.name}</span>
-                  <div className={styles.rowChips}>
+                  <span className={styles.tableName}>
                     {!row.hasSchema && (
-                      <Badge appearance="tint" color="warning" size="small" title="No schema — primary key and columns are guessed; go to Schema tab to generate one">⚠ no schema</Badge>
+                      <span
+                        title="No schema — primary key and columns are guessed. Go to the Schema tab to generate one."
+                        style={{
+                          color: tokens.colorPaletteYellowForeground1,
+                          fontWeight: 700,
+                          marginRight: 4,
+                          cursor: 'help',
+                        }}
+                        data-test-id={`entity-no-schema-${row.name}`}
+                      >!</span>
                     )}
+                    {row.name}
+                  </span>
+                  <div className={styles.rowChips}>
                     {!row.hasData && (
                       <Badge appearance="tint" color="subtle" size="small" title="Schema exists but no records yet.">◌ no data</Badge>
                     )}
@@ -1230,7 +1389,7 @@ export function DataPanel() {
                       </Badge>
                     </span>
                     <span className={styles.rowCountSlot}>
-                      <Badge appearance="tint" color={isSelected ? 'subtle' : 'informative'} size="small" title={`${row.columnCount} schema columns`}>
+                      <Badge appearance="tint" color={isSelected ? 'subtle' : 'informative'} size="small" title={row.hasSchema ? `${row.columnCount} schema columns` : `${row.columnCount} columns (inferred from rows — no schema)`}>
                         {row.columnCount} col
                       </Badge>
                     </span>
@@ -1324,7 +1483,8 @@ export function DataPanel() {
               />
             </div>
           )}
-        </>
+          </>)}
+        </div>
       )}
     </div>
   );

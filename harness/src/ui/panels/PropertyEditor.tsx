@@ -915,6 +915,55 @@ export function PropertyEditor({ manifest }: Props) {
           ))}
         </>
       )}
+
+          {manifest.dataSets && manifest.dataSets.length > 0 && (
+            <>
+              <Divider style={{ margin: '8px 0' }} />
+              <Label
+                size="small"
+                weight="semibold"
+                style={{ opacity: 0.6 }}
+                title="Datasets — collections of records the control iterates over. Configured on the Data tab."
+              >
+                Datasets
+              </Label>
+              {manifest.dataSets.map(ds => (
+                <div
+                  key={ds.name}
+                  style={{
+                    display: 'flex', flexDirection: 'column', gap: 2,
+                    padding: '6px 8px',
+                    border: '1px dashed var(--colorNeutralStroke2)',
+                    borderRadius: 4,
+                    fontSize: 12,
+                  }}
+                  data-test-id={`property-editor-dataset-${ds.name}`}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontWeight: 600 }}>{ds.name}</span>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      onClick={() => {
+                        // Cross-tab deep-link: switch to Data tab + autoEdit the binding.
+                        // Mirrors the form-chrome edit affordance — single click drops
+                        // the user on the configured surface for this dataset.
+                        window.dispatchEvent(new CustomEvent('pcfwb:focus-dataset-binding', {
+                          detail: { datasetName: ds.name, autoEdit: true },
+                        }));
+                      }}
+                      data-test-id={`property-editor-dataset-edit-${ds.name}`}
+                    >
+                      Edit on Data tab
+                    </Button>
+                  </div>
+                  <span style={{ opacity: 0.6 }}>
+                    {ds.columns.length} property-set{ds.columns.length === 1 ? '' : 's'} · bind fields + pick concrete types on the Data tab.
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
     </div>
   );
 }

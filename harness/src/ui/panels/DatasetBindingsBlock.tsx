@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   makeStyles, mergeClasses, tokens, Button, Badge,
   Radio, RadioGroup, Dropdown, Option, Input, Label, Switch,
@@ -6,9 +6,11 @@ import {
 } from '@fluentui/react-components';
 import {
   Add16Regular, Delete16Regular, ReOrderDotsVertical16Regular,
-  Edit16Regular,
+  Edit16Regular, ChevronDown16Regular, ChevronRight16Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore } from '../../store/harness-store';
+import { getEntityData, getEntityStoreKeys, subscribeData } from '../../store/data-store';
+import { getEntityMetadata } from '../../store/metadata-store';
 import type { ManifestDataSet, ManifestProperty } from '../../types/manifest';
 import type {
   DatasetBinding, DatasetHostType, ViewDefinition, ViewColumn,
@@ -135,7 +137,126 @@ const useStyles = makeStyles({
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
   },
+  psBindings: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    padding: '8px',
+    border: `1px dashed ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusSmall,
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  psHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    cursor: 'pointer',
+    userSelect: 'none',
+  },
+  psRow: {
+    display: 'grid',
+    // 2-col grid: property-set name (with inferred type suffix) + bound-field
+    // picker. The third "type" column was dropped because it's purely derived
+    // — for hard-coded property-sets the manifest dictates the type, and for
+    // of-type-group property-sets the type follows the bound field's metadata.
+    // Letting the maker pick a type that doesn't match the field was a footgun.
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.4fr)',
+    alignItems: 'center',
+    gap: '6px',
+    '& > *': { minWidth: 0 },
+    '& .fui-Combobox, & .fui-Dropdown, & .fui-Input': { width: '100%', minWidth: 0 },
+  },
+  psName: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  psType: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+    fontWeight: tokens.fontWeightRegular,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
 });
+
+/**
+ * Friendly display label for PCF `of-type` strings. The manifest uses
+ * cryptic short names (FP, SingleLine.Text, DateAndTime.DateOnly…); the
+ * editor surfaces them with maker-readable names so the type picker is
+ * actually scannable. Underlying `ofType` strings are unchanged — this is
+ * a UI-only mapping.
+ */
+function friendlyOfType(t: string | undefined): string {
+  if (!t) return '';
+  const map: Record<string, string> = {
+    'FP': 'Float',
+    'Decimal': 'Decimal',
+    'Whole.None': 'Whole number',
+    'Currency': 'Currency',
+    'SingleLine.Text': 'Text',
+    'SingleLine.Email': 'Email',
+    'SingleLine.Phone': 'Phone',
+    'SingleLine.URL': 'URL',
+    'SingleLine.TextArea': 'Text area',
+    'SingleLine.Ticker': 'Ticker',
+    'Multiple': 'Multi-line text',
+    'OptionSet': 'Choice',
+    'MultiSelectOptionSet': 'Choices',
+    'TwoOptions': 'Yes/No',
+    'DateAndTime.DateOnly': 'Date',
+    'DateAndTime.DateAndTime': 'Date & time',
+    'Lookup.Simple': 'Lookup',
+    'Lookup.Customer': 'Customer lookup',
+    'Lookup.Owner': 'Owner lookup',
+    'Lookup.PartyList': 'Party list',
+    'Lookup.Regarding': 'Regarding lookup',
+    'Image': 'Image',
+    'File': 'File',
+    'Object': 'Object',
+  };
+  return map[t] ?? t;
+}
+
+/**
+ * Map a metadata column type (Dataverse-style, e.g. "String", "Money",
+ * "Picklist") to the PCF `of-type` string the runtime expects (e.g.
+ * "SingleLine.Text", "Currency", "OptionSet"). Used to infer the concrete
+ * type for `of-type-group` property-set bindings from the bound field's
+ * metadata so the maker doesn't have to (and can't) pick a mismatched type.
+ *
+ * Returns `undefined` when the metadata type is unknown — caller should fall
+ * back to the group's first declared type.
+ */
+function inferOfTypeFromMetadata(metaType: string | undefined): string | undefined {
+  if (!metaType) return undefined;
+  const map: Record<string, string> = {
+    'String':                'SingleLine.Text',
+    'Memo':                  'Multiple',
+    'Integer':               'Whole.None',
+    'BigInt':                'Whole.None',
+    'Double':                'FP',
+    'Decimal':               'Decimal',
+    'Money':                 'Currency',
+    'Picklist':              'OptionSet',
+    'State':                 'OptionSet',
+    'Status':                'OptionSet',
+    'MultiSelectPicklist':   'MultiSelectOptionSet',
+    'Boolean':               'TwoOptions',
+    'TwoOptions':            'TwoOptions',
+    'DateTime':              'DateAndTime.DateAndTime',
+    'DateOnly':              'DateAndTime.DateOnly',
+    'Lookup':                'Lookup.Simple',
+    'Customer':              'Lookup.Customer',
+    'Owner':                 'Lookup.Owner',
+    'Uniqueidentifier':      'SingleLine.Text',
+  };
+  return map[metaType];
+}
 
 /**
  * Friendly label for a manifest column: RESX-resolved displayNameKey when
@@ -355,6 +476,62 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
     });
   }, [ds.columns, updateView]);
 
+  // --- Property-set bindings (maker-style field re-map) -----------------------
+  // A property-set in the manifest is a slot the maker binds to a real column on
+  // the dataset entity. For `<property-set of-type-group="...">` the maker also
+  // picks a concrete type. The harness defaults: read `row[propertySetName]`
+  // and pick the first type from the group — fine for synthetic data shaped
+  // around the manifest, but real Dataverse rows have native column names that
+  // don't match the property-set name, and of-type-group columns have no way
+  // to pick a non-default type. This editor surfaces both.
+  const [psOpen, setPsOpen] = useState(false);
+  const dataVersion = useSyncExternalStore(subscribeData, () => useHarnessStore.getState().dataVersion);
+
+  // Effective entity name the runtime reads from when building this dataset.
+  // Mirrors the resolution chain in context-factory.buildDataSet:
+  //   Homegrid     → view.entityType (if pinned) → ds.name → page entity
+  //   Subgrid      → derived from lookupColumn / parent
+  //   Associated   → derived from relationship (P6+)
+  // Exposed read-only on the binding card as a "Data comes from" hint so the
+  // maker can see exactly where the field-candidates list is sourced and fix
+  // page context (the most common cause of empty lists) without guesswork.
+  const resolvedDataEntity = useMemo(() => {
+    const viewEntity = isResolvedView(effective.view) ? effective.view.entityType : '';
+    const tries = [viewEntity, ds.name, pageEntityTypeName].filter(Boolean) as string[];
+    for (const e of tries) if (getEntityData(e).length > 0) return e;
+    for (const k of getEntityStoreKeys()) if (getEntityData(k).length > 0) return k;
+    return viewEntity || ds.name || pageEntityTypeName || '';
+  }, [effective.view, ds.name, pageEntityTypeName, dataVersion]);
+
+  const fieldCandidates = useMemo(() => {
+    // Source: union of column names across all rows of the resolved entity.
+    // Strip OData annotation suffixes so the picker shows clean field names only.
+    const seen = new Set<string>();
+    if (resolvedDataEntity) {
+      for (const r of getEntityData(resolvedDataEntity)) {
+        for (const k of Object.keys(r)) {
+          if (k.includes('@')) continue; // skip OData annotations (@OData.Community...)
+          seen.add(k);
+        }
+      }
+    }
+    return Array.from(seen).sort();
+  }, [resolvedDataEntity, dataVersion]);
+
+  const setColumnBinding = useCallback((psName: string, next: { field?: string; ofType?: string } | null) => {
+    const current = { ...(effective.columnBindings ?? {}) };
+    if (!next || (!next.field && !next.ofType)) {
+      delete current[psName];
+    } else {
+      const prev = current[psName] ?? { field: '' };
+      current[psName] = {
+        field: next.field ?? prev.field ?? '',
+        ofType: next.ofType ?? prev.ofType,
+      };
+    }
+    update({ columnBindings: Object.keys(current).length > 0 ? current : undefined });
+  }, [effective.columnBindings, update]);
+
   return (
     <div className={styles.card} data-test-id={`dataset-binding-card-${ds.name}`}>
       <div className={styles.cardHeader}>
@@ -477,6 +654,111 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
           <span className={styles.hint}>P6 wires N:N intersect fetch. Field captured here for forward-compat.</span>
         </div>
       )}
+
+      {/* Property-set bindings — collapsible. Hidden when the dataset has no
+          property-sets; common for fully-synthetic datasets but still rendered
+          as a no-op header for discoverability. */}
+      <div className={styles.row}>
+        <div
+          className={styles.psHeader}
+          onClick={() => setPsOpen(o => !o)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPsOpen(o => !o); } }}
+          data-test-id={`dataset-binding-ps-toggle-${ds.name}`}
+        >
+          {psOpen ? <ChevronDown16Regular /> : <ChevronRight16Regular />}
+          <Label size="small" style={{ cursor: 'pointer' }}>
+            Property-set bindings
+          </Label>
+          <Badge appearance="tint" size="small" color={effective.columnBindings && Object.keys(effective.columnBindings).length > 0 ? 'brand' : 'informative'}>
+            {Object.keys(effective.columnBindings ?? {}).length} / {ds.columns.length}
+          </Badge>
+        </div>
+        {psOpen && (
+          <div className={styles.psBindings} data-test-id={`dataset-binding-ps-editor-${ds.name}`}>
+            <span className={styles.hint}>
+              Pick which row field each property-set reads from. Leave as <code>&lt;not set&gt;</code> to read the property-set's own name as the field. For <code>of-type-group</code> entries (e.g. ConfigColumn1/2) the concrete type is inferred from the bound field's metadata.
+              <br />
+              Data comes from: <code>{resolvedDataEntity || '(none)'}</code>
+              {fieldCandidates.length === 0 && (
+                <> — <strong>no records loaded</strong>. Set the page-context entity on the Data tab to the entity this {effective.host} is on, and load some data for it.</>
+              )}
+              {fieldCandidates.length > 0 && (
+                <> ({fieldCandidates.length} field{fieldCandidates.length === 1 ? '' : 's'} available).</>
+              )}
+            </span>
+            <div className={styles.psRow}>
+              <span className={mergeClasses(styles.columnHeader)}>Property-set</span>
+              <span className={mergeClasses(styles.columnHeader)}>Bound field</span>
+            </div>
+            {ds.columns.map(col => {
+              const cb = effective.columnBindings?.[col.name];
+              const isTypeGroup = !!col.ofTypeGroup && (typeGroups[col.ofTypeGroup]?.length ?? 0) > 0;
+              const groupTypes = isTypeGroup ? typeGroups[col.ofTypeGroup!] : [];
+              // For of-type-group: effective type follows the bound field's
+              // metadata (when known + in the group), otherwise whatever was
+              // previously persisted, otherwise the group's first type.
+              // For hard-coded property-sets the manifest dictates the type.
+              const boundField = cb?.field;
+              const fieldMetaType = boundField
+                ? getEntityMetadata(resolvedDataEntity)?.columns?.[boundField]?.type
+                : undefined;
+              const inferred = isTypeGroup ? inferOfTypeFromMetadata(fieldMetaType) : undefined;
+              const inferredInGroup = inferred && groupTypes.includes(inferred) ? inferred : undefined;
+              const typeLabel = isTypeGroup
+                ? (inferredInGroup
+                    ? `${friendlyOfType(inferredInGroup)} (inferred from ${boundField})`
+                    : `group: ${col.ofTypeGroup} — pick a field to infer type`)
+                : friendlyOfType(col.ofType);
+              return (
+                <div key={col.name} className={styles.psRow} data-test-id={`dataset-binding-ps-row-${ds.name}-${col.name}`}>
+                  <span className={styles.psName} title={`${col.name}${typeLabel ? ` · ${typeLabel}` : ''}`}>
+                    {manifestColumnLabel(col, lcid)}
+                  </span>
+                  <Dropdown
+                    size="small"
+                    value={cb?.field ?? ''}
+                    selectedOptions={cb?.field ? [cb.field] : []}
+                    placeholder="<not set>"
+                    disabled={fieldCandidates.length === 0}
+                    onOptionSelect={(_, d) => {
+                      // Sentinel `__default__` clears the binding so the runtime
+                      // falls back to row[propertySetName]. Anything else pins
+                      // the row field this property-set reads from.
+                      if (d.optionValue === '__default__') {
+                        setColumnBinding(col.name, { field: '' });
+                        return;
+                      }
+                      const nextField = d.optionValue ?? '';
+                      // For of-type-group property-sets, infer the concrete
+                      // type from the newly-bound field's metadata so the
+                      // runtime gets a valid type without the maker having to
+                      // pick (or being able to pick a mismatched one).
+                      if (isTypeGroup && nextField) {
+                        const metaType = getEntityMetadata(resolvedDataEntity)?.columns?.[nextField]?.type;
+                        const next = inferOfTypeFromMetadata(metaType);
+                        const validNext = next && groupTypes.includes(next) ? next : groupTypes[0];
+                        setColumnBinding(col.name, { field: nextField, ofType: validNext });
+                      } else {
+                        setColumnBinding(col.name, { field: nextField });
+                      }
+                    }}
+                    data-test-id={`dataset-binding-ps-field-${ds.name}-${col.name}`}
+                  >
+                    <Option value="__default__" text="<not set>">
+                      <em>&lt;not set&gt;</em>
+                    </Option>
+                    {fieldCandidates.map(f => (
+                      <Option key={f} value={f}>{f}</Option>
+                    ))}
+                  </Dropdown>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div className={styles.row}>
         <div className={styles.inlineRow}>
@@ -814,9 +1096,6 @@ export function DatasetBindingsBlock() {
   if (datasets.length === 0) return null;
   return (
     <div className={styles.block} ref={rootRef} data-test-id="dataset-bindings-block">
-      <span className={styles.header} title="Per-dataset host + view configuration (mirrors how a maker configures the control on a form)">
-        Datasets
-      </span>
       {datasets.map(ds => <DatasetBindingCard key={ds.name} ds={ds} />)}
     </div>
   );

@@ -171,13 +171,14 @@ function buildProperty(prop: ManifestProperty, rawValue: any, boundColumn?: stri
  * NOT in the view are dropped — this mirrors UCI, where a view's column list
  * is authoritative over the manifest's property-set superset.
  */
-function buildDatasetColumns(
+export function buildDatasetColumns(
   ds: ManifestDataSet,
   resolvedEntity: string,
   getEntityData: (entityType: string) => Record<string, any>[],
   typeGroups: Record<string, string[]>,
   getLcid: () => number,
   view?: ViewDefinition,
+  columnBindings?: Record<string, { field: string; ofType?: string }>,
 ) {
   if (ds.columns && ds.columns.length > 0) {
     const manifestByName = new Map(ds.columns.map(c => [c.name, c] as const));
@@ -192,10 +193,16 @@ function buildDatasetColumns(
     viewColumns.forEach((vc, idx) => {
       const col = manifestByName.get(vc.name);
       if (!col) return; // view referenced a column not in the manifest — skip
-      // Resolve `of-type-group` to the first declared type.
+      // Resolve `of-type-group` to the bound type (when the maker pinned one
+      // via columnBindings) or fall back to the first declared type in the
+      // group. The maker-pinned type matches what real UCI surfaces; the
+      // fallback preserves pre-bindings behaviour for unconfigured columns.
       let ofType = col.ofType;
       if (col.ofTypeGroup && typeGroups[col.ofTypeGroup]?.length) {
-        ofType = typeGroups[col.ofTypeGroup][0];
+        const bound = columnBindings?.[col.name]?.ofType;
+        ofType = bound && typeGroups[col.ofTypeGroup].includes(bound)
+          ? bound
+          : typeGroups[col.ofTypeGroup][0];
       }
       // Display name precedence: view override > RESX-resolved manifest key > column name.
       let displayName = vc.displayName;
@@ -210,7 +217,11 @@ function buildDatasetColumns(
         name: col.name,
         displayName,
         dataType: mapOfTypeToDataType(ofType),
-        alias: col.name,
+        // Alias points at the actual row field — when columnBindings re-maps
+        // a property-set to a different column (e.g. ConfigColumn1 → estimateunitamount),
+        // the alias is what controls inspect to figure out the underlying
+        // logical name. Mirrors UCI's column.alias semantics.
+        alias: columnBindings?.[col.name]?.field ?? col.name,
         order: idx,
         visualSizeFactor,
         isHidden: false,
@@ -433,11 +444,18 @@ function buildDataSet(
       records[id] = {
         getRecordId: () => id,
         getValue: (field: string) => {
-          let val = row[field];
-          let actualKey = field;
+          // P5: honour columnBindings — when the maker re-mapped a property-set
+          // name to a different row field (e.g. ConfigColumn1 → estimateunitamount),
+          // resolve to that field. The control still calls getValue('ConfigColumn1');
+          // the alias re-mapping is invisible to it. Matches UCI behaviour where
+          // record.getValue(<property-set-name>) returns the bound field's value.
+          const bound = binding?.columnBindings?.[field]?.field;
+          const lookupField = bound ?? field;
+          let val = row[lookupField];
+          let actualKey = lookupField;
           // Fallback: if field not found, try OData lookup format (_field_value, _field)
           if (val === undefined) {
-            for (const candidate of [`_${field}_value`, `_${field}id`, `_${field}`]) {
+            for (const candidate of [`_${lookupField}_value`, `_${lookupField}id`, `_${lookupField}`]) {
               if (row[candidate] !== undefined) { val = row[candidate]; actualKey = candidate; break; }
             }
           }
@@ -445,20 +463,22 @@ function buildDataSet(
           // If the raw value looks like a GUID, return as a lookup object
           // Check for annotation on both the original field and the resolved key
           if (typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
-            const annotation = row[`${field}@OData.Community.Display.V1.FormattedValue`]
+            const annotation = row[`${lookupField}@OData.Community.Display.V1.FormattedValue`]
               ?? row[`${actualKey}@OData.Community.Display.V1.FormattedValue`];
-            return { id: { guid: val }, name: annotation != null ? String(annotation) : '', entityType: field };
+            return { id: { guid: val }, name: annotation != null ? String(annotation) : '', entityType: lookupField };
           }
           return val;
         },
         getFormattedValue: (field: string) => {
+          const bound = binding?.columnBindings?.[field]?.field;
+          const lookupField = bound ?? field;
           // Check for OData formatted value annotation — try direct field and OData fallback keys
-          const annotation = row[`${field}@OData.Community.Display.V1.FormattedValue`]
-            ?? row[`_${field}_value@OData.Community.Display.V1.FormattedValue`]
-            ?? row[`_${field}@OData.Community.Display.V1.FormattedValue`];
+          const annotation = row[`${lookupField}@OData.Community.Display.V1.FormattedValue`]
+            ?? row[`_${lookupField}_value@OData.Community.Display.V1.FormattedValue`]
+            ?? row[`_${lookupField}@OData.Community.Display.V1.FormattedValue`];
           if (annotation != null) return String(annotation);
           // Fallback: try direct field, then OData lookup format
-          const val = row[field] ?? row[`_${field}_value`] ?? row[`_${field}`];
+          const val = row[lookupField] ?? row[`_${lookupField}_value`] ?? row[`_${lookupField}`];
           return val != null ? String(val) : '';
         },
         getNamedReference: () => ({ id: { guid: id }, name: '', etn: ds.name }),
@@ -534,7 +554,7 @@ function buildDataSet(
     },
     records,
     sortedRecordIds: sortedIds,
-    columns: buildDatasetColumns(ds, resolvedEntity, getEntityData, typeGroups, () => getState().userLanguageId, resolvedView),
+    columns: buildDatasetColumns(ds, resolvedEntity, getEntityData, typeGroups, () => getState().userLanguageId, resolvedView, binding?.columnBindings),
     refresh: () => {
       // Capture any control-side mutations to sorting back into store, then trigger updateView.
       getState().setDatasetSorting(ds.name, liveSorting.map(s => ({ name: s.name, sortDirection: s.sortDirection })));

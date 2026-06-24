@@ -1,5 +1,8 @@
 import type { HarnessStore } from '../store/harness-store';
 import { addEntityRecord, updateEntityRecord, deleteEntityRecord } from '../store/data-store';
+import { getEntityMetadata } from '../store/metadata-store';
+import { getEntityStoreKeys } from '../store/data-store';
+import { pushDialog } from './dialog-bus';
 import { getExecuteMock } from '../store/execute-mock-store';
 import { liveRetrieveMultiple, liveRetrieveSingle, liveCreateRecord, liveUpdateRecord, liveDeleteRecord, DvProxyError } from '../api/dv-client';
 import { confirmLiveWrite } from '../lib/live-write-gate';
@@ -179,6 +182,113 @@ export function parseFilter(filter: string | undefined): (entity: Record<string,
 }
 
 /** Exported for unit testing (M11.M4). Pure. */
+/**
+ * Real-Dataverse-style validation against the metadata store. When metadata
+ * for the queried entity is present, we strictly check the entity logical
+ * name and every field referenced in $select / $orderby / $filter — exactly
+ * what the Dataverse Web API does, which surfaces controls that ship with
+ * subtly wrong table/column names (mixed case, typos, custom-schema-name
+ * confusion) instead of silently returning empty rows.
+ *
+ * Throws a `DataverseValidationError` and pushes an error dialog when
+ * invalid. No-op (returns) when no metadata is loaded for the entity —
+ * keeps existing controls without schema working as best-effort.
+ */
+class DataverseValidationError extends Error {
+  readonly errorCode: number;
+  readonly status: number;
+  readonly raw: { error: { code: string; message: string } };
+  constructor(message: string, errorCode = -2147217149) {
+    super(message);
+    this.name = 'DataverseValidationError';
+    this.errorCode = errorCode;
+    this.status = 400;
+    this.raw = { error: { code: '0x8004531c', message } };
+  }
+}
+
+function extractFilterFields(filter: string): string[] {
+  const out = new Set<string>();
+  const opRe = /\b([A-Za-z_][A-Za-z0-9_]*)\s+(eq|ne|gt|ge|lt|le)\s/g;
+  let m: RegExpExecArray | null;
+  while ((m = opRe.exec(filter))) out.add(m[1]);
+  const fnRe = /\b(?:contains|startswith|endswith)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,/g;
+  while ((m = fnRe.exec(filter))) out.add(m[1]);
+  return Array.from(out);
+}
+
+function suggestEntity(requested: string, candidates: string[]): string | null {
+  const lc = requested.toLowerCase();
+  const hit = candidates.find(c => c.toLowerCase() === lc);
+  return hit ?? null;
+}
+
+function suggestField(requested: string, candidates: string[]): string | null {
+  const lc = requested.toLowerCase();
+  const hit = candidates.find(c => c.toLowerCase() === lc);
+  return hit ?? null;
+}
+
+function reportValidationError(method: string, entityType: string, message: string, details: string): never {
+  // Console — every PCF developer is in DevTools.
+  // eslint-disable-next-line no-console
+  console.error(`[pcf-workbench] ${method}(${entityType}) validation failed: ${message}\n${details}`);
+  // Dialog — every PCF tester is on the harness page.
+  pushDialog<import('./dialog-bus').ErrorDialogRequest>({
+    kind: 'error',
+    options: {
+      message: `WebAPI validation: ${message}`,
+      details,
+      errorCode: -2147217149,
+    },
+    resolve: () => undefined,
+  });
+  throw new DataverseValidationError(`${message}. ${details}`);
+}
+
+function validateEntityAndFields(
+  method: string,
+  entityType: string,
+  opts: { select?: string[] | null; orderbyField?: string; filter?: string },
+): void {
+  const meta = getEntityMetadata(entityType);
+  if (!meta) {
+    // No schema — try to detect case-only mismatch against the data store so
+    // makers see "did you mean" instead of an empty result for the common
+    // PascalCase-vs-lowercase footgun.
+    const dataKeys = getEntityStoreKeys();
+    if (!dataKeys.includes(entityType)) {
+      const near = suggestEntity(entityType, dataKeys);
+      if (near) {
+        reportValidationError(
+          method,
+          entityType,
+          `Entity "${entityType}" not found`,
+          `Did you mean "${near}"? Entity logical names in Dataverse are case-sensitive.`,
+        );
+      }
+    }
+    return; // best-effort, no schema to validate against
+  }
+  const knownColumns = Object.keys(meta.columns ?? {});
+  const checkField = (kind: string, name: string) => {
+    if (!knownColumns.includes(name)) {
+      const near = suggestField(name, knownColumns);
+      reportValidationError(
+        method,
+        entityType,
+        `${kind} field "${name}" does not exist on entity "${entityType}"`,
+        near
+          ? `Did you mean "${near}"? (case-sensitive). Known fields: ${knownColumns.slice(0, 8).join(', ')}${knownColumns.length > 8 ? '…' : ''}`
+          : `Known fields: ${knownColumns.slice(0, 8).join(', ')}${knownColumns.length > 8 ? '…' : ''}`,
+      );
+    }
+  };
+  if (opts.select) for (const f of opts.select) checkField('$select', f);
+  if (opts.orderbyField) checkField('$orderby', opts.orderbyField);
+  if (opts.filter) for (const f of extractFilterFields(opts.filter)) checkField('$filter', f);
+}
+
 export function parseSelect(select: string | undefined): string[] | null {
   if (!select) return null;
   return select.split(',').map(s => s.trim());
@@ -465,6 +575,18 @@ export function createWebApiShim(
           const top = params.get('$top');
           const orderby = params.get('$orderby');
 
+          // Metadata-driven validation. Throws (and shows an error dialog)
+          // when the entity logical name or any referenced field doesn't
+          // exist — mirroring real Dataverse behaviour so controls don't
+          // silently get empty results from a mis-cased query.
+          const selectFields = parseSelect(select);
+          const orderbyField = orderby ? orderby.split(' ')[0] : undefined;
+          validateEntityAndFields(`${prefix}retrieveMultipleRecords`, entityType, {
+            select: selectFields,
+            orderbyField,
+            filter,
+          });
+
           const predicate = parseFilter(filter);
           entities = entities.filter(predicate);
 
@@ -481,8 +603,7 @@ export function createWebApiShim(
 
           if (top) entities = entities.slice(0, parseInt(top, 10));
 
-          const columns = parseSelect(select);
-          if (columns) entities = entities.map(e => applySelect(e, columns));
+          if (selectFields) entities = entities.map(e => applySelect(e, selectFields));
         }
 
         if (maxPageSize && entities.length > maxPageSize) {
