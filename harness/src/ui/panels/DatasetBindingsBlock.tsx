@@ -306,6 +306,7 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
   const typeGroups = useHarnessStore(s => s.manifest?.typeGroups ?? {});
   const pageEntityId = useHarnessStore(s => s.pageEntityId);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
+  const dataSource = useHarnessStore(s => s.dataSource);
   const binding = useHarnessStore(s => s.datasetBindings[ds.name]);
   const setDatasetBinding = useHarnessStore(s => s.setDatasetBinding);
 
@@ -762,49 +763,58 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
         )}
       </div>
 
-      <div className={styles.row}>
-        <div className={styles.inlineRow}>
-          <Label size="small" style={{ flex: 1 }}>View</Label>
-          <Tooltip content="Add a new view (clones the active one)" relationship="label">
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<Add16Regular />}
-              onClick={addView}
-              data-test-id={`dataset-binding-add-view-${ds.name}`}
-            >
-              Add view
-            </Button>
-          </Tooltip>
-          <Tooltip content={editingColumns ? 'Done editing columns' : 'Edit columns'} relationship="label">
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<Edit16Regular />}
-              onClick={() => setEditingColumns(v => !v)}
-              data-test-id={`dataset-binding-toggle-edit-${ds.name}`}
-            />
-          </Tooltip>
+      {dataSource !== 'live' && (
+        <div className={styles.row}>
+          <div className={styles.inlineRow}>
+            <Label size="small" style={{ flex: 1 }}>View</Label>
+            <Tooltip content="Add a new view (clones the active one)" relationship="label">
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={<Add16Regular />}
+                onClick={addView}
+                data-test-id={`dataset-binding-add-view-${ds.name}`}
+              >
+                Add view
+              </Button>
+            </Tooltip>
+            <Tooltip content={editingColumns ? 'Done editing columns' : 'Edit columns'} relationship="label">
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={<Edit16Regular />}
+                onClick={() => setEditingColumns(v => !v)}
+                data-test-id={`dataset-binding-toggle-edit-${ds.name}`}
+              />
+            </Tooltip>
+          </div>
+          <Dropdown
+            value={resolvedView.displayName}
+            selectedOptions={[resolvedView.viewId]}
+            onOptionSelect={(_, d) => { if (d.optionValue) selectView(d.optionValue); }}
+            data-test-id={`dataset-binding-view-${ds.name}`}
+          >
+            {viewLibrary.map(v => (
+              <Option key={v.viewId} value={v.viewId}>{v.displayName}</Option>
+            ))}
+          </Dropdown>
+          <span className={styles.hint}>
+            {resolvedView.columns.length} of {ds.columns.length} columns visible
+            {viewLibrary.length > 1 ? ` • ${viewLibrary.length} views in library` : ''}.
+          </span>
         </div>
-        <Dropdown
-          value={resolvedView.displayName}
-          selectedOptions={[resolvedView.viewId]}
-          onOptionSelect={(_, d) => { if (d.optionValue) selectView(d.optionValue); }}
-          data-test-id={`dataset-binding-view-${ds.name}`}
-        >
-          {viewLibrary.map(v => (
-            <Option key={v.viewId} value={v.viewId}>{v.displayName}</Option>
-          ))}
-        </Dropdown>
-        <span className={styles.hint}>
-          {resolvedView.columns.length} of {ds.columns.length} columns visible
-          {viewLibrary.length > 1 ? ` • ${viewLibrary.length} views in library` : ''}.
-        </span>
-      </div>
+      )}
 
       <LiveViewsRow
         dsName={ds.name}
-        entityType={resolvedView.entityType}
+        defaultEntityType={
+          // Prefer the page context entity over the view's own entityType:
+          // synthesised default views carry ds.name (the manifest dataset
+          // name like "ProductView") which isn't a real Dataverse entity
+          // and produces zero org-view matches. The page entity is what
+          // makers actually want views for in subgrid + homegrid hosts.
+          pageEntityTypeName || resolvedView.entityType || ds.name
+        }
         viewLibrary={viewLibrary}
         onAdoptView={(view) => {
           // Merge into the binding's view library and activate. The library
@@ -995,12 +1005,16 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
  */
 interface LiveViewsRowProps {
   dsName: string;
-  entityType: string;
+  /** Best-guess entity to seed the editable input with. The maker can edit it
+   *  before fetching — synthesised default views often carry the manifest
+   *  dataset name (not a real entity) and produce zero matches, so we let the
+   *  user correct it inline rather than forcing a binding edit. */
+  defaultEntityType: string;
   viewLibrary: ViewDefinition[];
   onAdoptView: (view: ViewDefinition) => void;
 }
 
-function LiveViewsRow({ dsName, entityType, viewLibrary, onAdoptView }: LiveViewsRowProps) {
+function LiveViewsRow({ dsName, defaultEntityType, viewLibrary, onAdoptView }: LiveViewsRowProps) {
   const dataSource = useHarnessStore(s => s.dataSource);
   const liveProfile = useHarnessStore(s => s.liveProfile);
   const styles = useStyles();
@@ -1008,6 +1022,14 @@ function LiveViewsRow({ dsName, entityType, viewLibrary, onAdoptView }: LiveView
   const [error, setError] = useState<string | null>(null);
   const [fetched, setFetched] = useState<ViewDefinition[] | null>(null);
   const [expanded, setExpanded] = useState(false);
+
+  // Editable entityType. Seeded from defaultEntityType, kept in sync only
+  // when the *default* changes (page entity flips) — otherwise the maker's
+  // manual override sticks across re-renders.
+  const [entityType, setEntityType] = useState(defaultEntityType);
+  useEffect(() => {
+    setEntityType(defaultEntityType);
+  }, [defaultEntityType]);
 
   // Reset cached fetched-views when the entity or org changes — the previous
   // list is no longer relevant.
@@ -1050,18 +1072,6 @@ function LiveViewsRow({ dsName, entityType, viewLibrary, onAdoptView }: LiveView
     );
   }
 
-  if (!entityType) {
-    return (
-      <div className={styles.row}>
-        <Label size="small">
-          <Globe16Regular style={{ verticalAlign: 'middle', marginRight: 4 }} />
-          Org views
-        </Label>
-        <span className={styles.hint}>Resolve the view's entityType first to load org views.</span>
-      </div>
-    );
-  }
-
   const libraryIds = new Set(viewLibrary.map(v => v.viewId));
   const sysViews = (fetched ?? []).filter(v => v.viewType === 'system');
   const usrViews = (fetched ?? []).filter(v => v.viewType === 'personal');
@@ -1071,8 +1081,7 @@ function LiveViewsRow({ dsName, entityType, viewLibrary, onAdoptView }: LiveView
       <div className={styles.inlineRow}>
         <Label size="small" style={{ flex: 1 }}>
           <Globe16Regular style={{ verticalAlign: 'middle', marginRight: 4 }} />
-          Org views ({entityType})
-          {fetched && ` — ${fetched.length}`}
+          Org views{fetched && ` — ${fetched.length}`}
         </Label>
         {fetched && (
           <Tooltip content="Refresh from org" relationship="label">
@@ -1086,18 +1095,6 @@ function LiveViewsRow({ dsName, entityType, viewLibrary, onAdoptView }: LiveView
             />
           </Tooltip>
         )}
-        {!fetched && (
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={loading ? <Spinner size="tiny" /> : <Globe16Regular />}
-            disabled={loading}
-            onClick={() => { void fetchViews(false); }}
-            data-test-id={`dataset-binding-load-views-${dsName}`}
-          >
-            {loading ? 'Loading…' : 'Load org views'}
-          </Button>
-        )}
         {fetched && (
           <Button
             appearance="subtle"
@@ -1107,6 +1104,26 @@ function LiveViewsRow({ dsName, entityType, viewLibrary, onAdoptView }: LiveView
             data-test-id={`dataset-binding-toggle-views-${dsName}`}
           />
         )}
+      </div>
+      <div className={styles.inlineRow} style={{ gap: 6 }}>
+        <Input
+          size="small"
+          value={entityType}
+          onChange={(_, d) => setEntityType(d.value)}
+          placeholder="entity logical name (e.g. msdyn_workorderproduct)"
+          style={{ flex: 1 }}
+          data-test-id={`dataset-binding-live-views-entity-${dsName}`}
+        />
+        <Button
+          appearance="primary"
+          size="small"
+          icon={loading ? <Spinner size="tiny" /> : <Globe16Regular />}
+          disabled={loading || !entityType}
+          onClick={() => { void fetchViews(false); }}
+          data-test-id={`dataset-binding-load-views-${dsName}`}
+        >
+          {fetched ? 'Reload' : 'Load views'}
+        </Button>
       </div>
       {error && (
         <div
