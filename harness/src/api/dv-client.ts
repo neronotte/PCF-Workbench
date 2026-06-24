@@ -12,6 +12,8 @@
 
 import { useHarnessStore, type PublicProfile } from '../store/harness-store';
 import { loadMetadata, getEntityMetadata } from '../store/metadata-store';
+import { fetchXmlToViewFragment } from '../lib/fetchxml-parser';
+import type { ViewDefinition } from '../types/dataset-binding';
 
 const PROXY_BASE = '/__pcf/dv';
 
@@ -473,6 +475,183 @@ export function getLiveLoadedEntities(): string[] {
 export function __clearLiveAttributeMetadataCache(): void {
   attrMetaInflight.clear();
   attrMetaLoaded.clear();
+}
+
+/* -------------------------------------------------------------------------- */
+/* P5.1 — live savedquery / userquery view fetcher                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Raw savedquery / userquery records used by the mappers. Only the fields
+ * we actually consume — keeps the test fixtures sane.
+ */
+export interface RawSavedQuery {
+  savedqueryid: string;
+  name?: string;
+  fetchxml?: string;
+  layoutxml?: string;
+  isdefault?: boolean;
+  returnedtypecode?: string;
+}
+
+export interface RawUserQuery {
+  userqueryid: string;
+  name?: string;
+  fetchxml?: string;
+  layoutxml?: string;
+  returnedtypecode?: string;
+}
+
+/**
+ * Pure: map a savedquery (system view) record to a `ViewDefinition`.
+ * Falls back to ``fallbackEntity`` when the fetchxml is missing/malformed so
+ * the picker still shows the view (with whatever columns the layoutxml ends
+ * up giving us at render time).
+ */
+export function mapSavedQueryToView(
+  record: RawSavedQuery,
+  fallbackEntity: string,
+): ViewDefinition {
+  const fragment = fetchXmlToViewFragment(record.fetchxml ?? null);
+  return {
+    viewId: `savedquery:${record.savedqueryid}`,
+    displayName: record.name?.trim() || 'Untitled system view',
+    entityType: fragment.entityType || record.returnedtypecode || fallbackEntity,
+    viewType: 'system',
+    columns: fragment.columns,
+    ...(record.fetchxml ? { fetchXml: record.fetchxml } : {}),
+  };
+}
+
+/**
+ * Pure: map a userquery (personal view) record to a `ViewDefinition`.
+ * Same fallback chain as `mapSavedQueryToView`.
+ */
+export function mapUserQueryToView(
+  record: RawUserQuery,
+  fallbackEntity: string,
+): ViewDefinition {
+  const fragment = fetchXmlToViewFragment(record.fetchxml ?? null);
+  return {
+    viewId: `userquery:${record.userqueryid}`,
+    displayName: record.name?.trim() || 'Untitled personal view',
+    entityType: fragment.entityType || record.returnedtypecode || fallbackEntity,
+    viewType: 'personal',
+    columns: fragment.columns,
+    ...(record.fetchxml ? { fetchXml: record.fetchxml } : {}),
+  };
+}
+
+/**
+ * Pure: sort + dedupe a merged list of system + personal views.
+ *  - System views first, then personal — matches UCI's view picker order.
+ *  - Within each group, the default system view (isDefault) floats to the
+ *    top; otherwise A→Z by displayName (case-insensitive).
+ *  - Dedupe by viewId (later entry wins) so a re-fetch overlaying cached
+ *    entries doesn't double-render.
+ */
+export function sortAndDedupeViews(
+  views: ViewDefinition[],
+  defaultSystemViewId?: string,
+): ViewDefinition[] {
+  const byId = new Map<string, ViewDefinition>();
+  for (const v of views) byId.set(v.viewId, v);
+  const merged = Array.from(byId.values());
+
+  return merged.sort((a, b) => {
+    // System before personal
+    if (a.viewType !== b.viewType) {
+      return a.viewType === 'system' ? -1 : 1;
+    }
+    // Default system view first
+    if (defaultSystemViewId) {
+      if (a.viewId === defaultSystemViewId) return -1;
+      if (b.viewId === defaultSystemViewId) return 1;
+    }
+    // Alphabetical within group
+    return a.displayName.toLowerCase().localeCompare(b.displayName.toLowerCase());
+  });
+}
+
+/**
+ * In-process cache keyed by `${orgUrl}||${entityType}`. Lives on the module
+ * so a single Data-panel mount + remount doesn't re-hit Web API for the same
+ * pair. Cleared explicitly via `__clearLiveViewsCache` (test seam + a future
+ * "Refresh views" button).
+ */
+const viewsCache = new Map<string, ViewDefinition[]>();
+const viewsInflight = new Map<string, Promise<ViewDefinition[]>>();
+
+function viewsCacheKey(orgUrl: string, entityType: string): string {
+  return `${orgUrl}||${entityType.toLowerCase()}`;
+}
+
+/**
+ * Fetch every system + personal view for an entity from the live org, parse
+ * each one's fetchxml into a `ViewDefinition`, dedupe + sort, and cache the
+ * result. Subsequent calls for the same (orgUrl, entity) pair return the
+ * cached array without hitting the network.
+ *
+ * Concurrent calls share an in-flight promise — refresh-spamming the picker
+ * UI won't issue parallel duplicate requests.
+ *
+ * Errors on either savedquery OR userquery do NOT fail the whole call; the
+ * caller still gets whichever list resolved. Returns [] only when both
+ * requests fail.
+ */
+export async function liveListViews(
+  orgUrl: string,
+  entityType: string,
+): Promise<ViewDefinition[]> {
+  const key = viewsCacheKey(orgUrl, entityType);
+  const cached = viewsCache.get(key);
+  if (cached) return cached;
+  const inflight = viewsInflight.get(key);
+  if (inflight) return inflight;
+
+  const promise = (async (): Promise<ViewDefinition[]> => {
+    const entity = entityType.toLowerCase();
+    // querytype=0 is "Public View" — excludes Quick Find, Lookup, etc. which
+    // aren't relevant to the dataset view picker. isdefault narrows the
+    // default-view sort below.
+    const sysFilter = `returnedtypecode eq '${entity}' and querytype eq 0`;
+    const sysSelect = 'savedqueryid,name,fetchxml,layoutxml,isdefault,returnedtypecode';
+    const usrFilter = `returnedtypecode eq '${entity}'`;
+    const usrSelect = 'userqueryid,name,fetchxml,layoutxml,returnedtypecode';
+
+    const sysPath = `/api/data/v9.2/savedqueries?$filter=${encodeURIComponent(sysFilter)}&$select=${sysSelect}`;
+    const usrPath = `/api/data/v9.2/userqueries?$filter=${encodeURIComponent(usrFilter)}&$select=${usrSelect}`;
+
+    const [sysResult, usrResult] = await Promise.allSettled([
+      dvGet<ODataValueResponse<RawSavedQuery>>(orgUrl, sysPath),
+      dvGet<ODataValueResponse<RawUserQuery>>(orgUrl, usrPath),
+    ]);
+
+    const sysRecords = sysResult.status === 'fulfilled' ? (sysResult.value.value ?? []) : [];
+    const usrRecords = usrResult.status === 'fulfilled' ? (usrResult.value.value ?? []) : [];
+
+    const sysViews = sysRecords.map(r => mapSavedQueryToView(r, entity));
+    const usrViews = usrRecords.map(r => mapUserQueryToView(r, entity));
+    const defaultSys = sysRecords.find(r => r.isdefault);
+    const defaultId = defaultSys ? `savedquery:${defaultSys.savedqueryid}` : undefined;
+
+    const merged = sortAndDedupeViews([...sysViews, ...usrViews], defaultId);
+    viewsCache.set(key, merged);
+    return merged;
+  })();
+
+  viewsInflight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    viewsInflight.delete(key);
+  }
+}
+
+/** Test seam + UI "Refresh views" hook. Clears every (orgUrl, entity) entry. */
+export function __clearLiveViewsCache(): void {
+  viewsCache.clear();
+  viewsInflight.clear();
 }
 
 /* -------------------------------------------------------------------------- */
