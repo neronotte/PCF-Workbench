@@ -20,6 +20,7 @@ import { createDeviceShim } from './device';
 import { pushDialog, type AlertDialogRequest, type ConfirmDialogRequest } from './dialog-bus';
 import { isFeatureAvailable } from './profile';
 import { addAppNotification, clearAppNotification } from './xrm-app-notifications';
+import { getEntityMetadata as getStoreMetadata } from '../store/metadata-store';
 
 let installed = false;
 
@@ -145,7 +146,23 @@ export function installXrmGlobalShims(
       },
       getEntityMetadata(entityName: string): Promise<any> {
         getState().addLogEntry({ category: 'utility', method: 'getEntityMetadata', args: { entityName }, coverage: 'stub' });
-        return Promise.resolve({ LogicalName: entityName, EntitySetName: entityName + 's' });
+        // Synthesise a UCI-shaped EntityMetadata response from the harness
+        // metadata-store. Controls calling Xrm.Utility.getEntityMetadata
+        // (e.g. PGProductView's MultiAddService) expect PrimaryNameAttribute
+        // / PrimaryIdAttribute / EntitySetName to be populated — without them
+        // the control falls back to "<entityName>name" / "<entityName>s",
+        // which then fail validation in the WebAPI shim. Best-effort: if
+        // the store has no metadata for the entity we still return the
+        // legacy stub so existing controls don't regress.
+        const stored = getStoreMetadata(entityName);
+        const setName = entityName.endsWith('y') ? entityName.slice(0, -1) + 'ies' : entityName + 's';
+        return Promise.resolve({
+          LogicalName: entityName,
+          EntitySetName: setName,
+          PrimaryIdAttribute: stored?.primaryIdAttribute ?? `${entityName}id`,
+          PrimaryNameAttribute: stored?.primaryNameAttribute ?? 'name',
+          DisplayName: stored?.displayName ?? entityName,
+        });
       },
       getResourceString(webResourceName: string, key: string): string {
         getState().addLogEntry({ category: 'utility', method: 'getResourceString', args: { webResourceName, key }, coverage: 'stub' });
