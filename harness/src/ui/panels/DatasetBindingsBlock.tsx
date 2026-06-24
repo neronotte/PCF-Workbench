@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
-  makeStyles, tokens, Button, Badge,
+  makeStyles, mergeClasses, tokens, Button, Badge,
   Radio, RadioGroup, Dropdown, Option, Input, Label, Switch,
   Tooltip,
 } from '@fluentui/react-components';
@@ -549,10 +549,10 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
           </div>
           <div className={styles.columnEditor}>
             <div className={styles.columnHeaderRow}>
-              <span className={`${styles.columnHeader} ${styles.colHeaderName}`}>Name</span>
-              <span className={`${styles.columnHeader} ${styles.colHeaderWidth}`}>Width</span>
-              <span className={`${styles.columnHeader} ${styles.colHeaderSort}`}>Sort</span>
-              <span className={`${styles.columnHeader} ${styles.colHeaderDel}`}></span>
+              <span className={mergeClasses(styles.columnHeader, styles.colHeaderName)}>Name</span>
+              <span className={mergeClasses(styles.columnHeader, styles.colHeaderWidth)}>Width</span>
+              <span className={mergeClasses(styles.columnHeader, styles.colHeaderSort)}>Sort</span>
+              <span className={mergeClasses(styles.columnHeader, styles.colHeaderDel)}></span>
             </div>
             {resolvedView.columns.map((col, idx) => {
               const manifestCol = ds.columns.find(c => c.name === col.name);
@@ -566,7 +566,7 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
               return (
                 <div
                   key={col.name}
-                  className={`${styles.columnRow} ${isDragging ? styles.dragging : ''} ${dropClass}`}
+                  className={mergeClasses(styles.columnRow, isDragging && styles.dragging, dropClass)}
                   draggable
                   onDragStart={(e) => {
                     setDragIdx(idx);
@@ -620,7 +620,7 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
                     placeholder="auto"
                   />
                   <Button
-                    className={`${styles.colSort} ${styles.sortBtn}`}
+                    className={mergeClasses(styles.colSort, styles.sortBtn)}
                     appearance={sort ? 'primary' : 'subtle'}
                     size="small"
                     onClick={() => setColumnSort(col.name, nextSort)}

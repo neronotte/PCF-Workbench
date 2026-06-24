@@ -398,6 +398,20 @@ export function normalizeScenario(raw: unknown): TestScenario | null {
   if (isObject(raw.dataRecords)) v2.dataRecords = raw.dataRecords as Record<string, Record<string, any>[]>;
   if (raw.dataSource === 'mock' || raw.dataSource === 'live') v2.dataSource = raw.dataSource;
 
+  // Preserve fields added after the initial v2 baseline. These are stored
+  // as plain JSON so a shallow object check + cast is sufficient — any
+  // shape mismatch is caught downstream by the consumers (applyDatasetBindings
+  // tolerates partial shapes via ensureViewsLibrary / default synthesis).
+  if (isObject(raw.metadata)) v2.metadata = raw.metadata as Record<string, EntityMetadata>;
+  if (isObject(raw.liveProfile)) {
+    const orgUrl = asString(raw.liveProfile.orgUrl);
+    const friendlyName = asString(raw.liveProfile.friendlyName);
+    if (orgUrl && friendlyName) v2.liveProfile = { orgUrl, friendlyName };
+  }
+  if (isObject(raw.datasetBindings)) {
+    v2.datasetBindings = raw.datasetBindings as DatasetBindingMap;
+  }
+
   return v2;
 }
 

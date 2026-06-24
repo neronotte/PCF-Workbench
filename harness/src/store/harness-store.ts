@@ -976,6 +976,7 @@ const SCENARIO_SCOPED_KEYS: (keyof HarnessStore)[] = [
   'userSecurityRoles',
   'host',
   'isFullBleed',
+  'datasetBindings',
 ];
 
 useHarnessStore.subscribe((state, prev) => {
