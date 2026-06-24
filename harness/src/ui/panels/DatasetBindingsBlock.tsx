@@ -5,7 +5,7 @@ import {
   Tooltip,
 } from '@fluentui/react-components';
 import {
-  Add16Regular, Delete16Regular, ChevronUp16Regular, ChevronDown16Regular,
+  Add16Regular, Delete16Regular, ReOrderDotsVertical16Regular,
   Edit16Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore } from '../../store/harness-store';
@@ -61,12 +61,64 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '8px',
   },
-  columnGrid: {
-    display: 'grid',
-    gridTemplateColumns: '16px minmax(0, 1fr) 56px 56px 24px 24px 24px',
+  columnEditor: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  columnHeaderRow: {
+    display: 'flex',
     alignItems: 'center',
     gap: '4px',
-    fontSize: tokens.fontSizeBase200,
+    paddingLeft: '24px',  // align with grip column
+  },
+  columnRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    borderRadius: tokens.borderRadiusSmall,
+    padding: '2px 0',
+  },
+  colName: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  colWidth: {
+    width: '56px',
+    flex: '0 0 56px',
+  },
+  colSort: {
+    width: '56px',
+    flex: '0 0 56px',
+  },
+  colHeaderName: { flex: 1 },
+  colHeaderWidth: { width: '56px', flex: '0 0 56px' },
+  colHeaderSort: { width: '56px', flex: '0 0 56px' },
+  colHeaderDel: { width: '24px', flex: '0 0 24px' },
+  dragGrip: {
+    cursor: 'grab',
+    color: tokens.colorNeutralForeground3,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '24px',
+    flex: '0 0 20px',
+    borderRadius: tokens.borderRadiusSmall,
+    ':hover': { color: tokens.colorNeutralForeground1, backgroundColor: tokens.colorNeutralBackground3 },
+    ':active': { cursor: 'grabbing' },
+  },
+  dragOverTop: {
+    boxShadow: `inset 0 2px 0 0 ${tokens.colorBrandStroke1}`,
+  },
+  dragOverBottom: {
+    boxShadow: `inset 0 -2px 0 0 ${tokens.colorBrandStroke1}`,
+  },
+  dragging: {
+    opacity: 0.4,
   },
   sortBtn: {
     minWidth: '48px',
@@ -133,6 +185,8 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
   const setDatasetBinding = useHarnessStore(s => s.setDatasetBinding);
 
   const [editingColumns, setEditingColumns] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   // Effective binding — fall back to a synthesised homegrid + all-columns
   // default so the UI never has to deal with `undefined`. P0's apply path
@@ -192,11 +246,14 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
     }
   }, [ds.columns, resolvedView.columns, updateView]);
 
-  const moveColumn = useCallback((idx: number, dir: -1 | 1) => {
-    const target = idx + dir;
-    if (target < 0 || target >= resolvedView.columns.length) return;
+  const moveColumnTo = useCallback((fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+    if (fromIdx >= resolvedView.columns.length || toIdx > resolvedView.columns.length) return;
     const next = [...resolvedView.columns];
-    [next[idx], next[target]] = [next[target], next[idx]];
+    const [moved] = next.splice(fromIdx, 1);
+    // Adjust insertion index: removing from earlier position shifts indices.
+    const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
+    next.splice(insertAt, 0, moved);
     updateView({ columns: next });
   }, [resolvedView.columns, updateView]);
 
@@ -370,50 +427,103 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
       {editingColumns && (
         <div className={styles.row} data-test-id={`dataset-binding-column-editor-${ds.name}`}>
           <div className={styles.inlineRow} style={{ justifyContent: 'space-between' }}>
-            <span className={styles.hint}>Reorder with ▲ ▼. Click Sort to cycle ASC → DESC → off. Width in px.</span>
+            <span className={styles.hint}>Drag rows by the grip to reorder. Click Sort to cycle ASC → DESC → off. Width in px.</span>
             <Button appearance="subtle" size="small" onClick={resetView}>Reset</Button>
           </div>
-          <div className={styles.columnGrid}>
-            <span className={styles.columnHeader}></span>
-            <span className={styles.columnHeader}>Name</span>
-            <span className={styles.columnHeader}>Width</span>
-            <span className={styles.columnHeader}>Sort</span>
-            <span className={styles.columnHeader}></span>
-            <span className={styles.columnHeader}></span>
-            <span className={styles.columnHeader}></span>
-          </div>
-          {resolvedView.columns.map((col, idx) => {
-            const manifestCol = ds.columns.find(c => c.name === col.name);
-            const label = manifestCol ? manifestColumnLabel(manifestCol, lcid) : col.name;
-            const sort = col.sortDirection ?? null;
-            const nextSort: 'asc' | 'desc' | null = sort == null ? 'asc' : sort === 'asc' ? 'desc' : null;
-            const sortLabel = sort == null ? '—' : sort === 'asc' ? 'ASC ▲' : 'DESC ▼';
-            return (
-              <div key={col.name} className={styles.columnGrid}>
-                <span style={{ width: 10, height: 10, display: 'inline-block', backgroundColor: tokens.colorBrandBackground, borderRadius: 2 }} />
-                <span title={col.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-                <Input
-                  size="small"
-                  value={col.width != null ? String(col.width) : ''}
-                  onChange={(_, d) => setColumnWidth(col.name, d.value)}
-                  placeholder="auto"
-                />
-                <Button
-                  className={styles.sortBtn}
-                  appearance={sort ? 'primary' : 'subtle'}
-                  size="small"
-                  onClick={() => setColumnSort(col.name, nextSort)}
-                  title="Click to cycle sort: none → ASC → DESC → none"
-                  data-test-id={`dataset-binding-sort-${ds.name}-${col.name}`}
+          <div className={styles.columnEditor}>
+            <div className={styles.columnHeaderRow}>
+              <span className={`${styles.columnHeader} ${styles.colHeaderName}`}>Name</span>
+              <span className={`${styles.columnHeader} ${styles.colHeaderWidth}`}>Width</span>
+              <span className={`${styles.columnHeader} ${styles.colHeaderSort}`}>Sort</span>
+              <span className={`${styles.columnHeader} ${styles.colHeaderDel}`}></span>
+            </div>
+            {resolvedView.columns.map((col, idx) => {
+              const manifestCol = ds.columns.find(c => c.name === col.name);
+              const label = manifestCol ? manifestColumnLabel(manifestCol, lcid) : col.name;
+              const sort = col.sortDirection ?? null;
+              const nextSort: 'asc' | 'desc' | null = sort == null ? 'asc' : sort === 'asc' ? 'desc' : null;
+              const sortLabel = sort == null ? '—' : sort === 'asc' ? 'ASC ▲' : 'DESC ▼';
+              const isDragging = dragIdx === idx;
+              const isDragOver = dragOverIdx === idx && dragIdx !== null && dragIdx !== idx;
+              const dropClass = !isDragOver ? '' : (dragIdx! < idx ? styles.dragOverBottom : styles.dragOverTop);
+              return (
+                <div
+                  key={col.name}
+                  className={`${styles.columnRow} ${isDragging ? styles.dragging : ''} ${dropClass}`}
+                  draggable
+                  onDragStart={(e) => {
+                    setDragIdx(idx);
+                    e.dataTransfer.effectAllowed = 'move';
+                    // Firefox requires data to be set for drag to fire.
+                    try { e.dataTransfer.setData('text/plain', col.name); } catch { /* ignore */ }
+                  }}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    if (dragIdx !== null) setDragOverIdx(idx);
+                  }}
+                  onDragOver={(e) => {
+                    if (dragIdx !== null) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }
+                  }}
+                  onDragLeave={() => {
+                    // Don't clear here — onDragEnter on the next row resets it.
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragIdx !== null && dragIdx !== idx) {
+                      // Insert AT idx position: drop on row N means "place dragged before N".
+                      // When dragging from above (fromIdx < idx) we want to land AFTER idx → idx+1.
+                      const toIdx = dragIdx < idx ? idx + 1 : idx;
+                      moveColumnTo(dragIdx, toIdx);
+                    }
+                    setDragIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  data-test-id={`dataset-binding-col-row-${ds.name}-${col.name}`}
                 >
-                  {sortLabel}
-                </Button>
-                <Button appearance="subtle" size="small" icon={<ChevronUp16Regular />} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} aria-label={`Move ${col.name} up`} />
-                <Button appearance="subtle" size="small" icon={<ChevronDown16Regular />} onClick={() => moveColumn(idx, 1)} disabled={idx === resolvedView.columns.length - 1} aria-label={`Move ${col.name} down`} />
-                <Button appearance="subtle" size="small" icon={<Delete16Regular />} onClick={() => toggleColumn(col.name, false)} aria-label={`Hide ${col.name}`} data-test-id={`dataset-binding-remove-col-${ds.name}-${col.name}`} />
-              </div>
-            );
-          })}
+                  <span
+                    className={styles.dragGrip}
+                    aria-label={`Drag to reorder ${col.name}`}
+                    title="Drag to reorder"
+                  >
+                    <ReOrderDotsVertical16Regular />
+                  </span>
+                  <span className={styles.colName} title={col.name}>{label}</span>
+                  <Input
+                    className={styles.colWidth}
+                    size="small"
+                    value={col.width != null ? String(col.width) : ''}
+                    onChange={(_, d) => setColumnWidth(col.name, d.value)}
+                    placeholder="auto"
+                  />
+                  <Button
+                    className={`${styles.colSort} ${styles.sortBtn}`}
+                    appearance={sort ? 'primary' : 'subtle'}
+                    size="small"
+                    onClick={() => setColumnSort(col.name, nextSort)}
+                    title="Click to cycle sort: none → ASC → DESC → none"
+                    data-test-id={`dataset-binding-sort-${ds.name}-${col.name}`}
+                  >
+                    {sortLabel}
+                  </Button>
+                  <Button
+                    appearance="subtle"
+                    size="small"
+                    icon={<Delete16Regular />}
+                    onClick={() => toggleColumn(col.name, false)}
+                    aria-label={`Hide ${col.name}`}
+                    data-test-id={`dataset-binding-remove-col-${ds.name}-${col.name}`}
+                  />
+                </div>
+              );
+            })}
+          </div>
           {hiddenManifestColumns.length > 0 && (
             <>
               <div className={styles.hint} style={{ marginTop: 6 }}>Hidden columns ({hiddenManifestColumns.length})</div>
