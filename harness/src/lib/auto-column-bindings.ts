@@ -73,6 +73,21 @@ export function deriveColumnBindings(
   viewColumns: Array<{ name: string }>,
   existing?: Record<string, { field: string; ofType?: string }>,
 ): AutoDerivedBindings {
+  return deriveColumnBindingsFromCandidates(columns, viewColumns.map(c => c.name), existing);
+}
+
+/**
+ * Variant that accepts a flat list of candidate field names. Used post-fetch
+ * to fill in property-sets that the view-attributes-only derivation missed,
+ * by feeding it the keys of an actual row from the live response (which
+ * carries OData lookup shapes like `_msdyn_product_value` that aren't in
+ * the system view's `<attribute>` list).
+ */
+export function deriveColumnBindingsFromCandidates(
+  columns: ManifestProperty[],
+  candidateFields: string[],
+  existing?: Record<string, { field: string; ofType?: string }>,
+): AutoDerivedBindings {
   const out: Record<string, { field: string; ofType?: string }> = {};
   const matched: string[] = [];
   const unmatched: string[] = [];
@@ -86,15 +101,15 @@ export function deriveColumnBindings(
   // pointing at a literal "Product" key won't be valid against a live view
   // whose columns are msdyn_product / _msdyn_product_value).
   const validRowKeys = new Set<string>();
-  for (const vc of viewColumns) {
-    byExact.set(vc.name.toLowerCase(), vc.name);
-    const tok = normaliseToken(vc.name);
-    if (tok && !byNormalised.has(tok)) byNormalised.set(tok, vc.name);
-    bySubstring.push({ token: tok, original: vc.name });
-    validRowKeys.add(vc.name.toLowerCase());
-    validRowKeys.add(`_${vc.name.toLowerCase()}_value`);
-    validRowKeys.add(`_${vc.name.toLowerCase()}`);
-    validRowKeys.add(`${vc.name.toLowerCase()}id`);
+  for (const name of candidateFields) {
+    byExact.set(name.toLowerCase(), name);
+    const tok = normaliseToken(name);
+    if (tok && !byNormalised.has(tok)) byNormalised.set(tok, name);
+    bySubstring.push({ token: tok, original: name });
+    validRowKeys.add(name.toLowerCase());
+    validRowKeys.add(`_${name.toLowerCase()}_value`);
+    validRowKeys.add(`_${name.toLowerCase()}`);
+    validRowKeys.add(`${name.toLowerCase()}id`);
   }
 
   for (const col of columns) {
