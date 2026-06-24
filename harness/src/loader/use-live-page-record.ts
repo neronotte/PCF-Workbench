@@ -31,8 +31,13 @@ function classifyError(err: unknown): string {
   return (err as Error).message;
 }
 
+// A real Dataverse GUID. Excludes the harness's mock `bulk-…` ids that
+// would otherwise trigger a 400 against the live org.
+const GUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export function useLivePageRecord() {
   const dataSource = useHarnessStore(s => s.dataSource);
+  const connectionState = useHarnessStore(s => s.liveConnectionState);
   const orgUrl = useHarnessStore(s => s.liveProfile?.orgUrl ?? '');
   const entityType = useHarnessStore(s => s.pageEntityTypeName);
   const entityId = useHarnessStore(s => s.pageEntityId);
@@ -47,7 +52,14 @@ export function useLivePageRecord() {
   const inflightRef = useRef(0);
 
   useEffect(() => {
-    if (dataSource !== 'live' || !orgUrl || !entityType || !entityId) {
+    if (
+      dataSource !== 'live'
+      || connectionState !== 'connected'
+      || !orgUrl
+      || !entityType
+      || !entityId
+      || !GUID_RE.test(entityId.replace(/[{}]/g, ''))
+    ) {
       // Clear any prior error when the live-fetch preconditions aren't met.
       setLivePageRecordError(null);
       return;
@@ -81,7 +93,7 @@ export function useLivePageRecord() {
         });
       });
   }, [
-    dataSource, orgUrl, entityType, entityId, reloadEpoch,
+    dataSource, connectionState, orgUrl, entityType, entityId, reloadEpoch,
     cacheLiveRecord, setPageEntityRecordName, setLivePageRecordError, addLogEntry,
   ]);
 }

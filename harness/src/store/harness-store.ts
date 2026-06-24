@@ -386,6 +386,28 @@ export interface HarnessStore {
    *  successful re-fetch, on dataSource/profile change, and on control
    *  reload (via bumpReloadEpoch). */
   livePageRecordError: string | null;
+  /** Live-org connection state. Drives gating for entity catalogue fetches,
+   *  page-record auto-fetch, and dataset-record auto-fetch — none of those
+   *  fire until the maker clicks Connect and we've verified the catalogue
+   *  loaded successfully.
+   *
+   *  - 'disconnected' — initial state; maker picked a profile but hasn't
+   *    clicked Connect yet (or profile switched).
+   *  - 'connecting'   — in-flight: Connect clicked, catalogue request out.
+   *  - 'connected'    — entity catalogue loaded; live fetches enabled.
+   *  - 'error'        — last connect attempt failed; details in
+   *    `liveConnectionError`. Maker clicks Retry / Connect to re-try.
+   */
+  liveConnectionState: 'disconnected' | 'connecting' | 'connected' | 'error';
+  liveConnectionError: string | null;
+  /** Org-wide entity catalogue (display name + logical + entitySetName + PK/PN)
+   *  populated by the Connect action via liveListEntities. Shared by all
+   *  pickers (Page Context entity, dataset entity selector, future record
+   *  selectors). Null when not yet fetched / disconnected. */
+  liveEntityCatalogue: import('../api/dv-client').LiveEntityDescriptor[] | null;
+  setLiveConnectionState: (state: HarnessStore['liveConnectionState']) => void;
+  setLiveConnectionError: (msg: string | null) => void;
+  setLiveEntityCatalogue: (items: import('../api/dv-client').LiveEntityDescriptor[] | null) => void;
   setDataSource: (source: DataSource) => void;
   setLiveProfile: (profile: PublicProfile | null) => void;
   setLiveProfiles: (profiles: PublicProfile[]) => void;
@@ -796,6 +818,9 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   reloadEpoch: 0,
   pacReauthRequired: null,
   livePageRecordError: null,
+  liveConnectionState: 'disconnected',
+  liveConnectionError: null,
+  liveEntityCatalogue: null,
   setDataSource: (source) => {
     // Safety guardrail (M2.P6): when live access is blocked (loop CLI sets
     // window.__PCF_WORKBENCH_BLOCK_LIVE__, or the URL has ?live=block), any
@@ -823,6 +848,9 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
       liveFetchBuffer: source === 'live' ? {} : s.liveFetchBuffer,
       pacReauthRequired: null,
       livePageRecordError: null,
+      liveConnectionState: source === 'live' ? s.liveConnectionState : 'disconnected',
+      liveConnectionError: source === 'live' ? s.liveConnectionError : null,
+      liveEntityCatalogue: source === 'live' ? s.liveEntityCatalogue : null,
       dataVersion: s.dataVersion + 1,
     }));
   },
@@ -843,9 +871,15 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
       liveRecordCache: {},
       liveFetchBuffer: {},
       livePageRecordError: null,
+      liveConnectionState: 'disconnected',
+      liveConnectionError: null,
+      liveEntityCatalogue: null,
       dataVersion: s.dataVersion + 1,
     }));
   },
+  setLiveConnectionState: (state) => set({ liveConnectionState: state }),
+  setLiveConnectionError: (msg) => set({ liveConnectionError: msg }),
+  setLiveEntityCatalogue: (items) => set({ liveEntityCatalogue: items }),
   setLiveProfiles: (profiles) => set({ liveProfiles: profiles }),
   setEntitySetName: (logicalName, entitySetName) => set(s => ({
     entitySetCache: { ...s.entitySetCache, [logicalName]: entitySetName },

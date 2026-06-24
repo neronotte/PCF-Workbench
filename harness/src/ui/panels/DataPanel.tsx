@@ -283,6 +283,8 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
   const [recordSearch, setRecordSearch] = useState('');
   const dataSource = useHarnessStore(s => s.dataSource);
   const liveProfile = useHarnessStore(s => s.liveProfile);
+  const liveConnectionState = useHarnessStore(s => s.liveConnectionState);
+  const liveEntityCatalogue = useHarnessStore(s => s.liveEntityCatalogue);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
   const pageEntityId = useHarnessStore(s => s.pageEntityId);
   const setPageEntityTypeName = useHarnessStore(s => s.setPageEntityTypeName);
@@ -291,12 +293,9 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
   const livePageRecordError = useHarnessStore(s => s.livePageRecordError);
   const addLogEntry = useHarnessStore(s => s.addLogEntry);
 
-  // Live entity catalogue — loaded once per org when entering live mode.
-  const [liveEntities, setLiveEntities] = useState<LiveEntityDescriptor[] | null>(null);
-  const [liveEntitiesLoading, setLiveEntitiesLoading] = useState(false);
-  const [liveEntitiesError, setLiveEntitiesError] = useState<string | null>(null);
-
-  // Live record search — debounced fetch keyed by (entity, query).
+  // Live record search — debounced fetch keyed by (entity, query). The entity
+  // catalogue itself comes from the shared store (loaded by LiveModeControls
+  // Connect), so this block has no separate "load tables" state.
   const [liveRecords, setLiveRecords] = useState<LiveRecordResult[]>([]);
   const [liveRecordsLoading, setLiveRecordsLoading] = useState(false);
   const [liveRecordsError, setLiveRecordsError] = useState<string | null>(null);
@@ -377,34 +376,9 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
     setPageEntityRecordName(picked?.name ?? '');
   }, [records, setPageEntityId, setPageEntityRecordName]);
 
-  // Auto-load the live entity catalogue when the panel opens in live mode.
-  // Cached in dv-client across the session so this is a no-op after the
-  // first call per org.
+  // Live entity catalogue is owned by LiveModeControls (loaded on Connect).
+  // Reset record search when switching orgs.
   useEffect(() => {
-    if (!isLive || !open || !liveProfile?.orgUrl) return;
-    if (liveEntities || liveEntitiesLoading) return;
-    setLiveEntitiesLoading(true);
-    setLiveEntitiesError(null);
-    void liveListEntities(liveProfile.orgUrl)
-      .then(list => {
-        setLiveEntities(list);
-        addLogEntry({
-          category: 'data', method: 'live.listEntities.ok',
-          args: { count: list.length },
-        });
-      })
-      .catch((e: any) => {
-        const msg = e instanceof DvProxyError ? `${e.body.error}: ${e.body.message}` : (e?.message ?? 'Failed');
-        setLiveEntitiesError(msg);
-        addLogEntry({ category: 'data', method: 'live.listEntities.error', args: { message: msg } });
-      })
-      .finally(() => setLiveEntitiesLoading(false));
-  }, [isLive, open, liveProfile?.orgUrl, liveEntities, liveEntitiesLoading, addLogEntry]);
-
-  // Reset live entity cache when switching orgs.
-  useEffect(() => {
-    setLiveEntities(null);
-    setLiveEntitiesError(null);
     setLiveRecords([]);
     setLiveRecordSearchTerm('');
   }, [liveProfile?.orgUrl]);
@@ -471,25 +445,30 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
           </Dropdown>
         ) : isLive ? (
           <SearchPicker<LiveEntityDescriptor>
-            items={(liveEntities ?? []).map(e => ({
+            items={(liveEntityCatalogue ?? []).map(e => ({
               value: e.logicalName,
               text: `${e.displayName} (${e.logicalName})`,
               raw: e,
             }))}
             activeValue={pageEntityTypeName}
-            placeholder={liveEntitiesLoading ? 'Loading entities…' : 'Search org entities…'}
-            loading={liveEntitiesLoading}
-            error={liveEntitiesError}
+            placeholder={
+              liveConnectionState === 'connected' ? 'Search org entities…' :
+              liveConnectionState === 'connecting' ? 'Connecting…' :
+              'Connect to load tables'
+            }
+            loading={liveConnectionState === 'connecting'}
+            error={null}
             emptyMessage="No matches"
             unfetchedMessage={
               !liveProfile?.orgUrl
                 ? 'Pick a live profile first.'
-                : liveEntities && liveEntities.length === 0
-                  ? 'No entities returned by the org.'
-                  : undefined
+                : liveConnectionState !== 'connected'
+                  ? 'Click Connect (above) to load the org entity catalogue.'
+                  : liveEntityCatalogue && liveEntityCatalogue.length === 0
+                    ? 'No entities returned by the org.'
+                    : undefined
             }
             onSelect={(item) => onEntityChange(item.value)}
-            onRefresh={() => { setLiveEntities(null); }}
             testIdPrefix="page-context-entity-type"
           />
         ) : (
@@ -811,6 +790,13 @@ function LiveModeControls() {
   const setReauth = useHarnessStore(s => s.setPacReauthRequired);
   const reloadControl = useHarnessStore(s => s.reloadControl);
   const addLogEntry = useHarnessStore(s => s.addLogEntry);
+  // Connection state machine — see liveConnectionState in harness-store.
+  const connectionState = useHarnessStore(s => s.liveConnectionState);
+  const connectionError = useHarnessStore(s => s.liveConnectionError);
+  const liveEntityCatalogue = useHarnessStore(s => s.liveEntityCatalogue);
+  const setConnectionState = useHarnessStore(s => s.setLiveConnectionState);
+  const setConnectionError = useHarnessStore(s => s.setLiveConnectionError);
+  const setLiveEntityCatalogue = useHarnessStore(s => s.setLiveEntityCatalogue);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -860,6 +846,44 @@ function LiveModeControls() {
     reloadControl?.();
   }, [liveProfiles, setLiveProfile, setReauth, reloadControl]);
 
+  // Connect: verify org reachability + pull the org-wide entity catalogue
+  // in one go. liveListEntities also hydrates the per-entity metadata cache
+  // (entitySetName / primaryName / primaryId) so subsequent retrieveRecord
+  // calls skip the EntityDefinitions round-trip. Live fetch hooks
+  // (useLivePageRecord, useLiveDatasetRecords) gate on this state.
+  const connect = useCallback(async () => {
+    if (!liveProfile?.orgUrl) return;
+    setConnectionState('connecting');
+    setConnectionError(null);
+    addLogEntry({
+      category: 'data', method: 'live.connect.start',
+      args: { orgUrl: liveProfile.orgUrl, user: liveProfile.user },
+    });
+    try {
+      const entities = await liveListEntities(liveProfile.orgUrl, true);
+      setLiveEntityCatalogue(entities);
+      setConnectionState('connected');
+      addLogEntry({
+        category: 'data', method: 'live.connect.ok',
+        args: { entityCount: entities.length },
+      });
+    } catch (e: any) {
+      const msg = e instanceof DvProxyError
+        ? `${e.body.error}: ${e.body.message}`
+        : (e?.message ?? 'Failed to connect');
+      setConnectionError(msg);
+      setConnectionState('error');
+      addLogEntry({ category: 'data', method: 'live.connect.error', args: { message: msg } });
+    }
+  }, [liveProfile, setConnectionState, setConnectionError, setLiveEntityCatalogue, addLogEntry]);
+
+  const disconnect = useCallback(() => {
+    setConnectionState('disconnected');
+    setConnectionError(null);
+    setLiveEntityCatalogue(null);
+    addLogEntry({ category: 'data', method: 'live.disconnect', args: {} });
+  }, [setConnectionState, setConnectionError, setLiveEntityCatalogue, addLogEntry]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -890,6 +914,78 @@ function LiveModeControls() {
           aria-label="Refresh profiles"
         />
       </div>
+
+      {liveProfile && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 6px',
+            borderRadius: 4,
+            background: connectionState === 'connected'
+              ? 'var(--colorPaletteGreenBackground1)'
+              : connectionState === 'error'
+                ? 'var(--colorPaletteRedBackground1)'
+                : 'var(--colorNeutralBackground3)',
+          }}
+          data-test-id="live-connection-row"
+        >
+          {connectionState === 'connecting' && <Spinner size="tiny" />}
+          <span style={{ flex: 1, fontSize: 12 }} data-test-id="live-connection-status">
+            {connectionState === 'disconnected' && 'Disconnected — click Connect to load org metadata.'}
+            {connectionState === 'connecting' && 'Connecting — loading entity catalogue…'}
+            {connectionState === 'connected' && (
+              <>
+                <span style={{
+                  display: 'inline-block', width: 8, height: 8, borderRadius: 4,
+                  background: 'var(--colorPaletteGreenForeground1)', marginRight: 6,
+                }} />
+                Connected · {liveEntityCatalogue?.length ?? 0} tables
+              </>
+            )}
+            {connectionState === 'error' && (
+              <span style={{ color: 'var(--colorPaletteRedForeground1)' }}>
+                Connection failed — {connectionError}
+              </span>
+            )}
+          </span>
+          {connectionState === 'disconnected' && (
+            <Button
+              size="small"
+              appearance="primary"
+              onClick={() => void connect()}
+              data-test-id="live-connect-button"
+            >Connect</Button>
+          )}
+          {connectionState === 'error' && (
+            <Button
+              size="small"
+              appearance="primary"
+              onClick={() => void connect()}
+              data-test-id="live-connect-retry"
+            >Retry</Button>
+          )}
+          {connectionState === 'connected' && (
+            <>
+              <Button
+                size="small"
+                appearance="subtle"
+                icon={<ArrowClockwise24Regular />}
+                title="Refresh org metadata"
+                onClick={() => void connect()}
+                data-test-id="live-connect-refresh"
+              />
+              <Button
+                size="small"
+                appearance="subtle"
+                onClick={disconnect}
+                data-test-id="live-disconnect-button"
+              >Disconnect</Button>
+            </>
+          )}
+        </div>
+      )}
 
       {liveProfile && (
         <div style={{ fontSize: 11, color: tokens.colorNeutralForeground3, lineHeight: 1.4 }}>

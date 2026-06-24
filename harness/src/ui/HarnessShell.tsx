@@ -249,6 +249,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
   const reloadControl = useHarnessStore(s => s.reloadControl);
   const dataSource = useHarnessStore(s => s.dataSource);
   const liveProfile = useHarnessStore(s => s.liveProfile);
+  const liveConnectionState = useHarnessStore(s => s.liveConnectionState);
   const rightPanelCollapsed = useHarnessStore(s => s.rightPanelCollapsed);
   const bottomPanelCollapsed = useHarnessStore(s => s.bottomPanelCollapsed);
   const chromeMode = useHarnessStore(s => s.chromeMode);
@@ -315,9 +316,9 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launc
           {manifest.namespace}.{manifest.constructor}
         </span>
 
-        {/* Live mode pill — visible only when dataSource === 'live' so users
-            never lose sight of the fact that fetches hit a real org. */}
-        {dataSource === 'live' && (
+        {/* Live mode pill — visible only once the org connection is live
+            (Connect succeeded). Reminds users that fetches hit a real org. */}
+        {dataSource === 'live' && liveConnectionState === 'connected' && (
           <span
             data-test-id="live-pill"
             title={liveProfile ? `Live: ${liveProfile.user} @ ${liveProfile.orgUrl}` : 'Live mode (no profile selected)'}

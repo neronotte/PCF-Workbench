@@ -289,9 +289,10 @@ const liveEntityListCache = new Map<string, LiveEntityDescriptor[]>();
  * Fetch the full catalogue of entities in the org. Used by the Page Context
  * entity picker so the maker can search instead of pasting logical names.
  *
- * Filters to `IsValidForAdvancedFind = true` to keep the list to user-
- * relevant tables (cuts out 1500+ internal/system entities). Cached per
- * orgUrl for the session; `force` re-fetches.
+ * Returns every entity (~1500 in a stock org). We do NOT filter server-side
+ * on `IsValidForAdvancedFind/Value` — Dataverse rejects managed-property
+ * filters on `EntityDefinitions` with a 400. The SearchPicker handles the
+ * volume client-side.
  */
 export async function liveListEntities(
   orgUrl: string,
@@ -303,8 +304,7 @@ export async function liveListEntities(
   }
   const path =
     '/api/data/v9.2/EntityDefinitions'
-    + '?$select=LogicalName,EntitySetName,PrimaryNameAttribute,PrimaryIdAttribute,DisplayName'
-    + '&$filter=IsValidForAdvancedFind/Value eq true';
+    + '?$select=LogicalName,EntitySetName,PrimaryNameAttribute,PrimaryIdAttribute,DisplayName';
   const raw = await dvGet<{ value: RawEntityDef[] }>(orgUrl, path);
   const list: LiveEntityDescriptor[] = (raw.value ?? [])
     .map(e => ({

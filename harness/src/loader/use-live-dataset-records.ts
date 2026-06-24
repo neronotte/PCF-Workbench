@@ -42,6 +42,7 @@ function classifyError(err: unknown): string {
 
 export function useLiveDatasetRecords() {
   const dataSource = useHarnessStore(s => s.dataSource);
+  const connectionState = useHarnessStore(s => s.liveConnectionState);
   const orgUrl = useHarnessStore(s => s.liveProfile?.orgUrl ?? '');
   const reloadEpoch = useHarnessStore(s => s.reloadEpoch);
   const manifest = useHarnessStore(s => s.manifest);
