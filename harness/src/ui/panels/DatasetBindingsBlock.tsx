@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   makeStyles, tokens, Button, Badge,
   Radio, RadioGroup, Dropdown, Option, Input, Label, Switch,
@@ -550,16 +550,110 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
 }
 
 /**
+ * Cross-panel focus event. The form-chrome view pill (P4) dispatches this to
+ * jump to the binding card in DataPanel. The card listens via window event
+ * and scrolls itself into view + flashes a brand-coloured outline.
+ *
+ * Custom DOM event is the simplest tool for one-off cross-panel signalling
+ * without coupling form-chrome to DataPanel's mount state — the listener
+ * mounts/unmounts with DataPanel and the event is a no-op when the panel
+ * is collapsed.
+ */
+export const FOCUS_BINDING_EVENT = 'pcfwb:focus-dataset-binding';
+export interface FocusBindingDetail { datasetName: string }
+export function emitFocusDatasetBinding(datasetName: string): void {
+  window.dispatchEvent(new CustomEvent<FocusBindingDetail>(FOCUS_BINDING_EVENT, { detail: { datasetName } }));
+}
+
+/**
+ * Form-chrome view pill. One pill per manifest dataset. Read-only: shows
+ * "View: <displayName> ▾" and clicking jumps to the Data panel binding card.
+ * Mirrors how UCI shows the maker-pinned view on a subgrid command bar.
+ *
+ * Designed to live inside the FormChrome command bar (or any host that
+ * wants to surface the active view + offer a deep-link to configure it).
+ */
+export function DatasetViewPills() {
+  const datasets = useHarnessStore(s => s.manifest?.dataSets ?? []);
+  const bindings = useHarnessStore(s => s.datasetBindings);
+  if (datasets.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }} data-test-id="form-chrome-view-pills">
+      {datasets.map(ds => {
+        const binding = bindings[ds.name];
+        const view = binding && isResolvedView(binding.view) ? binding.view : null;
+        const label = view?.displayName ?? 'Default view';
+        const host = binding?.host ?? 'homegrid';
+        return (
+          <button
+            key={ds.name}
+            type="button"
+            onClick={() => emitFocusDatasetBinding(ds.name)}
+            data-test-id={`form-chrome-view-pill-${ds.name}`}
+            title={`${ds.name} • host: ${host} • click to edit in Data panel`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '2px 8px',
+              borderRadius: 12,
+              border: `1px solid ${tokens.colorNeutralStroke2}`,
+              backgroundColor: tokens.colorNeutralBackground3,
+              color: tokens.colorNeutralForeground2,
+              fontSize: tokens.fontSizeBase200,
+              fontWeight: tokens.fontWeightRegular,
+              cursor: 'pointer',
+              lineHeight: 1.4,
+              fontFamily: 'inherit',
+            }}
+          >
+            <span style={{ color: tokens.colorNeutralForeground3 }}>View:</span>
+            <span style={{ fontWeight: tokens.fontWeightSemibold, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+            <span style={{ color: tokens.colorNeutralForeground3 }}>▾</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * Top-level Datasets section for the Data panel. Renders one card per manifest
  * dataset, or nothing when the control has no datasets (field controls). Lives
  * directly above the Mock Data block so users see the binding context first.
+ *
+ * Subscribes to the cross-panel focus event so the form-chrome view pill can
+ * scroll a card into view + flash it. The handler matches by data-test-id on
+ * the card root so we don't need to thread refs through child components.
  */
 export function DatasetBindingsBlock() {
   const styles = useStyles();
   const datasets = useHarnessStore(s => s.manifest?.dataSets ?? []);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<FocusBindingDetail>).detail;
+      if (!detail?.datasetName || !rootRef.current) return;
+      const card = rootRef.current.querySelector<HTMLDivElement>(
+        `[data-test-id="dataset-binding-card-${detail.datasetName}"]`,
+      );
+      if (!card) return;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Brief flash. CSS class would be cleaner but the inline approach keeps
+      // the side-effect colocated with the listener.
+      const original = card.style.boxShadow;
+      card.style.transition = 'box-shadow 200ms ease-out';
+      card.style.boxShadow = `0 0 0 2px ${tokens.colorBrandStroke1}`;
+      window.setTimeout(() => { card.style.boxShadow = original; }, 1200);
+    };
+    window.addEventListener(FOCUS_BINDING_EVENT, handler);
+    return () => window.removeEventListener(FOCUS_BINDING_EVENT, handler);
+  }, []);
+
   if (datasets.length === 0) return null;
   return (
-    <div className={styles.block} data-test-id="dataset-bindings-block">
+    <div className={styles.block} ref={rootRef} data-test-id="dataset-bindings-block">
       <span className={styles.header} title="Per-dataset host + view configuration (mirrors how a maker configures the control on a form)">
         Datasets
       </span>

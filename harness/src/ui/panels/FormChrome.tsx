@@ -30,6 +30,7 @@ import {
   subscribeFormNotifications, dismissFormNotification,
   type FormNotification,
 } from '../../shim/xrm-form';
+import { DatasetViewPills } from './DatasetBindingsBlock';
 
 /**
  * Convert a Dataverse logical name into a human-friendly display name:
@@ -355,6 +356,7 @@ export function FormChrome({ entityTypeName, children }: Props) {
         <span data-test-id="form-chrome-cmd-delete">
           <Button appearance="subtle" size="small" className={styles.cmdButton} icon={<Delete20Regular />} onClick={handleDelete}>Delete</Button>
         </span>
+        <DatasetViewPills />
       </div>
 
       {tabs.length > 0 && (
