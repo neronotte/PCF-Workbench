@@ -871,6 +871,21 @@ export function __clearLiveViewsCache(): void {
 }
 
 /**
+ * Sync peek into the live-views cache for a whole entity. Returns the cached
+ * list for `(orgUrl, entity)` if `liveListViews` has populated it, otherwise
+ * `undefined`. Used by the form-chrome view pill so its dropdown reflects the
+ * full org views list in live mode (instead of only the views the maker has
+ * explicitly adopted into the binding's library). Never triggers a fetch.
+ */
+export function getCachedLiveViewsForEntity(
+  orgUrl: string,
+  entityType: string,
+): ViewDefinition[] | undefined {
+  if (!orgUrl || !entityType) return undefined;
+  return viewsCache.get(viewsCacheKey(orgUrl, entityType));
+}
+
+/**
  * Sync peek into the live-views cache. Returns the `ViewDefinition` matching
  * `viewId` (e.g. `"savedquery:<guid>"` or `"userquery:<guid>"`) if any
  * `(orgUrl, entity)` bucket has been populated by `liveListViews`, otherwise

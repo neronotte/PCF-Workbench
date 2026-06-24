@@ -12,7 +12,7 @@ import {
 import { useHarnessStore } from '../../store/harness-store';
 import { getEntityData, getEntityStoreKeys, subscribeData } from '../../store/data-store';
 import { getEntityMetadata } from '../../store/metadata-store';
-import { liveListViews, liveListRelationships, type LiveRelationship, DvProxyError, __clearLiveViewsCache } from '../../api/dv-client';
+import { liveListViews, liveListRelationships, type LiveRelationship, DvProxyError, __clearLiveViewsCache, getCachedLiveViewsForEntity } from '../../api/dv-client';
 import { SearchPicker, type SearchPickerItem } from '../common/SearchPicker';
 import type { ManifestDataSet, ManifestProperty } from '../../types/manifest';
 import type {
@@ -1283,17 +1283,75 @@ export function DatasetViewPills() {
   const datasets = useHarnessStore(s => s.manifest?.dataSets ?? []);
   const bindings = useHarnessStore(s => s.datasetBindings);
   const setDatasetBinding = useHarnessStore(s => s.setDatasetBinding);
+  const dataSource = useHarnessStore(s => s.dataSource);
+  const connectionState = useHarnessStore(s => s.liveConnectionState);
+  const orgUrl = useHarnessStore(s => s.liveProfile?.orgUrl ?? '');
+  const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
+  // Re-derive the live views snapshot when the live cache reload epoch bumps
+  // (Connect / refresh / scenario change) so the dropdown reflects fresh data.
+  const liveEpoch = useHarnessStore(s => s.reloadEpoch);
+  const isLive = dataSource === 'live' && connectionState === 'connected';
+
+  // Pre-hydrate the live-views cache for each dataset's effective entity so
+  // the pill dropdown shows the full org list without needing the maker to
+  // open the Data panel. Tracked per-(orgUrl, entity) so we don't double-fetch.
+  const hydratedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isLive || !orgUrl) return;
+    for (const ds of datasets) {
+      const binding = bindings[ds.name];
+      const host = binding?.host ?? 'homegrid';
+      const entity = host === 'associated'
+        ? (binding?.relationshipReferencingEntity ?? '')
+        : pageEntityTypeName;
+      if (!entity) continue;
+      const key = `${orgUrl}|${entity}`;
+      if (hydratedRef.current.has(key)) continue;
+      if (getCachedLiveViewsForEntity(orgUrl, entity)) {
+        hydratedRef.current.add(key);
+        continue;
+      }
+      hydratedRef.current.add(key);
+      void liveListViews(orgUrl, entity).catch(() => {
+        // Cache failed — allow a retry on the next render. The Data panel
+        // surfaces the error; the pill silently falls back to local library.
+        hydratedRef.current.delete(key);
+      });
+    }
+  }, [isLive, orgUrl, pageEntityTypeName, bindings, datasets]);
+
   if (datasets.length === 0) return null;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }} data-test-id="form-chrome-view-pills">
       {datasets.map(ds => {
         const binding = bindings[ds.name];
         const activeView = binding && isResolvedView(binding.view) ? binding.view : null;
-        const library: ViewDefinition[] = binding?.views && binding.views.length > 0
-          ? binding.views
-          : (activeView ? [activeView] : []);
-        const label = activeView?.displayName ?? 'Default view';
         const host = binding?.host ?? 'homegrid';
+
+        // In live+connected mode the pill mirrors the org views list for the
+        // effective entity (Associated → relationship child; otherwise page
+        // entity), so the maker doesn't have to round-trip through the Data
+        // panel to switch views. Falls back to the binding's local library
+        // when offline / not connected / cache cold.
+        const effectiveEntity = host === 'associated'
+          ? (binding?.relationshipReferencingEntity ?? '')
+          : pageEntityTypeName;
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        liveEpoch; // keep liveEpoch in the dep chain
+        const liveLibrary = isLive && effectiveEntity
+          ? getCachedLiveViewsForEntity(orgUrl, effectiveEntity)
+          : undefined;
+        let library: ViewDefinition[] = liveLibrary && liveLibrary.length > 0
+          ? liveLibrary
+          : (binding?.views && binding.views.length > 0
+            ? binding.views
+            : (activeView ? [activeView] : []));
+        // Ensure the active view always shows up in the list even if the live
+        // cache hasn't been hydrated yet for that entity.
+        if (activeView && !library.find(v => v.viewId === activeView.viewId)) {
+          library = [activeView, ...library];
+        }
+
         const activeViewId = activeView?.viewId ?? '';
         return (
           <span
@@ -1319,7 +1377,15 @@ export function DatasetViewPills() {
               onChange={(e) => {
                 const nextView = library.find(v => v.viewId === e.target.value);
                 if (!binding || !nextView) return;
-                setDatasetBinding(ds.name, { ...binding, view: nextView });
+                // In live mode, adopting a view from the org list also merges
+                // it into the binding's local `views` library so it survives a
+                // scenario save (the dv-client cache is session-scoped).
+                const existingLib = binding.views ?? [];
+                const inLib = existingLib.find(v => v.viewId === nextView.viewId);
+                const nextLib = inLib
+                  ? existingLib.map(v => v.viewId === nextView.viewId ? nextView : v)
+                  : [...existingLib, nextView];
+                setDatasetBinding(ds.name, { ...binding, view: nextView, views: nextLib });
               }}
               data-test-id={`form-chrome-view-pill-trigger-${ds.name}`}
               aria-label={`Select view for ${ds.name}`}
