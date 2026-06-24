@@ -516,6 +516,29 @@ function buildDataSet(
               if (row[candidate] !== undefined) { val = row[candidate]; actualKey = candidate; break; }
             }
           }
+          // Defensive auto-bind: when the maker hasn't explicitly mapped this
+          // property-set AND the property-set name doesn't appear in the row,
+          // try a normalised name-match against the row's keys. Catches the
+          // "All columns (default)" view case where the synthesised view has
+          // manifest property-set names ("Product") but rows are keyed by
+          // Dataverse field names ("msdyn_product" / "_msdyn_product_value").
+          // Mirrors deriveColumnBindingsFromCandidates' suffix/prefix stripping.
+          if (val === undefined && !bound) {
+            const needle = field.toLowerCase().replace(/[_\s-]/g, '');
+            for (const k of Object.keys(row)) {
+              if (k.includes('@')) continue; // skip OData annotations
+              const norm = k.toLowerCase()
+                .replace(/^_+/, '')
+                .replace(/_value$/, '')
+                .replace(/^[a-z][a-z0-9]{1,7}_/, '') // strip publisher prefix
+                .replace(/[_\s-]/g, '');
+              if (norm === needle || norm.includes(needle) || needle.includes(norm)) {
+                val = row[k];
+                actualKey = k;
+                break;
+              }
+            }
+          }
           if (val == null) {
             // Real UCI returns null here, but lots of controls in the wild
             // call `record.getValue("MyLookup").id.guid` without null-checking.
@@ -567,12 +590,31 @@ function buildDataSet(
           const bound = binding?.columnBindings?.[field]?.field;
           const lookupField = bound ?? field;
           // Check for OData formatted value annotation — try direct field and OData fallback keys
-          const annotation = row[`${lookupField}@OData.Community.Display.V1.FormattedValue`]
+          let annotation = row[`${lookupField}@OData.Community.Display.V1.FormattedValue`]
             ?? row[`_${lookupField}_value@OData.Community.Display.V1.FormattedValue`]
             ?? row[`_${lookupField}@OData.Community.Display.V1.FormattedValue`];
+          // Same defensive auto-bind as getValue: when no binding is set and
+          // the field doesn't appear in the row, find a normalised match.
+          let resolvedKey = lookupField;
+          if (annotation == null && !bound && row[lookupField] === undefined) {
+            const needle = field.toLowerCase().replace(/[_\s-]/g, '');
+            for (const k of Object.keys(row)) {
+              if (k.includes('@')) continue;
+              const norm = k.toLowerCase()
+                .replace(/^_+/, '')
+                .replace(/_value$/, '')
+                .replace(/^[a-z][a-z0-9]{1,7}_/, '')
+                .replace(/[_\s-]/g, '');
+              if (norm === needle || norm.includes(needle) || needle.includes(norm)) {
+                resolvedKey = k;
+                annotation = row[`${k}@OData.Community.Display.V1.FormattedValue`];
+                break;
+              }
+            }
+          }
           if (annotation != null) return String(annotation);
           // Fallback: try direct field, then OData lookup format
-          const val = row[lookupField] ?? row[`_${lookupField}_value`] ?? row[`_${lookupField}`];
+          const val = row[resolvedKey] ?? row[`_${resolvedKey}_value`] ?? row[`_${resolvedKey}`];
           return val != null ? String(val) : '';
         },
         getNamedReference: () => ({ id: { guid: id }, name: '', etn: ds.name }),
