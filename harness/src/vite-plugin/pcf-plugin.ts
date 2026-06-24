@@ -1156,6 +1156,32 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
                 }
               }
               const target = existing ?? candidates[0];
+              // Defensive merge: if the incoming v3 envelope has no `metadata`
+              // (or an empty metadata block) but the existing file has one,
+              // preserve the on-disk metadata. This protects against client
+              // load races where the metadata-store hasn't hydrated yet at
+              // save time — without this, the first auto-save after a refresh
+              // would silently wipe out the carefully-authored entity schemas.
+              if (existing && isV3) {
+                const incoming = parsed as { metadata?: unknown };
+                const incomingMeta = incoming.metadata;
+                const incomingEmpty = !incomingMeta
+                  || typeof incomingMeta !== 'object'
+                  || Array.isArray(incomingMeta)
+                  || Object.keys(incomingMeta as Record<string, unknown>).length === 0;
+                if (incomingEmpty) {
+                  try {
+                    const onDisk = JSON.parse(fs.readFileSync(existing, 'utf-8'));
+                    const diskMeta = onDisk && typeof onDisk === 'object' && !Array.isArray(onDisk)
+                      ? (onDisk as { metadata?: unknown }).metadata
+                      : null;
+                    if (diskMeta && typeof diskMeta === 'object' && !Array.isArray(diskMeta)
+                      && Object.keys(diskMeta as Record<string, unknown>).length > 0) {
+                      (parsed as { metadata?: unknown }).metadata = diskMeta;
+                    }
+                  } catch { /* fall through to plain write */ }
+                }
+              }
               fs.writeFileSync(target, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
