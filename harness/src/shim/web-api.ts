@@ -294,18 +294,31 @@ export function parseSelect(select: string | undefined): string[] | null {
   return select.split(',').map(s => s.trim());
 }
 
-/** Exported for unit testing (M11.M4). Pure. */
-export function applySelect(entity: Record<string, any>, columns: string[] | null): Record<string, any> {
+/** Exported for unit testing (M11.M4). Pure.
+ *
+ * Mirrors real Dataverse: even when `$select` doesn't list it, the primary
+ * id attribute is always returned (the server adds it implicitly). Pass
+ * `primaryIdAttribute` to opt in to that behaviour — when omitted, the
+ * select is taken literally (preserves prior unit-test expectations).
+ */
+export function applySelect(
+  entity: Record<string, any>,
+  columns: string[] | null,
+  primaryIdAttribute?: string,
+): Record<string, any> {
   if (!columns) return { ...entity };
+  const effective = primaryIdAttribute && !columns.includes(primaryIdAttribute)
+    ? [...columns, primaryIdAttribute]
+    : columns;
   const result: Record<string, any> = {};
-  for (const col of columns) {
+  for (const col of effective) {
     if (col in entity) result[col] = entity[col];
   }
   // Also include OData annotations for selected columns (formatted values, lookup metadata)
   for (const key of Object.keys(entity)) {
     if (!key.includes('@')) continue;
     const baseCol = key.split('@')[0];
-    if (columns.some(c => baseCol === c || baseCol === `_${c}_value` || c === baseCol)) {
+    if (effective.some(c => baseCol === c || baseCol === `_${c}_value` || c === baseCol)) {
       result[key] = entity[key];
     }
   }
@@ -603,7 +616,11 @@ export function createWebApiShim(
 
           if (top) entities = entities.slice(0, parseInt(top, 10));
 
-          if (selectFields) entities = entities.map(e => applySelect(e, selectFields));
+          if (selectFields) {
+            const meta = getEntityMetadata(entityType);
+            const primaryId = meta?.primaryIdAttribute;
+            entities = entities.map(e => applySelect(e, selectFields, primaryId));
+          }
         }
 
         if (maxPageSize && entities.length > maxPageSize) {
@@ -700,7 +717,10 @@ export function createWebApiShim(
         if (options) {
           const params = new URLSearchParams(options.startsWith('?') ? options.slice(1) : options);
           const select = parseSelect(params.get('$select') ?? undefined);
-          if (select) result = applySelect(record, select);
+          if (select) {
+            const meta = getEntityMetadata(entityType);
+            result = applySelect(record, select, meta?.primaryIdAttribute);
+          }
         }
 
         const duration = performance.now() - start;

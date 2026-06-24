@@ -1109,10 +1109,15 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
             try {
               const body = Buffer.concat(chunks).toString('utf-8');
               const parsed = JSON.parse(body);
-              if (!Array.isArray(parsed)) {
+              // Accept either v3 envelope {schemaVersion, metadata, scenarios}
+              // or legacy v2 array of TestScenarios.
+              const isV3 = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                && Array.isArray((parsed as any).scenarios);
+              const isV2 = Array.isArray(parsed);
+              if (!isV2 && !isV3) {
                 res.statusCode = 400;
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ ok: false, error: 'body must be a JSON array of TestScenario objects' }));
+                res.end(JSON.stringify({ ok: false, error: 'body must be a v3 envelope { schemaVersion, metadata?, scenarios } or a v2 TestScenario array' }));
                 return;
               }
               const candidates = [
@@ -1122,10 +1127,16 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
               const existing = candidates.find(p => fs.existsSync(p));
               if (existing) {
                 // Refuse to overwrite if the file on disk isn't a recognizable
-                // TestScenario array. Empty array is fine (legit reset).
+                // TestScenario container. Empty array / empty scenarios is fine
+                // (legit reset).
                 try {
                   const onDisk = JSON.parse(fs.readFileSync(existing, 'utf-8'));
-                  const looksLikeScenarios = Array.isArray(onDisk) && (onDisk.length === 0 || onDisk.every((s: any) =>
+                  const onDiskScenarios = Array.isArray(onDisk)
+                    ? onDisk
+                    : (onDisk && typeof onDisk === 'object' && Array.isArray((onDisk as any).scenarios)
+                        ? (onDisk as any).scenarios
+                        : null);
+                  const looksLikeScenarios = onDiskScenarios !== null && (onDiskScenarios.length === 0 || onDiskScenarios.every((s: any) =>
                     s && typeof s === 'object' && typeof s.name === 'string' && (
                       'schemaVersion' in s || 'propertyValues' in s || 'savedAt' in s
                     )
@@ -1133,7 +1144,7 @@ export const launchedAsGallery = ${state.launchedAsGallery};`;
                   if (!looksLikeScenarios) {
                     res.statusCode = 409;
                     res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ ok: false, error: `existing file at ${existing} is not a TestScenario array — refusing to overwrite`, path: existing }));
+                    res.end(JSON.stringify({ ok: false, error: `existing file at ${existing} is not a TestScenario container — refusing to overwrite`, path: existing }));
                     return;
                   }
                 } catch {

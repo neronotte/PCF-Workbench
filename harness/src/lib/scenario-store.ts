@@ -31,6 +31,7 @@ import {
 import {
   getAllMetadata,
   replaceAllMetadata,
+  loadMetadata,
   type EntityMetadata,
 } from '../store/metadata-store';
 import { reseedForPageEntity } from '../store/form-store';
@@ -186,14 +187,15 @@ export function saveScenariosToStorage(controlId: string, scenarios: TestScenari
  */
 export async function saveScenariosToDisk(_controlId: string, scenarios: TestScenario[]): Promise<string | null> {
   try {
+    const body = buildScenariosFile(scenarios, getAllMetadata());
     const r = await fetch('/pcf-data/test-scenarios.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(scenarios, null, 2),
+      body: JSON.stringify(body, null, 2),
     });
     if (!r.ok) return null;
-    const body = await r.json().catch(() => ({}));
-    return body?.path ?? null;
+    const respBody = await r.json().catch(() => ({}));
+    return respBody?.path ?? null;
   } catch {
     return null;
   }
@@ -426,6 +428,61 @@ export function normalizeScenarioList(raw: unknown): TestScenario[] {
     }
   }
   return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* File shape (schemaVersion 3): scenarios + shared metadata                  */
+/* -------------------------------------------------------------------------- */
+
+export const SCENARIOS_FILE_SCHEMA_VERSION = 3 as const;
+
+export interface ScenariosFile {
+  /** Scenarios (always normalized to v2). */
+  scenarios: TestScenario[];
+  /** Org-wide entity metadata (logical-name → schema). Optional. */
+  metadata: Record<string, EntityMetadata> | null;
+}
+
+/**
+ * Parse the on-disk `test-scenarios.json` body, accepting both shapes:
+ *
+ *   - v3 object:  `{ schemaVersion: 3, metadata: {...}, scenarios: [...] }`
+ *   - v2 legacy:  bare `TestScenario[]` array
+ *
+ * Returns null only when `raw` is fundamentally not parseable.
+ */
+export function parseScenariosFile(raw: unknown): ScenariosFile {
+  if (Array.isArray(raw)) {
+    return { scenarios: normalizeScenarioList(raw), metadata: null };
+  }
+  if (raw && typeof raw === 'object') {
+    const r = raw as { scenarios?: unknown; metadata?: unknown };
+    const scenarios = Array.isArray(r.scenarios) ? normalizeScenarioList(r.scenarios) : [];
+    const metadata = r.metadata && typeof r.metadata === 'object' && !Array.isArray(r.metadata)
+      ? (r.metadata as Record<string, EntityMetadata>)
+      : null;
+    return { scenarios, metadata };
+  }
+  return { scenarios: [], metadata: null };
+}
+
+/**
+ * Build the v3 file body for writing. Always embeds the current metadata
+ * snapshot when one is provided (typically `getAllMetadata()`), so the
+ * folded file remains a single source of truth.
+ */
+export function buildScenariosFile(
+  scenarios: TestScenario[],
+  metadata: Record<string, EntityMetadata> | null,
+): unknown {
+  const body: Record<string, unknown> = {
+    schemaVersion: SCENARIOS_FILE_SCHEMA_VERSION,
+    scenarios,
+  };
+  if (metadata && Object.keys(metadata).length > 0) {
+    body.metadata = metadata;
+  }
+  return body;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -903,8 +960,9 @@ export async function findScenarioByName(
   try {
     const r = await fetch('/pcf-data/test-scenarios.json');
     if (r.ok) {
-      const fileList = normalizeScenarioList(await r.json());
-      const hit = fileList.find(s => s.name === name);
+      const { scenarios, metadata } = parseScenariosFile(await r.json());
+      if (metadata) loadMetadata(metadata);
+      const hit = scenarios.find(s => s.name === name);
       if (hit) return hit;
     }
   } catch { /* ignore */ }
@@ -915,13 +973,22 @@ export async function findScenarioByName(
 /**
  * Merge localStorage + on-disk scenarios for a control. Local wins when names
  * collide and the local `savedAt` is newer. Used by the side-panel loader.
+ *
+ * Also hydrates the metadata store from the on-disk file's `metadata` block
+ * (v3 shape) when present — folding `metadata.json` into the same file as
+ * scenarios is the canonical v3 layout. Legacy v2 array files still load;
+ * App.tsx's fallback fetch of `/pcf-data/metadata.json` covers those.
  */
 export async function loadAllScenarios(controlId: string): Promise<TestScenario[]> {
   const local = loadScenariosFromStorage(controlId);
   let file: TestScenario[] = [];
   try {
     const r = await fetch('/pcf-data/test-scenarios.json');
-    if (r.ok) file = normalizeScenarioList(await r.json());
+    if (r.ok) {
+      const parsed = parseScenariosFile(await r.json());
+      file = parsed.scenarios;
+      if (parsed.metadata) loadMetadata(parsed.metadata);
+    }
   } catch { /* ignore */ }
 
   const merged: TestScenario[] = [];
