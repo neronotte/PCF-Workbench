@@ -402,22 +402,28 @@ function buildDataSet(
   const earlyResolvedView = resolveViewForBinding(ds, binding, ds.name);
 
   function getRecords() {
-    // P1: prefer the view's entityType (the maker's pin) before falling back
-    // to the dataset name / pageContext / first non-empty key heuristic.
+    // Resolve the dataset entity ONCE up front from the binding. A dataset's
+    // rows come from one well-defined entity — never from page context. UCI
+    // never leaks the form's record into a Homegrid/Subgrid/Associated grid;
+    // an empty/in-flight fetch renders empty. Falling back to
+    // `pageEntityTypeName` here used to silently render the parent record as
+    // a row when the dataset's own fetch hadn't landed yet (a footgun the
+    // moment live mode shipped).
+    //
+    //   associated → binding.relationshipReferencingEntity (hard pin)
+    //   subgrid    → view.entityType (parent-FK filter still applies below)
+    //   homegrid   → view.entityType → ds.name → first non-empty key in store
+    //                (last one is data.json compat: maker may have keyed by
+    //                logical name while ds.name is an alias like
+    //                "bookingRecords")
     let rawData: Record<string, any>[] = [];
     let resolvedEntity = ds.name;
 
-    // Associated host: hard-pin to the relationship's child entity. Without
-    // this, an empty/in-flight child fetch falls through to `pageEntityType`
-    // below and the dataset silently renders the parent record as its rows
-    // (the parent is in the store from the live page-record fetch). Returning
-    // empty rows while the child fetch resolves matches UCI behaviour.
-    const associatedChildEntity = binding?.host === 'associated'
-      ? (binding.relationshipReferencingEntity ?? earlyResolvedView.entityType ?? '')
-      : '';
-    if (associatedChildEntity) {
-      rawData = getEntityData(associatedChildEntity);
-      resolvedEntity = associatedChildEntity;
+    if (binding?.host === 'associated') {
+      resolvedEntity = binding.relationshipReferencingEntity
+        ?? earlyResolvedView.entityType
+        ?? ds.name;
+      rawData = getEntityData(resolvedEntity);
     } else {
       const viewEntity = earlyResolvedView.entityType;
       if (viewEntity) {
@@ -425,23 +431,17 @@ function buildDataSet(
         if (rawData.length > 0) resolvedEntity = viewEntity;
       }
       if (rawData.length === 0) {
-        // Try dataset name first (e.g. "bookingRecords")
         rawData = getEntityData(ds.name);
         resolvedEntity = ds.name;
       }
       if (rawData.length === 0) {
-        // Fallback: try pageEntityTypeName from store
+        // data.json compat: maker may have keyed by logical name while
+        // ds.name is an alias. Pick the first store key with rows. Page
+        // entity is NOT a valid fallback — that's the form record, not a
+        // dataset row source.
         const pageEntity = getState().pageEntityTypeName;
-        if (pageEntity) {
-          rawData = getEntityData(pageEntity);
-          if (rawData.length > 0) resolvedEntity = pageEntity;
-        }
-      }
-      if (rawData.length === 0) {
-        // Fallback: use the first entity in the data store that has array records
-        // This handles data.json keyed by entity logical name (e.g. "bookableresourcebooking")
-        // when the dataset name is different (e.g. "bookingRecords")
         for (const key of getEntityStoreKeys()) {
+          if (key === pageEntity) continue;
           const data = getEntityData(key);
           if (data.length > 0) { rawData = data; resolvedEntity = key; break; }
         }
