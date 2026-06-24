@@ -465,7 +465,27 @@ function buildDataSet(
           if (typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
             const annotation = row[`${lookupField}@OData.Community.Display.V1.FormattedValue`]
               ?? row[`${actualKey}@OData.Community.Display.V1.FormattedValue`];
-            return { id: { guid: val }, name: annotation != null ? String(annotation) : '', entityType: lookupField };
+            // Real Dataverse returns the target entity logical name via
+            // @Microsoft.Dynamics.CRM.lookuplogicalname. Without it, controls
+            // that resolve lookup targets via record.getValue(alias).etn
+            // (e.g. PGProductView's MultiAddService.readTargetEntityFromRows)
+            // can't figure out which entity to query and silently return
+            // empty results. Fall back to the column name only when no
+            // annotation is present (legacy data.json shape).
+            const targetEntity = row[`${lookupField}@Microsoft.Dynamics.CRM.lookuplogicalname`]
+              ?? row[`${actualKey}@Microsoft.Dynamics.CRM.lookuplogicalname`]
+              ?? lookupField;
+            const name = annotation != null ? String(annotation) : '';
+            return {
+              id: { guid: val },
+              name,
+              // Modern ComponentFramework.LookupValue shape.
+              entityType: String(targetEntity),
+              // Legacy {etn,id,name} shape — still used by many controls
+              // (including PGProductView). Real UCI dataset values expose
+              // BOTH, so we match.
+              etn: String(targetEntity),
+            };
           }
           return val;
         },
