@@ -1248,6 +1248,7 @@ export function DataPanel() {
   const setRebaseEnabled = useHarnessStore(s => s.setRebaseDatesToToday);
   const dataSource = useHarnessStore(s => s.dataSource);
   const setDataSource = useHarnessStore(s => s.setDataSource);
+  const liveConnectionState = useHarnessStore(s => s.liveConnectionState);
   const reloadControl = useHarnessStore(s => s.reloadControl);
   const activeScenarioName = useHarnessStore(s => s.activeScenarioName);
   const manifest = useHarnessStore(s => s.manifest);
@@ -1521,7 +1522,7 @@ export function DataPanel() {
           >
             Data source
           </span>
-          {dataSource === 'live' && (
+          {dataSource === 'live' && liveConnectionState === 'connected' && (
             <span className={styles.liveOnline}>
               <Globe16Regular />
               LIVE
