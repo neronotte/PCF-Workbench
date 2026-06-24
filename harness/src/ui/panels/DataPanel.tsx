@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
 import {
   makeStyles, tokens, Button, Badge, MessageBar, MessageBarBody, Checkbox,
-  Radio, RadioGroup, Dropdown, Option, Spinner, Label, Input,
+  Radio, RadioGroup, Dropdown, Combobox, Option, Spinner, Label, Input,
   TabList, Tab,
 } from '@fluentui/react-components';
 import { ArrowClockwise24Regular, Save24Regular, Globe16Regular, ArrowDownload24Regular, Add16Regular, Delete16Regular, ChevronDown16Regular, ChevronRight16Regular } from '@fluentui/react-icons';
@@ -279,6 +279,7 @@ const metadataSnapshotRef = (() => {
 function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
+  const [recordSearch, setRecordSearch] = useState('');
   const dataSource = useHarnessStore(s => s.dataSource);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
   const pageEntityId = useHarnessStore(s => s.pageEntityId);
@@ -417,29 +418,105 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
         </div>
         {!isLive && records.length > 0 ? (
           <>
-            <Dropdown
-              size="small"
-              placeholder="Select record"
-              selectedOptions={pageEntityId ? [pageEntityId] : []}
-              value={pageEntityId ? (records.find(r => r.id === pageEntityId)?.name || records.find(r => r.id === pageEntityId)?.id || pageEntityId) : ''}
-              onOptionSelect={(_, d) => onRecordChange(d.optionValue ?? '')}
-              data-test-id="page-context-entity-id"
-            >
-              <Option value="" text="">— None —</Option>
-              {records.map(r => (
-                <Option key={r.id} value={r.id} text={r.name || r.id}>{r.name || r.id}</Option>
-              ))}
-            </Dropdown>
+            {(() => {
+              const MAX_OPTIONS = 50;
+              const selected = pageEntityId ? records.find(r => r.id === pageEntityId) : undefined;
+              const q = recordSearch.trim().toLowerCase();
+              const filtered = q
+                ? records.filter(r =>
+                    (r.name && r.name.toLowerCase().includes(q)) ||
+                    r.id.toLowerCase().includes(q),
+                  )
+                : records;
+              const shown = filtered.slice(0, MAX_OPTIONS);
+              const overflow = filtered.length - shown.length;
+              return (
+                <Combobox
+                  size="small"
+                  placeholder={records.length > 50 ? `Search ${records.length} records…` : 'Select record'}
+                  selectedOptions={pageEntityId ? [pageEntityId] : []}
+                  value={recordSearch || selected?.name || selected?.id || ''}
+                  onOptionSelect={(_, d) => {
+                    onRecordChange(d.optionValue ?? '');
+                    const picked = records.find(r => r.id === d.optionValue);
+                    setRecordSearch(picked?.name ?? '');
+                  }}
+                  onInput={(e) => setRecordSearch((e.target as HTMLInputElement).value)}
+                  onBlur={() => {
+                    // Restore the selected name when the user blurs without
+                    // picking — otherwise the input shows a stale search.
+                    setRecordSearch(selected?.name ?? '');
+                  }}
+                  data-test-id="page-context-entity-id"
+                  freeform={false}
+                  clearable
+                >
+                  {shown.map(r => (
+                    <Option key={r.id} value={r.id} text={r.name || r.id}>
+                      <span>{r.name || r.id}</span>
+                      {r.name && (
+                        <span style={{ marginLeft: 8, opacity: 0.55, fontFamily: 'monospace', fontSize: 11 }}>
+                          {r.id}
+                        </span>
+                      )}
+                    </Option>
+                  ))}
+                  {overflow > 0 && (
+                    <Option key="__overflow" value="" text="" disabled>
+                      <span style={{ opacity: 0.55, fontStyle: 'italic' }}>
+                        +{overflow} more — keep typing to narrow
+                      </span>
+                    </Option>
+                  )}
+                  {shown.length === 0 && (
+                    <Option key="__nomatch" value="" text="" disabled>
+                      <span style={{ opacity: 0.55, fontStyle: 'italic' }}>
+                        No records match "{recordSearch}"
+                      </span>
+                    </Option>
+                  )}
+                </Combobox>
+              );
+            })()}
             {pageEntityId && (
               <span className={styles.pageCtxHint} style={{ marginTop: 2, fontFamily: 'monospace' }}>
                 {pageEntityId}
               </span>
             )}
           </>
+        ) : !isLive && pageEntityTypeName ? (
+          // Entity selected but the mock store has no records for it yet.
+          // Show a disabled placeholder + an inline hint pointing the user
+          // at Mock Data so they don't waste time typing a fake GUID that
+          // won't resolve anywhere. Clicking the hint scrolls Mock Data
+          // into view (handled in DataPanel).
+          <>
+            <Dropdown
+              size="small"
+              disabled
+              placeholder="No records — add some to this entity first"
+              data-test-id="page-context-entity-id"
+            />
+            <span className={styles.pageCtxHint} style={{ marginTop: 4 }}>
+              {entityLabel(pageEntityTypeName)} has no mock records.{' '}
+              <a
+                href="#"
+                onClick={e => {
+                  e.preventDefault();
+                  window.dispatchEvent(new CustomEvent('pcfwb:focus-mock-entity', {
+                    detail: { entityType: pageEntityTypeName },
+                  }));
+                }}
+                style={{ color: 'var(--colorBrandForeground1)' }}
+              >
+                Add records →
+              </a>
+            </span>
+          </>
         ) : (
           <Input
             size="small"
-            placeholder={isLive ? 'Record GUID' : (pageEntityTypeName ? 'No records loaded for this entity' : 'Select an entity first')}
+            placeholder={isLive ? 'Record GUID' : 'Select an entity first'}
             value={pageEntityId}
             onChange={(_, d) => onRecordChange(d.value)}
             disabled={!isLive && !pageEntityTypeName}
@@ -1075,6 +1152,24 @@ export function DataPanel() {
     setSelectedEntity(name);
     refreshEditor(name, editorMode);
   }, [editorMode, refreshEditor]);
+
+  // Cross-panel: PageContextBlock fires `pcfwb:focus-mock-entity` when the
+  // maker clicks "Add records →" on an empty entity. Select the entity in
+  // the Mock Data list and scroll its row into view.
+  useEffect(() => {
+    const onFocus = (e: Event) => {
+      const detail = (e as CustomEvent<{ entityType?: string }>).detail;
+      const name = detail?.entityType;
+      if (!name) return;
+      handleSelectEntity(name);
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-test-id="entity-node-${name}"]`);
+        if (el) (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    };
+    window.addEventListener('pcfwb:focus-mock-entity', onFocus);
+    return () => window.removeEventListener('pcfwb:focus-mock-entity', onFocus);
+  }, [handleSelectEntity]);
 
   const handleSwitchMode = useCallback((mode: 'records' | 'schema') => {
     setEditorMode(mode);
