@@ -96,6 +96,9 @@ export function clearMetadata(): void {
 export function loadMetadata(data: any): void {
   if (!data || typeof data !== 'object') return;
 
+  let mutated = false;
+  const next = { ...metadataStore };
+
   // Detect Dataverse API format: has "value" array with Attributes
   if (Array.isArray(data.value) && data.value.length > 0 && data.value[0].Attributes) {
     parseDataverseFormat(data);
@@ -116,11 +119,17 @@ export function loadMetadata(data: any): void {
   for (const [key, val] of Object.entries(data)) {
     const entity = val as any;
     if (entity.displayName && entity.columns) {
-      metadataStore[key] = entity;
+      next[key] = entity;
+      mutated = true;
     } else if (entity.Attributes) {
       // Single entity in Dataverse format without the "value" wrapper
       parseDataverseEntity(entity);
     }
+  }
+
+  if (mutated) {
+    metadataStore = next;
+    notifyMetadata();
   }
 }
 
@@ -128,6 +137,7 @@ function parseDataverseFormat(data: any): void {
   for (const entity of data.value) {
     parseDataverseEntity(entity);
   }
+  notifyMetadata();
 }
 
 function parseDataverseEntity(entity: any): void {
