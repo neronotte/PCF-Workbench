@@ -1,6 +1,6 @@
 import type { HarnessStore } from '../store/harness-store';
 import { addEntityRecord, updateEntityRecord, deleteEntityRecord } from '../store/data-store';
-import { getEntityMetadata } from '../store/metadata-store';
+import { getEntityMetadata, getAllEntityTypes } from '../store/metadata-store';
 import { getEntityStoreKeys } from '../store/data-store';
 import { pushDialog } from './dialog-bus';
 import { getExecuteMock } from '../store/execute-mock-store';
@@ -19,6 +19,75 @@ const NETWORK_DELAYS: Record<string, number> = {
 function delay(ms: number): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise(r => setTimeout(r, ms));
+}
+
+/**
+ * Translate `<navProperty>@odata.bind = "/<entitySet>(<guid>)"` entries
+ * into the real Dataverse OData wire shape:
+ *   _<lookupCol>_value: <guid>
+ *   _<lookupCol>_value@Microsoft.Dynamics.CRM.lookuplogicalname: <targetEntity>
+ *   _<lookupCol>_value@Microsoft.Dynamics.CRM.associatednavigationproperty: <navProperty>
+ *   _<lookupCol>_value@OData.Community.Display.V1.FormattedValue: <primaryName>
+ *
+ * Without this, controls that read lookup columns from a newly-created
+ * record via record.getValue(alias).id.guid will crash because the raw
+ * `@odata.bind` key is never re-parsed back into a lookup value.
+ *
+ * Best-effort: when the entity-set → entity mapping isn't in the metadata
+ * store we fall back to naive de-pluralisation (`products` → `product`).
+ */
+function translateODataBinds(
+  data: Record<string, any>,
+  getEntityData: (entityType: string) => Record<string, any>[],
+): Record<string, any> {
+  const out: Record<string, any> = {};
+
+  // Build a one-shot entitySet → entity logical name map from loaded metadata.
+  const setToEntity: Record<string, string> = {};
+  for (const ent of getAllEntityTypes()) {
+    const meta = getEntityMetadata(ent);
+    if (!meta) continue;
+    // Convention: entitySet = ent + 's' unless ends in 'y' → 'ies'.
+    const set = ent.endsWith('y') ? ent.slice(0, -1) + 'ies' : ent + 's';
+    setToEntity[set] = ent;
+  }
+
+  for (const [key, val] of Object.entries(data)) {
+    const bindMatch = key.match(/^(.+)@odata\.bind$/i);
+    if (!bindMatch || typeof val !== 'string') {
+      out[key] = val;
+      continue;
+    }
+    const navProp = bindMatch[1];
+    const refMatch = val.match(/^\/?([A-Za-z0-9_]+)\(([0-9a-fA-F-]+)\)$/);
+    if (!refMatch) {
+      out[key] = val;
+      continue;
+    }
+    const [, entitySet, guid] = refMatch;
+    const targetEntity = setToEntity[entitySet]
+      ?? (entitySet.endsWith('ies') ? entitySet.slice(0, -3) + 'y' : entitySet.replace(/s$/, ''));
+    const lookupCol = navProp.toLowerCase();
+
+    // Best-effort: pull the primary name from the target record for the
+    // FormattedValue annotation. Controls that render lookups read this.
+    let formatted = '';
+    try {
+      const targetMeta = getEntityMetadata(targetEntity);
+      const primaryName = targetMeta?.primaryNameAttribute ?? 'name';
+      const primaryId = targetMeta?.primaryIdAttribute ?? `${targetEntity}id`;
+      const rec = getEntityData(targetEntity).find(r => String(r[primaryId]) === guid);
+      if (rec && rec[primaryName] != null) formatted = String(rec[primaryName]);
+    } catch { /* best-effort */ }
+
+    out[`_${lookupCol}_value`] = guid;
+    out[`_${lookupCol}_value@Microsoft.Dynamics.CRM.lookuplogicalname`] = targetEntity;
+    out[`_${lookupCol}_value@Microsoft.Dynamics.CRM.associatednavigationproperty`] = navProp;
+    if (formatted) {
+      out[`_${lookupCol}_value@OData.Community.Display.V1.FormattedValue`] = formatted;
+    }
+  }
+  return out;
 }
 
 /**
@@ -416,7 +485,8 @@ export function createWebApiShim(
           }
         }
         await applyNetworkConditions(mode);
-        const record = addEntityRecord(entityType, { ...data });
+        const translated = translateODataBinds(data, getEntityData);
+        const record = addEntityRecord(entityType, translated);
         const idField = Object.keys(record).find(k => k.toLowerCase().endsWith('id') || k === 'id') ?? 'id';
         const id = String(record[idField]);
         const result = { id, entityType };
@@ -521,7 +591,7 @@ export function createWebApiShim(
           }
         }
         await applyNetworkConditions(mode);
-        updateEntityRecord(entityType, id, data);
+        updateEntityRecord(entityType, id, translateODataBinds(data, getEntityData));
         getState().addWebApiCall({
           method: `${prefix}updateRecord`, entityType, durationMs: performance.now() - start,
           responseSize: estimateSize(data), recordCount: 1,
