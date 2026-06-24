@@ -22,6 +22,7 @@ import {
   isResolvedView, synthesizeDefaultView, ensureViewsLibrary, generateViewId,
 } from '../../types/dataset-binding';
 import { lookupResxString } from '../../shim/resources';
+import { deriveColumnBindings } from '../../lib/auto-column-bindings';
 
 const useStyles = makeStyles({
   block: {
@@ -818,10 +819,24 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
           const nextLib = existing >= 0
             ? viewLibrary.map((v, i) => i === existing ? view : v)
             : [...viewLibrary, view];
+
+          // Auto-derive columnBindings from the view's columns when the maker
+          // hasn't explicitly mapped them yet. In live mode the row keys are
+          // Dataverse schema names (`msdyn_product`) and OData lookup values
+          // (`_msdyn_product_value`) — without a mapping, `getValue("Product")`
+          // returns null and controls that don't null-check (most of them)
+          // crash on `.id.guid`. Existing user-set bindings are preserved.
+          const { bindings: derived } = deriveColumnBindings(
+            ds.columns,
+            view.columns,
+            effective.columnBindings,
+          );
+
           setDatasetBinding(ds.name, {
             ...effective,
             view,
             views: nextLib,
+            columnBindings: derived,
           });
         }}
       />
