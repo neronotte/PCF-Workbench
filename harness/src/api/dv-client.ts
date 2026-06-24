@@ -414,29 +414,33 @@ export interface LiveRelationship {
 const liveRelationshipCache = new Map<string, LiveRelationship[]>();
 
 /**
- * List the 1:N relationships from `parentEntity` to `childEntity`. Returns
- * every candidate (often >1 — e.g. msdyn_workorder has both a "WorkOrder"
- * and a "SourceWorkOrder" relationship to msdyn_workorderproduct), so the
- * maker picks. Cached per (org, parent, child).
+ * List the 1:N relationships from `parentEntity`. If `childEntity` is
+ * provided, narrow to that child; otherwise return every 1:N relationship
+ * (often dozens) so the picker UX can show the maker what entity each
+ * relationship points at. Cached per (org, parent, child).
  */
 export async function liveListRelationships(
   orgUrl: string,
   parentEntity: string,
-  childEntity: string,
+  childEntity?: string,
   force = false,
 ): Promise<LiveRelationship[]> {
-  const key = `${orgUrl}||${parentEntity}->${childEntity}`;
+  const key = `${orgUrl}||${parentEntity}->${childEntity ?? '*'}`;
   if (!force) {
     const cached = liveRelationshipCache.get(key);
     if (cached) return cached;
   }
   const select = '$select=SchemaName,ReferencingEntity,ReferencingAttribute,ReferencedEntity,ReferencedAttribute';
-  const filter = `$filter=${encodeURIComponent(`ReferencingEntity eq '${childEntity}'`)}`;
-  const path = `/api/data/v9.2/EntityDefinitions(LogicalName='${parentEntity}')/OneToManyRelationships?${select}&${filter}`;
+  const filterParts: string[] = [];
+  if (childEntity) filterParts.push(`ReferencingEntity eq '${childEntity}'`);
+  const filter = filterParts.length > 0
+    ? `&$filter=${encodeURIComponent(filterParts.join(' and '))}`
+    : '';
+  const path = `/api/data/v9.2/EntityDefinitions(LogicalName='${parentEntity}')/OneToManyRelationships?${select}${filter}`;
   const raw = await dvGet<{ value: Array<Record<string, string>> }>(orgUrl, path);
   const list: LiveRelationship[] = (raw.value ?? []).map(r => ({
     schemaName: r.SchemaName ?? '',
-    referencingEntity: r.ReferencingEntity ?? childEntity,
+    referencingEntity: r.ReferencingEntity ?? childEntity ?? '',
     referencingAttribute: r.ReferencingAttribute ?? '',
     referencedEntity: r.ReferencedEntity ?? parentEntity,
     referencedAttribute: r.ReferencedAttribute ?? `${parentEntity}id`,

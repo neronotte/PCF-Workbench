@@ -657,7 +657,6 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
             <LiveRelationshipPicker
               dsName={ds.name}
               parentEntity={pageEntityTypeName}
-              childEntity={resolvedView.entityType || ds.name}
               activeSchemaName={effective.relationshipName}
               onPick={(rel) => update({
                 relationshipName: rel?.schemaName,
@@ -1131,23 +1130,22 @@ function LiveViewsRow({ dsName, entityType, activeViewId, onAdoptView }: LiveVie
 }
 
 /**
- * UCI-style searchable picker for 1:N relationships between a parent entity
- * (typically Page Context) and the child dataset entity. Hits
- * `EntityDefinitions(<parent>)/OneToManyRelationships` filtered to the
- * child entity. Auto-picks when there's exactly one candidate so the maker
- * doesn't have to click. Shows a clear "pick the parent first" state when
- * the prerequisites aren't met.
+ * UCI-style searchable picker for 1:N relationships from a parent entity
+ * (typically Page Context). Lists EVERY 1:N from the parent so the maker
+ * can see which child entity each goes to — useful when the dataset isn't
+ * yet bound to a concrete entity (the relationship itself defines the
+ * child). Auto-picks when there's exactly one candidate. Shows a clear
+ * "pick the parent first" state when the prerequisites aren't met.
  */
 interface LiveRelationshipPickerProps {
   dsName: string;
   parentEntity: string;
-  childEntity: string;
   activeSchemaName?: string;
   onPick: (rel: LiveRelationship | null) => void;
 }
 
 function LiveRelationshipPicker({
-  dsName, parentEntity, childEntity, activeSchemaName, onPick,
+  dsName, parentEntity, activeSchemaName, onPick,
 }: LiveRelationshipPickerProps) {
   const orgUrl = useHarnessStore(s => s.liveProfile?.orgUrl ?? '');
   const connectionState = useHarnessStore(s => s.liveConnectionState);
@@ -1155,38 +1153,43 @@ function LiveRelationshipPicker({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canFetch = orgUrl && connectionState === 'connected' && parentEntity && childEntity;
+  const canFetch = orgUrl && connectionState === 'connected' && parentEntity;
 
   const fetchRels = useCallback(async (force = false) => {
     if (!canFetch) return;
     setLoading(true);
     setError(null);
     try {
-      const rels = await liveListRelationships(orgUrl, parentEntity, childEntity, force);
+      // Pass `undefined` for childEntity so the API returns ALL 1:N from
+      // the parent — the maker picks the relationship, which in turn tells
+      // us which child entity to fetch from.
+      const rels = await liveListRelationships(orgUrl, parentEntity, undefined, force);
+      // Sort by child entity name → relationship schema, for a stable display.
+      rels.sort((a, b) =>
+        a.referencingEntity.localeCompare(b.referencingEntity)
+        || a.schemaName.localeCompare(b.schemaName),
+      );
       setFetched(rels);
-      // Auto-pick when there's exactly one candidate (common case).
-      if (rels.length === 1 && !activeSchemaName) {
-        onPick(rels[0]);
-      }
     } catch (e: any) {
       const msg = e instanceof DvProxyError ? `${e.body.error}: ${e.body.message}` : (e?.message ?? 'Failed');
       setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [canFetch, orgUrl, parentEntity, childEntity, activeSchemaName, onPick]);
+  }, [canFetch, orgUrl, parentEntity]);
 
   useEffect(() => {
     if (canFetch && !fetched && !loading) {
       void fetchRels(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canFetch, parentEntity, childEntity]);
+  }, [canFetch, parentEntity]);
 
   const items: Array<SearchPickerItem<LiveRelationship>> = useMemo(
     () => (fetched ?? []).map(r => ({
       value: r.schemaName,
-      text: `${r.referencingAttribute}  ·  ${r.schemaName}`,
+      // Show: <child entity> · <fk attr> · <schema>
+      text: `${r.referencingEntity}  ·  ${r.referencingAttribute}  ·  ${r.schemaName}`,
       raw: r,
     })),
     [fetched],
@@ -1208,7 +1211,7 @@ function LiveRelationshipPicker({
         !parentEntity ? 'Pick a Page Context entity to load relationships.' :
         connectionState !== 'connected' ? 'Connect to the org first.' :
         fetched && fetched.length === 0
-          ? `No 1:N relationships from ${parentEntity} to ${childEntity}.`
+          ? `No 1:N relationships from ${parentEntity}.`
           : undefined
       }
       onSelect={(item) => onPick(item.raw)}
