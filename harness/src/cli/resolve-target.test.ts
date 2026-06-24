@@ -13,6 +13,10 @@ function writeManifest(dir: string): void {
   mkdir(dir);
   fs.writeFileSync(path.join(dir, 'ControlManifest.Input.xml'), MANIFEST);
 }
+function writeDeployedManifest(dir: string): void {
+  mkdir(dir);
+  fs.writeFileSync(path.join(dir, 'ControlManifest.xml'), MANIFEST);
+}
 
 describe('resolvePcfTarget', () => {
   let tmp: string;
@@ -115,5 +119,23 @@ describe('resolvePcfTarget', () => {
     writeManifest(path.join(tmp, 'SubControl'));
     const result = resolvePcfTarget(tmp);
     expect(result.kind).toBe('control');
+  });
+
+  it('returns control mode for deployed/extracted controls (ControlManifest.xml)', () => {
+    const ctrl = path.join(tmp, 'DeployedControl');
+    writeDeployedManifest(ctrl);
+    const result = resolvePcfTarget(ctrl);
+    expect(result.kind).toBe('control');
+    expect(result.path).toBe(path.resolve(ctrl));
+  });
+
+  it('workspace mode picks up both source and deployed manifests in subdirs', () => {
+    writeManifest(path.join(tmp, 'SourceControl'));
+    writeDeployedManifest(path.join(tmp, 'DeployedControl'));
+    const result = resolvePcfTarget(tmp);
+    expect(result.kind).toBe('workspace');
+    if (result.kind === 'workspace') {
+      expect(result.controls.sort()).toEqual(['DeployedControl', 'SourceControl']);
+    }
   });
 });

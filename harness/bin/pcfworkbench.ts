@@ -353,10 +353,11 @@ function evaluateBudget(harnessReport: any, budget: PerfBudget, source: string |
 /* ---------------------------------------------------------------- */
 
 function assertControlDir(controlPath: string): void {
-  const manifestPath = path.join(controlPath, 'ControlManifest.Input.xml');
-  if (!fs.existsSync(manifestPath)) {
-    console.error(`\n  Error: ControlManifest.Input.xml not found at:\n  ${manifestPath}\n`);
-    console.error(`  Make sure --path points to the directory containing ControlManifest.Input.xml.\n`);
+  const inputManifest = path.join(controlPath, 'ControlManifest.Input.xml');
+  const deployedManifest = path.join(controlPath, 'ControlManifest.xml');
+  if (!fs.existsSync(inputManifest) && !fs.existsSync(deployedManifest)) {
+    console.error(`\n  Error: ControlManifest not found at:\n  ${inputManifest}\n  ${deployedManifest}\n`);
+    console.error(`  Make sure --path points to the directory containing ControlManifest.Input.xml (source) or ControlManifest.xml (deployed/extracted).\n`);
     process.exit(1);
   }
 }

@@ -3,9 +3,11 @@
 // described in issue #36.
 //
 // Rules:
-//   1. If `<input>/ControlManifest.Input.xml` exists → single-control mode.
-//   2. Else if `<input>` contains any subdirectory with its own
-//      `ControlManifest.Input.xml` → workspace (gallery) mode.
+//   1. If `<input>/ControlManifest.Input.xml` (source projects) or
+//      `<input>/ControlManifest.xml` (deployed / extracted controls) exists
+//      → single-control mode.
+//   2. Else if `<input>` contains any subdirectory with either manifest file
+//      → workspace (gallery) mode.
 //   3. Else → throw with a clear, actionable message listing what was found.
 //
 // Pure, no global state, no env mutation. The CLI is responsible for
@@ -14,6 +16,19 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+
+/** Manifest filenames accepted by the harness: `Input.xml` is the
+ *  pcf-scripts authoring source; bare `ControlManifest.xml` is what ships
+ *  inside an exported / extracted solution. The Vite plugin and gallery
+ *  scanner both honour either form, so the CLI must too. */
+const MANIFEST_BASENAMES = ['ControlManifest.Input.xml', 'ControlManifest.xml'];
+
+function hasManifest(dir: string): boolean {
+  for (const name of MANIFEST_BASENAMES) {
+    if (fs.existsSync(path.join(dir, name))) return true;
+  }
+  return false;
+}
 
 export interface ControlTarget {
   kind: 'control';
@@ -56,7 +71,7 @@ export function resolvePcfTarget(input: string): ResolveResult {
   }
 
   // Rule 1 — direct manifest = control mode.
-  if (fs.existsSync(path.join(abs, 'ControlManifest.Input.xml'))) {
+  if (hasManifest(abs)) {
     return { kind: 'control', path: abs };
   }
 
@@ -89,8 +104,8 @@ export function resolvePcfTarget(input: string): ResolveResult {
   throw new ResolveTargetError(
     `No PCF control found at: ${abs}\n` +
       `  Expected either:\n` +
-      `    - a ControlManifest.Input.xml in this directory (single-control mode), or\n` +
-      `    - one or more subdirectories each containing ControlManifest.Input.xml (workspace mode).${contentsHint}`,
+      `    - a ControlManifest.Input.xml (or ControlManifest.xml for deployed/extracted controls) in this directory (single-control mode), or\n` +
+      `    - one or more subdirectories each containing one of those manifests (workspace mode).${contentsHint}`,
   );
 }
 
@@ -118,7 +133,7 @@ function findControlsUpToDepth(root: string, maxDepth: number): string[] {
         const childDir = path.join(dir, entry.name);
         const name = topLevelName ?? entry.name;
         // Cheap manifest check on this subdir before recursing further.
-        if (fs.existsSync(path.join(childDir, 'ControlManifest.Input.xml'))) {
+        if (hasManifest(childDir)) {
           hits.add(name);
           continue; // No need to descend into a known control dir.
         }
