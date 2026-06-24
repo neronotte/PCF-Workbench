@@ -63,10 +63,17 @@ const useStyles = makeStyles({
   },
   columnGrid: {
     display: 'grid',
-    gridTemplateColumns: '24px 1fr 60px 60px 28px 28px',
+    gridTemplateColumns: '16px minmax(0, 1fr) 56px 56px 24px 24px 24px',
     alignItems: 'center',
     gap: '4px',
     fontSize: tokens.fontSizeBase200,
+  },
+  sortBtn: {
+    minWidth: '48px',
+    paddingLeft: '4px',
+    paddingRight: '4px',
+    fontSize: tokens.fontSizeBase100,
+    fontWeight: tokens.fontWeightSemibold,
   },
   columnHeader: {
     fontSize: tokens.fontSizeBase100,
@@ -363,7 +370,7 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
       {editingColumns && (
         <div className={styles.row} data-test-id={`dataset-binding-column-editor-${ds.name}`}>
           <div className={styles.inlineRow} style={{ justifyContent: 'space-between' }}>
-            <span className={styles.hint}>Drag-free order: ▲ ▼. Sort: click ASC / DESC. Width: px.</span>
+            <span className={styles.hint}>Reorder with ▲ ▼. Click Sort to cycle ASC → DESC → off. Width in px.</span>
             <Button appearance="subtle" size="small" onClick={resetView}>Reset</Button>
           </div>
           <div className={styles.columnGrid}>
@@ -373,42 +380,47 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
             <span className={styles.columnHeader}>Sort</span>
             <span className={styles.columnHeader}></span>
             <span className={styles.columnHeader}></span>
+            <span className={styles.columnHeader}></span>
           </div>
           {resolvedView.columns.map((col, idx) => {
             const manifestCol = ds.columns.find(c => c.name === col.name);
             const label = manifestCol ? manifestColumnLabel(manifestCol, lcid) : col.name;
             const sort = col.sortDirection ?? null;
+            const nextSort: 'asc' | 'desc' | null = sort == null ? 'asc' : sort === 'asc' ? 'desc' : null;
+            const sortLabel = sort == null ? '—' : sort === 'asc' ? 'ASC ▲' : 'DESC ▼';
             return (
               <div key={col.name} className={styles.columnGrid}>
-                <span style={{ width: 16, height: 16, display: 'inline-block', backgroundColor: tokens.colorBrandBackground, borderRadius: 4 }} />
-                <span title={col.name}>{label}</span>
+                <span style={{ width: 10, height: 10, display: 'inline-block', backgroundColor: tokens.colorBrandBackground, borderRadius: 2 }} />
+                <span title={col.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
                 <Input
                   size="small"
                   value={col.width != null ? String(col.width) : ''}
                   onChange={(_, d) => setColumnWidth(col.name, d.value)}
                   placeholder="auto"
                 />
-                <Dropdown
+                <Button
+                  className={styles.sortBtn}
+                  appearance={sort ? 'primary' : 'subtle'}
                   size="small"
-                  value={sort ?? '—'}
-                  selectedOptions={[sort ?? 'none']}
-                  onOptionSelect={(_, d) => setColumnSort(col.name, d.optionValue === 'none' ? null : (d.optionValue as 'asc' | 'desc'))}
+                  onClick={() => setColumnSort(col.name, nextSort)}
+                  title="Click to cycle sort: none → ASC → DESC → none"
+                  data-test-id={`dataset-binding-sort-${ds.name}-${col.name}`}
                 >
-                  <Option value="none">—</Option>
-                  <Option value="asc">ASC</Option>
-                  <Option value="desc">DESC</Option>
-                </Dropdown>
+                  {sortLabel}
+                </Button>
                 <Button appearance="subtle" size="small" icon={<ChevronUp16Regular />} onClick={() => moveColumn(idx, -1)} disabled={idx === 0} aria-label={`Move ${col.name} up`} />
                 <Button appearance="subtle" size="small" icon={<ChevronDown16Regular />} onClick={() => moveColumn(idx, 1)} disabled={idx === resolvedView.columns.length - 1} aria-label={`Move ${col.name} down`} />
+                <Button appearance="subtle" size="small" icon={<Delete16Regular />} onClick={() => toggleColumn(col.name, false)} aria-label={`Hide ${col.name}`} data-test-id={`dataset-binding-remove-col-${ds.name}-${col.name}`} />
               </div>
             );
           })}
           {hiddenManifestColumns.length > 0 && (
             <>
               <div className={styles.hint} style={{ marginTop: 6 }}>Hidden columns ({hiddenManifestColumns.length})</div>
-              {hiddenManifestColumns.map(col => (
-                <div key={col.name} className={styles.inlineRow}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {hiddenManifestColumns.map(col => (
                   <Button
+                    key={col.name}
                     appearance="subtle"
                     size="small"
                     icon={<Add16Regular />}
@@ -417,27 +429,9 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
                   >
                     {manifestColumnLabel(col, lcid)}
                   </Button>
-                </div>
-              ))}
+                ))}
+              </div>
             </>
-          )}
-          {resolvedView.columns.length > 0 && (
-            <div className={styles.hint} style={{ marginTop: 6 }}>
-              Remove a visible column:
-              {resolvedView.columns.map(col => (
-                <Button
-                  key={col.name}
-                  appearance="subtle"
-                  size="small"
-                  icon={<Delete16Regular />}
-                  onClick={() => toggleColumn(col.name, false)}
-                  data-test-id={`dataset-binding-remove-col-${ds.name}-${col.name}`}
-                  style={{ marginLeft: 4 }}
-                >
-                  {col.name}
-                </Button>
-              ))}
-            </div>
           )}
         </div>
       )}
