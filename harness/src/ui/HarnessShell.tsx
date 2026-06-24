@@ -224,6 +224,15 @@ function BuildStatusPill() {
 export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir, launchedAsGallery }: Props) {
   const styles = useStyles();
   const [activeTab, setActiveTab] = useState<SidePanelTab>('properties');
+
+  // Cross-panel deep-link: form-chrome view pill's Edit button fires
+  // `pcfwb:focus-dataset-binding`. The Data panel listens for the card focus,
+  // but the tab also needs to switch when the user is on a different tab.
+  useEffect(() => {
+    const handler = () => setActiveTab('data');
+    window.addEventListener('pcfwb:focus-dataset-binding', handler);
+    return () => window.removeEventListener('pcfwb:focus-dataset-binding', handler);
+  }, []);
   const isDarkMode = useHarnessStore(s => s.isDarkMode);
   const toggleDarkMode = useHarnessStore(s => s.toggleDarkMode);
   const isControlDisabled = useHarnessStore(s => s.isControlDisabled);

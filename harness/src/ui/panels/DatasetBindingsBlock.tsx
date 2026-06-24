@@ -3,11 +3,10 @@ import {
   makeStyles, tokens, Button, Badge,
   Radio, RadioGroup, Dropdown, Option, Input, Label, Switch,
   Tooltip,
-  Menu, MenuTrigger, MenuPopover, MenuList, MenuItemRadio, MenuDivider, MenuItem,
 } from '@fluentui/react-components';
 import {
   Add16Regular, Delete16Regular, ReOrderDotsVertical16Regular,
-  Edit16Regular, ChevronDown16Regular,
+  Edit16Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore } from '../../store/harness-store';
 import type { ManifestDataSet, ManifestProperty } from '../../types/manifest';
@@ -190,6 +189,19 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
   const [editingColumns, setEditingColumns] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  // Cross-panel deep-link from form-chrome edit affordances. When the focus
+  // event names THIS dataset and asks for autoEdit, open the column editor
+  // so the user lands on the configured surface in one click.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<FocusBindingDetail>).detail;
+      if (detail?.datasetName !== ds.name) return;
+      if (detail.autoEdit) setEditingColumns(true);
+    };
+    window.addEventListener(FOCUS_BINDING_EVENT, handler);
+    return () => window.removeEventListener(FOCUS_BINDING_EVENT, handler);
+  }, [ds.name]);
 
   // Effective binding — fall back to a synthesised homegrid + all-columns
   // default so the UI never has to deal with `undefined`. P0's apply path
@@ -665,9 +677,11 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
  * is collapsed.
  */
 export const FOCUS_BINDING_EVENT = 'pcfwb:focus-dataset-binding';
-export interface FocusBindingDetail { datasetName: string }
-export function emitFocusDatasetBinding(datasetName: string): void {
-  window.dispatchEvent(new CustomEvent<FocusBindingDetail>(FOCUS_BINDING_EVENT, { detail: { datasetName } }));
+export interface FocusBindingDetail { datasetName: string; autoEdit?: boolean }
+export function emitFocusDatasetBinding(datasetName: string, opts?: { autoEdit?: boolean }): void {
+  window.dispatchEvent(new CustomEvent<FocusBindingDetail>(FOCUS_BINDING_EVENT, {
+    detail: { datasetName, autoEdit: opts?.autoEdit },
+  }));
 }
 
 /**
@@ -700,78 +714,59 @@ export function DatasetViewPills() {
         return (
           <span
             key={ds.name}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
             data-test-id={`form-chrome-view-pill-${ds.name}`}
+            title={`${ds.name} • host: ${host}`}
           >
-            <Menu
-              checkedValues={{ view: activeViewId ? [activeViewId] : [] }}
-              onCheckedValueChange={(_, data) => {
-                if (data.name !== 'view') return;
-                const nextId = data.checkedItems[0];
-                const nextView = library.find(v => v.viewId === nextId);
+            <span style={{
+              color: tokens.colorNeutralForeground3,
+              fontSize: tokens.fontSizeBase200,
+            }}>View:</span>
+            {/*
+              Native <select> on purpose. We tried Fluent v9 Menu and Dropdown
+              here first; both caused the whole page to render white while the
+              popover was open, likely because FormChrome's providerRoot is
+              `overflow: hidden` and the popover's portal positioning gets
+              clipped/blanks the FluentProvider scope. Native <select> uses
+              OS-level popup chrome and dodges the whole problem.
+            */}
+            <select
+              value={activeViewId}
+              onChange={(e) => {
+                const nextView = library.find(v => v.viewId === e.target.value);
                 if (!binding || !nextView) return;
                 setDatasetBinding(ds.name, { ...binding, view: nextView });
               }}
+              data-test-id={`form-chrome-view-pill-trigger-${ds.name}`}
+              aria-label={`Select view for ${ds.name}`}
+              style={{
+                fontFamily: 'inherit',
+                fontSize: tokens.fontSizeBase200,
+                fontWeight: tokens.fontWeightSemibold,
+                color: tokens.colorNeutralForeground1,
+                backgroundColor: tokens.colorNeutralBackground3,
+                border: `1px solid ${tokens.colorNeutralStroke2}`,
+                borderRadius: tokens.borderRadiusMedium,
+                padding: '2px 6px',
+                cursor: 'pointer',
+                maxWidth: 200,
+              }}
             >
-              <MenuTrigger disableButtonEnhancement>
-                <button
-                  type="button"
-                  title={`${ds.name} • host: ${host} • switch view`}
-                  data-test-id={`form-chrome-view-pill-trigger-${ds.name}`}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '2px 8px',
-                    borderRadius: 12,
-                    border: `1px solid ${tokens.colorNeutralStroke2}`,
-                    backgroundColor: tokens.colorNeutralBackground3,
-                    color: tokens.colorNeutralForeground2,
-                    fontSize: tokens.fontSizeBase200,
-                    fontWeight: tokens.fontWeightRegular,
-                    cursor: 'pointer',
-                    lineHeight: 1.4,
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  <span style={{ color: tokens.colorNeutralForeground3 }}>View:</span>
-                  <span style={{ fontWeight: tokens.fontWeightSemibold, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-                  <ChevronDown16Regular />
-                </button>
-              </MenuTrigger>
-              <MenuPopover>
-                <MenuList>
-                  {library.map(v => (
-                    <MenuItemRadio
-                      key={v.viewId}
-                      name="view"
-                      value={v.viewId}
-                      data-test-id={`form-chrome-view-menu-item-${ds.name}-${v.viewId}`}
-                    >
-                      {v.displayName}
-                    </MenuItemRadio>
-                  ))}
-                  <MenuDivider />
-                  <MenuItem
-                    icon={<Edit16Regular />}
-                    onClick={() => emitFocusDatasetBinding(ds.name)}
-                    data-test-id={`form-chrome-view-menu-edit-${ds.name}`}
-                  >
-                    Edit columns…
-                  </MenuItem>
-                </MenuList>
-              </MenuPopover>
-            </Menu>
-            <Tooltip content="Edit columns in Data panel" relationship="label">
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={<Edit16Regular />}
-                onClick={() => emitFocusDatasetBinding(ds.name)}
-                aria-label={`Edit columns for ${ds.name}`}
-                data-test-id={`form-chrome-view-edit-${ds.name}`}
-              />
-            </Tooltip>
+              {library.map(v => (
+                <option key={v.viewId} value={v.viewId}>
+                  {v.displayName}
+                </option>
+              ))}
+            </select>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<Edit16Regular />}
+              onClick={() => emitFocusDatasetBinding(ds.name, { autoEdit: true })}
+              aria-label={`Edit columns for ${ds.name}`}
+              title="Edit columns in Data panel"
+              data-test-id={`form-chrome-view-edit-${ds.name}`}
+            />
           </span>
         );
       })}
@@ -797,17 +792,20 @@ export function DatasetBindingsBlock() {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<FocusBindingDetail>).detail;
       if (!detail?.datasetName || !rootRef.current) return;
-      const card = rootRef.current.querySelector<HTMLDivElement>(
-        `[data-test-id="dataset-binding-card-${detail.datasetName}"]`,
-      );
-      if (!card) return;
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Brief flash. CSS class would be cleaner but the inline approach keeps
-      // the side-effect colocated with the listener.
-      const original = card.style.boxShadow;
-      card.style.transition = 'box-shadow 200ms ease-out';
-      card.style.boxShadow = `0 0 0 2px ${tokens.colorBrandStroke1}`;
-      window.setTimeout(() => { card.style.boxShadow = original; }, 1200);
+      // Defer to the next animation frame so the HarnessShell tab switch +
+      // the card's own autoEdit re-render have committed before we try to
+      // scroll. Calling scrollIntoView synchronously on a still-hidden
+      // (display:none) DataPanel causes a visible layout-thrash flash.
+      requestAnimationFrame(() => {
+        if (!rootRef.current) return;
+        const card = rootRef.current.querySelector<HTMLDivElement>(
+          `[data-test-id="dataset-binding-card-${detail.datasetName}"]`,
+        );
+        if (!card) return;
+        // 'auto' (instant) avoids the smooth-scroll animation that, combined
+        // with the tab content swap, was reading as a full-screen flash.
+        card.scrollIntoView({ behavior: 'auto', block: 'center' });
+      });
     };
     window.addEventListener(FOCUS_BINDING_EVENT, handler);
     return () => window.removeEventListener(FOCUS_BINDING_EVENT, handler);
