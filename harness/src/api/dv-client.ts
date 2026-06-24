@@ -214,6 +214,23 @@ export async function liveRetrieveMultiple(
   options: string | undefined,
   maxPageSize: number | undefined,
 ): Promise<AdaptedMultiResponse> {
+  // Short-circuit obviously-malformed filters BEFORE hitting Dataverse.
+  // Common case: a control reads a null lookup (we stub to empty-guid for
+  // crash safety) and substitutes it into `$filter=(<attr> eq )` — Dataverse
+  // 400s on this, masking the real bug (the control didn't null-check). We
+  // return an empty result instead so the maker can keep testing, with a
+  // visible warning entry in the activity log that points at the control.
+  if (options && hasEmptyFilterOperand(options)) {
+    if (typeof console !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[pcf-workbench] Skipping retrieveMultipleRecords — filter has empty operand. ' +
+        'The control likely passed a null lookup id into $filter without checking. ' +
+        `entity=${logicalEntity} options=${options}`,
+      );
+    }
+    return { entities: [] };
+  }
   const setName = await resolveEntitySetName(orgUrl, logicalEntity);
   const query = options
     ? options.startsWith('?') ? options : `?${options}`
@@ -222,6 +239,25 @@ export async function liveRetrieveMultiple(
   const prefer = maxPageSize ? `odata.maxpagesize=${maxPageSize}` : undefined;
   const raw = await dvGet<ODataValueResponse>(orgUrl, path, prefer);
   return adaptMultiResponse(raw);
+}
+
+/**
+ * Detect `$filter` clauses with an empty right-hand operand on a comparison
+ * operator — e.g. `(productid eq )`, `(name eq '')`. Matches patterns the
+ * eq-empty-guid stub produces when controls don't null-check a Lookup value.
+ * Lenient by design: a string-literal `eq ''` is also flagged because no
+ * real PCF would intentionally filter for empty-string keys.
+ */
+function hasEmptyFilterOperand(options: string): boolean {
+  // Find the $filter= segment (case-insensitive, may be URL-encoded).
+  const decoded = (() => { try { return decodeURIComponent(options); } catch { return options; } })();
+  const match = /\$filter=([^&]+)/i.exec(decoded);
+  if (!match) return false;
+  const expr = match[1];
+  // `<attr> <op>` followed by `)` or end → empty operand
+  // `<attr> <op> ''`                      → empty string literal
+  // Operators: eq ne gt ge lt le
+  return /\b(eq|ne|gt|ge|lt|le)\s*(?:\)|$|''|""|,)/i.test(expr);
 }
 
 /**
