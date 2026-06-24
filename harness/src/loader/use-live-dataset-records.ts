@@ -123,6 +123,67 @@ function injectAllAttributes(fetchXml: string): string {
   return fetchXml.slice(0, openIdx) + newInner + fetchXml.slice(closeIdx);
 }
 
+/**
+ * Inject a `<filter><condition attribute=<fk> operator='eq' value=<id>/></filter>`
+ * into the outer entity of a FetchXML so an Associated-host dataset is
+ * scoped to records that point back at the page-context parent. Mirrors
+ * how UCI augments the underlying query with the relationship filter when
+ * rendering an Associated grid.
+ *
+ * If the FetchXML already has a top-level `<filter>`, we append a new
+ * `<condition>` inside it (preserves the maker's own filter). Otherwise
+ * we add a fresh `<filter type="and">`. Nested link-entity filters are
+ * untouched.
+ */
+function injectParentFilter(
+  fetchXml: string,
+  fkAttribute: string,
+  parentId: string,
+): string {
+  if (!fkAttribute || !parentId) return fetchXml;
+  const condition = `<condition attribute="${fkAttribute}" operator="eq" value="${parentId}"/>`;
+  // Find outer <entity ...> open tag.
+  const entityRe = /<entity\b[^>]*>/i;
+  const openMatch = entityRe.exec(fetchXml);
+  if (!openMatch) return fetchXml;
+  const openIdx = openMatch.index + openMatch[0].length;
+  // Walk inside the outer entity (skipping any link-entity blocks) to find
+  // the first top-level <filter ...> open tag, OR the </entity> close.
+  let i = openIdx;
+  const len = fetchXml.length;
+  while (i < len) {
+    // Skip link-entity blocks
+    const linkOpen = /<link-entity\b/gi; linkOpen.lastIndex = i;
+    const filterOpen = /<filter\b[^>]*>/gi; filterOpen.lastIndex = i;
+    const entClose = /<\/entity>/gi; entClose.lastIndex = i;
+    const nextLink = linkOpen.exec(fetchXml);
+    const nextFilter = filterOpen.exec(fetchXml);
+    const nextClose = entClose.exec(fetchXml);
+    if (!nextClose) return fetchXml;
+    // Earliest of the three wins.
+    const candidates = [nextLink, nextFilter, nextClose].filter(Boolean) as RegExpExecArray[];
+    candidates.sort((a, b) => a.index - b.index);
+    const winner = candidates[0];
+    if (winner === nextLink) {
+      // Skip past matching </link-entity>
+      const linkClose = /<\/link-entity>/gi; linkClose.lastIndex = winner.index;
+      const m = linkClose.exec(fetchXml);
+      if (!m) return fetchXml;
+      i = m.index + m[0].length;
+      continue;
+    }
+    if (winner === nextFilter) {
+      // Insert the condition immediately after the <filter ...> open tag.
+      const insertAt = winner.index + winner[0].length;
+      return fetchXml.slice(0, insertAt) + condition + fetchXml.slice(insertAt);
+    }
+    // winner === nextClose → no existing filter; create one.
+    const insertAt = winner.index;
+    return fetchXml.slice(0, insertAt) + `<filter type="and">${condition}</filter>` + fetchXml.slice(insertAt);
+  }
+  return fetchXml;
+}
+
 export function useLiveDatasetRecords() {
   const dataSource = useHarnessStore(s => s.dataSource);
   const connectionState = useHarnessStore(s => s.liveConnectionState);
@@ -133,6 +194,7 @@ export function useLiveDatasetRecords() {
   const addLiveFetches = useHarnessStore(s => s.addLiveFetches);
   const addLogEntry = useHarnessStore(s => s.addLogEntry);
   const setDatasetBinding = useHarnessStore(s => s.setDatasetBinding);
+  const pageEntityId = useHarnessStore(s => s.pageEntityId);
 
   // Per-dataset inflight counter — keyed by dataset name. Each new fetch
   // increments; only the response whose id matches at completion is kept.
@@ -151,7 +213,12 @@ export function useLiveDatasetRecords() {
     if (binding && !view.fetchXml && typeof binding.view === 'object' && 'viewId' in binding.view && binding.view.viewId) {
       getCachedLiveView(binding.view.viewId);
     }
-    return `${ds.name}|${view.entityType}|${view.viewId}|${(view.fetchXml ?? '').length}`;
+    // Include host + relationship + parent id in the digest so an Associated
+    // grid re-fetches when the parent record changes.
+    const assocKey = binding?.host === 'associated'
+      ? `assoc:${binding.relationshipReferencingAttribute ?? ''}:${pageEntityId}`
+      : binding?.host ?? '';
+    return `${ds.name}|${view.entityType}|${view.viewId}|${(view.fetchXml ?? '').length}|${assocKey}`;
   });
   const digestKey = viewDigests.join('||');
 
@@ -170,10 +237,34 @@ export function useLiveDatasetRecords() {
 
       addLogEntry({
         category: 'data', method: 'live.datasetRecords.fetch',
-        args: { dataset: ds.name, entityType, viewId, reloadEpoch },
+        args: { dataset: ds.name, entityType, viewId, reloadEpoch,
+          host: binding?.host,
+          relationship: binding?.relationshipName,
+          parentId: binding?.host === 'associated' ? pageEntityId : undefined,
+        },
       });
 
-      void liveRetrieveByFetchXml(orgUrl, entityType, injectAllAttributes(view.fetchXml))
+      // Compose the FetchXML: all-attributes for full column coverage, plus
+      // an Associated-host parent filter when applicable. The filter is
+      // skipped (with a logged warning) when the relationship FK or parent
+      // id is missing — the maker sees an unfiltered fetch instead of a
+      // silent empty result.
+      let outgoingFetchXml = injectAllAttributes(view.fetchXml);
+      if (binding?.host === 'associated') {
+        const fk = binding.relationshipReferencingAttribute;
+        if (fk && pageEntityId) {
+          outgoingFetchXml = injectParentFilter(outgoingFetchXml, fk, pageEntityId);
+        } else {
+          addLogEntry({
+            category: 'data', method: 'live.datasetRecords.associatedSkipped',
+            args: { dataset: ds.name,
+              reason: !fk ? 'no relationship picked' : 'no page record',
+            },
+          });
+        }
+      }
+
+      void liveRetrieveByFetchXml(orgUrl, entityType, outgoingFetchXml)
         .then(({ entities }) => {
           if (fetchId !== inflightRef.current[ds.name]) return; // stale
           const rowKeys = entities[0]

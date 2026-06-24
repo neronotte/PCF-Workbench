@@ -103,6 +103,12 @@ export interface DatasetBinding {
   /** Associated only: N:N intersect / relationship schema name. */
   relationshipName?: string;
 
+  /** Associated only: the FK attribute on the child entity that the parent
+   *  filter is applied to (e.g. `msdyn_workorder` on msdyn_workorderproduct).
+   *  Captured at picker time so we don't have to re-fetch relationship
+   *  metadata to inject the FetchXML filter. */
+  relationshipReferencingAttribute?: string;
+
   /** Subgrid + associated: pin a specific parent. Omit to derive from pageContext. */
   parentRecordRef?: {
     entityType: string;

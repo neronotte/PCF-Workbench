@@ -12,7 +12,7 @@ import {
 import { useHarnessStore } from '../../store/harness-store';
 import { getEntityData, getEntityStoreKeys, subscribeData } from '../../store/data-store';
 import { getEntityMetadata } from '../../store/metadata-store';
-import { liveListViews, __clearLiveViewsCache } from '../../api/dv-client';
+import { liveListViews, liveListRelationships, type LiveRelationship, DvProxyError, __clearLiveViewsCache } from '../../api/dv-client';
 import { SearchPicker, type SearchPickerItem } from '../common/SearchPicker';
 import type { ManifestDataSet, ManifestProperty } from '../../types/manifest';
 import type {
@@ -420,7 +420,10 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
     // Clear host-specific fields when switching away so a stale FK doesn't
     // silently filter on a homegrid.
     if (host !== 'subgrid') { next.lookupColumn = undefined; }
-    if (host !== 'associated') { next.relationshipName = undefined; }
+    if (host !== 'associated') {
+      next.relationshipName = undefined;
+      next.relationshipReferencingAttribute = undefined;
+    }
     if (host === 'homegrid') { next.parentRecordRef = undefined; }
     setDatasetBinding(ds.name, next);
   }, [effective, setDatasetBinding, ds.name]);
@@ -650,13 +653,30 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
       {effective.host === 'associated' && (
         <div className={styles.row}>
           <Label size="small">Relationship</Label>
-          <Input
-            value={effective.relationshipName ?? ''}
-            onChange={(_, d) => update({ relationshipName: d.value || undefined })}
-            placeholder="e.g. account_contact_n_n"
-            data-test-id={`dataset-binding-relationship-${ds.name}`}
-          />
-          <span className={styles.hint}>P6 wires N:N intersect fetch. Field captured here for forward-compat.</span>
+          {dataSource === 'live' ? (
+            <LiveRelationshipPicker
+              dsName={ds.name}
+              parentEntity={pageEntityTypeName}
+              childEntity={resolvedView.entityType || ds.name}
+              activeSchemaName={effective.relationshipName}
+              onPick={(rel) => update({
+                relationshipName: rel?.schemaName,
+                relationshipReferencingAttribute: rel?.referencingAttribute,
+              })}
+            />
+          ) : (
+            <Input
+              value={effective.relationshipName ?? ''}
+              onChange={(_, d) => update({ relationshipName: d.value || undefined })}
+              placeholder="e.g. msdyn_msdyn_workorder_msdyn_workorderproduct_WorkOrder"
+              data-test-id={`dataset-binding-relationship-${ds.name}`}
+            />
+          )}
+          <span className={styles.hint}>
+            Filters the child dataset to records whose lookup points at the
+            Page Context record. Pick from the 1:N relationships between
+            <code> {pageEntityTypeName || '<parent>'} </code> and the dataset entity.
+          </span>
         </div>
       )}
 
@@ -1107,6 +1127,94 @@ function LiveViewsRow({ dsName, entityType, activeViewId, onAdoptView }: LiveVie
         testIdPrefix={`dataset-binding-live-views-${dsName}`}
       />
     </div>
+  );
+}
+
+/**
+ * UCI-style searchable picker for 1:N relationships between a parent entity
+ * (typically Page Context) and the child dataset entity. Hits
+ * `EntityDefinitions(<parent>)/OneToManyRelationships` filtered to the
+ * child entity. Auto-picks when there's exactly one candidate so the maker
+ * doesn't have to click. Shows a clear "pick the parent first" state when
+ * the prerequisites aren't met.
+ */
+interface LiveRelationshipPickerProps {
+  dsName: string;
+  parentEntity: string;
+  childEntity: string;
+  activeSchemaName?: string;
+  onPick: (rel: LiveRelationship | null) => void;
+}
+
+function LiveRelationshipPicker({
+  dsName, parentEntity, childEntity, activeSchemaName, onPick,
+}: LiveRelationshipPickerProps) {
+  const orgUrl = useHarnessStore(s => s.liveProfile?.orgUrl ?? '');
+  const connectionState = useHarnessStore(s => s.liveConnectionState);
+  const [fetched, setFetched] = useState<LiveRelationship[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canFetch = orgUrl && connectionState === 'connected' && parentEntity && childEntity;
+
+  const fetchRels = useCallback(async (force = false) => {
+    if (!canFetch) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const rels = await liveListRelationships(orgUrl, parentEntity, childEntity, force);
+      setFetched(rels);
+      // Auto-pick when there's exactly one candidate (common case).
+      if (rels.length === 1 && !activeSchemaName) {
+        onPick(rels[0]);
+      }
+    } catch (e: any) {
+      const msg = e instanceof DvProxyError ? `${e.body.error}: ${e.body.message}` : (e?.message ?? 'Failed');
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [canFetch, orgUrl, parentEntity, childEntity, activeSchemaName, onPick]);
+
+  useEffect(() => {
+    if (canFetch && !fetched && !loading) {
+      void fetchRels(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canFetch, parentEntity, childEntity]);
+
+  const items: Array<SearchPickerItem<LiveRelationship>> = useMemo(
+    () => (fetched ?? []).map(r => ({
+      value: r.schemaName,
+      text: `${r.referencingAttribute}  ·  ${r.schemaName}`,
+      raw: r,
+    })),
+    [fetched],
+  );
+
+  return (
+    <SearchPicker<LiveRelationship>
+      items={items}
+      activeValue={activeSchemaName}
+      placeholder={
+        !parentEntity ? 'Set Page Context entity first' :
+        loading ? 'Loading relationships…' :
+        `Search 1:N from ${parentEntity}…`
+      }
+      loading={loading}
+      error={error}
+      emptyMessage="No matches"
+      unfetchedMessage={
+        !parentEntity ? 'Pick a Page Context entity to load relationships.' :
+        connectionState !== 'connected' ? 'Connect to the org first.' :
+        fetched && fetched.length === 0
+          ? `No 1:N relationships from ${parentEntity} to ${childEntity}.`
+          : undefined
+      }
+      onSelect={(item) => onPick(item.raw)}
+      onRefresh={() => { void fetchRels(true); }}
+      testIdPrefix={`dataset-binding-relationship-${dsName}`}
+    />
   );
 }
 

@@ -393,6 +393,64 @@ export function __clearLiveEntityListCache(orgUrl?: string): void {
 }
 
 /**
+ * Describes a single 1:N relationship discovered between a parent entity
+ * and a child entity. Used by Associated-host dataset bindings so the
+ * harness can show a UCI-style relationship picker and inject the parent
+ * filter into the child's FetchXML.
+ */
+export interface LiveRelationship {
+  /** Schema name, e.g. `msdyn_msdyn_workorder_msdyn_workorderproduct_WorkOrder`. */
+  schemaName: string;
+  /** Child entity (the dataset entity), e.g. `msdyn_workorderproduct`. */
+  referencingEntity: string;
+  /** Lookup attribute on the child that points back at the parent, e.g. `msdyn_workorder`. */
+  referencingAttribute: string;
+  /** Parent entity (typically the page context entity), e.g. `msdyn_workorder`. */
+  referencedEntity: string;
+  /** Primary id attribute on the parent. */
+  referencedAttribute: string;
+}
+
+const liveRelationshipCache = new Map<string, LiveRelationship[]>();
+
+/**
+ * List the 1:N relationships from `parentEntity` to `childEntity`. Returns
+ * every candidate (often >1 — e.g. msdyn_workorder has both a "WorkOrder"
+ * and a "SourceWorkOrder" relationship to msdyn_workorderproduct), so the
+ * maker picks. Cached per (org, parent, child).
+ */
+export async function liveListRelationships(
+  orgUrl: string,
+  parentEntity: string,
+  childEntity: string,
+  force = false,
+): Promise<LiveRelationship[]> {
+  const key = `${orgUrl}||${parentEntity}->${childEntity}`;
+  if (!force) {
+    const cached = liveRelationshipCache.get(key);
+    if (cached) return cached;
+  }
+  const select = '$select=SchemaName,ReferencingEntity,ReferencingAttribute,ReferencedEntity,ReferencedAttribute';
+  const filter = `$filter=${encodeURIComponent(`ReferencingEntity eq '${childEntity}'`)}`;
+  const path = `/api/data/v9.2/EntityDefinitions(LogicalName='${parentEntity}')/OneToManyRelationships?${select}&${filter}`;
+  const raw = await dvGet<{ value: Array<Record<string, string>> }>(orgUrl, path);
+  const list: LiveRelationship[] = (raw.value ?? []).map(r => ({
+    schemaName: r.SchemaName ?? '',
+    referencingEntity: r.ReferencingEntity ?? childEntity,
+    referencingAttribute: r.ReferencingAttribute ?? '',
+    referencedEntity: r.ReferencedEntity ?? parentEntity,
+    referencedAttribute: r.ReferencedAttribute ?? `${parentEntity}id`,
+  })).filter(r => r.schemaName && r.referencingAttribute);
+  liveRelationshipCache.set(key, list);
+  return list;
+}
+
+/** Test/dev hook — drop the relationship list cache. */
+export function __clearLiveRelationshipCache(): void {
+  liveRelationshipCache.clear();
+}
+
+/**
  * Fetch the current page record from Dataverse with no $select / $expand —
  * driven by the harness page-record auto-fetch hook so bound properties
  * (resolved sync via `getEntityData`) can populate from a real org record.
