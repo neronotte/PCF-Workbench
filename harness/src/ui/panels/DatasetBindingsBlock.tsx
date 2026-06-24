@@ -16,7 +16,7 @@ import { liveListViews, liveListRelationships, type LiveRelationship, DvProxyErr
 import { SearchPicker, type SearchPickerItem } from '../common/SearchPicker';
 import type { ManifestDataSet, ManifestProperty } from '../../types/manifest';
 import type {
-  DatasetBinding, DatasetHostType, ViewDefinition, ViewColumn,
+  DatasetBinding, DatasetHostType, ViewDefinition, ViewColumn, ViewSelector,
 } from '../../types/dataset-binding';
 import {
   isResolvedView, synthesizeDefaultView, ensureViewsLibrary, generateViewId,
@@ -423,6 +423,7 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
     if (host !== 'associated') {
       next.relationshipName = undefined;
       next.relationshipReferencingAttribute = undefined;
+      next.relationshipReferencingEntity = undefined;
     }
     if (host === 'homegrid') { next.parentRecordRef = undefined; }
     setDatasetBinding(ds.name, next);
@@ -661,6 +662,12 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
               onPick={(rel) => update({
                 relationshipName: rel?.schemaName,
                 relationshipReferencingAttribute: rel?.referencingAttribute,
+                relationshipReferencingEntity: rel?.referencingEntity,
+                // Picking a different relationship invalidates the active view
+                // (it was pinned to a different child entity). Reset to a
+                // selector so LiveViewsRow re-fetches for the new entity.
+                view: { viewId: '' } as ViewSelector,
+                views: undefined,
               })}
             />
           ) : (
@@ -826,9 +833,20 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
         </div>
       )}
 
+      {/* Effective entity to fetch views/rows from.
+       *  - associated → relationship's child entity (the dataset row entity)
+       *  - homegrid/subgrid → page context entity
+       *  In Associated mode, gate views on a relationship being picked — without
+       *  it we don't know the child entity, so showing views for the parent is
+       *  misleading (looks like it worked, but rows would be parent rows). */}
       <LiveViewsRow
         dsName={ds.name}
-        entityType={pageEntityTypeName}
+        entityType={
+          effective.host === 'associated'
+            ? (effective.relationshipReferencingEntity ?? '')
+            : pageEntityTypeName
+        }
+        hostMode={effective.host}
         activeViewId={resolvedView.viewId}
         onAdoptView={(view) => {
           // Merge into the binding's view library and activate. The library
@@ -1027,14 +1045,20 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
  */
 interface LiveViewsRowProps {
   dsName: string;
-  /** Page context entity — what UCI would scope views to. Empty disables. */
+  /** Effective entity to fetch views for:
+   *  - associated → relationship's referencingEntity (child entity)
+   *  - homegrid / subgrid → page context entity
+   *  Empty string disables the row with a contextual hint. */
   entityType: string;
+  /** Current host mode — drives the empty-state copy (Associated mode tells
+   *  the maker to pick a relationship; other modes point at Page Context). */
+  hostMode: DatasetHostType;
   /** viewId of the currently-active view (selected in the binding). */
   activeViewId?: string;
   onAdoptView: (view: ViewDefinition) => void;
 }
 
-function LiveViewsRow({ dsName, entityType, activeViewId, onAdoptView }: LiveViewsRowProps) {
+function LiveViewsRow({ dsName, entityType, hostMode, activeViewId, onAdoptView }: LiveViewsRowProps) {
   const dataSource = useHarnessStore(s => s.dataSource);
   const liveProfile = useHarnessStore(s => s.liveProfile);
   const styles = useStyles();
@@ -1090,7 +1114,11 @@ function LiveViewsRow({ dsName, entityType, activeViewId, onAdoptView }: LiveVie
           <Globe16Regular style={{ verticalAlign: 'middle', marginRight: 4 }} />
           Org views
         </Label>
-        <span className={styles.hint}>Set the Page Context entity to load org views.</span>
+        <span className={styles.hint}>
+          {hostMode === 'associated'
+            ? 'Pick a relationship above to load views for the child entity.'
+            : 'Set the Page Context entity to load org views.'}
+        </span>
       </div>
     );
   }
@@ -1199,6 +1227,7 @@ function LiveRelationshipPicker({
     <SearchPicker<LiveRelationship>
       items={items}
       activeValue={activeSchemaName}
+      wrapOptionText
       placeholder={
         !parentEntity ? 'Set Page Context entity first' :
         loading ? 'Loading relationships…' :

@@ -109,6 +109,12 @@ export interface DatasetBinding {
    *  metadata to inject the FetchXML filter. */
   relationshipReferencingAttribute?: string;
 
+  /** Associated only: the child entity logical name of the picked relationship
+   *  (e.g. `msdyn_workorderproduct` for a relationship from `msdyn_workorder`).
+   *  Drives the views row and live fetch — in Associated mode the dataset
+   *  shows rows of this entity filtered by the parent record. */
+  relationshipReferencingEntity?: string;
+
   /** Subgrid + associated: pin a specific parent. Omit to derive from pageContext. */
   parentRecordRef?: {
     entityType: string;

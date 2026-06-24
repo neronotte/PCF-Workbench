@@ -76,6 +76,10 @@ export interface SearchPickerProps<T = unknown> {
    *  re-query (e.g. live record search). When provided, the local in-memory
    *  `filtered` view is still applied as a client-side fallback. */
   onSearchChange?: (search: string) => void;
+  /** When true, option text wraps to multiple lines instead of ellipsing. Use
+   *  for pickers whose item labels are long compound strings (e.g. the
+   *  relationship picker: `<child> · <fk> · <schema>`). */
+  wrapOptionText?: boolean;
 }
 
 const useStyles = makeStyles({
@@ -96,9 +100,17 @@ const useStyles = makeStyles({
   },
   optionText: {
     flex: 1,
+    minWidth: 0,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  optionTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    lineHeight: '1.3',
   },
   optionSecondary: {
     fontSize: tokens.fontSizeBase200,
@@ -133,6 +145,7 @@ export function SearchPicker<T = unknown>({
   maxVisible = 50,
   disabled = false,
   onSearchChange,
+  wrapOptionText = false,
 }: SearchPickerProps<T>) {
   const styles = useStyles();
   const activeItem = useMemo(
@@ -184,7 +197,7 @@ export function SearchPicker<T = unknown>({
   const renderOption = (item: SearchPickerItem<T>) => (
     <Option key={item.value} value={item.value} text={item.text}>
       <span className={styles.optionRow}>
-        <span className={styles.optionText}>{item.text}</span>
+        <span className={wrapOptionText ? styles.optionTextWrap : styles.optionText}>{item.text}</span>
         {item.secondary && <span className={styles.optionSecondary}>{item.secondary}</span>}
         {item.badge && <Badge size="small" appearance="tint" color="brand">{item.badge}</Badge>}
       </span>
