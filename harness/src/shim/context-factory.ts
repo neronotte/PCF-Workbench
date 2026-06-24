@@ -292,6 +292,45 @@ function resolveViewForBinding(
 }
 
 /**
+ * Normalise a Dataverse-style GUID (strip braces, lowercase) for FK comparison.
+ * Mirrors how the WebAPI shim normalises IDs in `$filter` clauses.
+ */
+function normalizeGuid(id: string | undefined | null): string {
+  if (id == null) return '';
+  return String(id).replace(/[{}]/g, '').toLowerCase();
+}
+
+/**
+ * P2 — filter rows by a parent foreign-key column. The child entity may store
+ * the FK under any of the common shapes: `<col>`, `<col>id`, `_<col>_value`,
+ * `_<col>id_value`. We check all of them and match against the normalised
+ * parent record id.
+ *
+ * Exported for unit testing.
+ */
+export function filterByParentFk(
+  rows: Record<string, any>[],
+  lookupColumn: string,
+  parentEntityId: string,
+): Record<string, any>[] {
+  const wanted = normalizeGuid(parentEntityId);
+  if (!wanted) return rows;
+  const candidates = [
+    lookupColumn,
+    `${lookupColumn}id`,
+    `_${lookupColumn}_value`,
+    `_${lookupColumn}id_value`,
+  ];
+  return rows.filter(row => {
+    for (const key of candidates) {
+      const v = row[key];
+      if (v != null && normalizeGuid(String(v)) === wanted) return true;
+    }
+    return false;
+  });
+}
+
+/**
  * Build a dataset shim that mimics ComponentFramework.PropertyTypes.DataSet.
  * Reads records from the entity data store using the dataset name as the entity type.
  */
@@ -336,6 +375,18 @@ function buildDataSet(
       for (const key of getEntityStoreKeys()) {
         const data = getEntityData(key);
         if (data.length > 0) { rawData = data; resolvedEntity = key; break; }
+      }
+    }
+
+    // P2: subgrid parent-FK filter. When the binding pins host='subgrid' and a
+    // lookupColumn, narrow rawData to rows whose FK column points at the
+    // effective parent record (binding.parentRecordRef OR pageContext fallback).
+    // Mirrors UCI's subgrid behaviour, where the form's record adds an implicit
+    // filter to the grid query.
+    if (binding?.host === 'subgrid' && binding.lookupColumn) {
+      const parentEntityId = binding.parentRecordRef?.entityId ?? getState().pageEntityId;
+      if (parentEntityId) {
+        rawData = filterByParentFk(rawData, binding.lookupColumn, parentEntityId);
       }
     }
 
