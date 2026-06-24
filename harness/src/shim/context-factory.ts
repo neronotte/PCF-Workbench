@@ -503,7 +503,24 @@ function buildDataSet(
               if (row[candidate] !== undefined) { val = row[candidate]; actualKey = candidate; break; }
             }
           }
-          if (val == null) return null;
+          if (val == null) {
+            // Real UCI returns null here, but lots of controls in the wild
+            // call `record.getValue("MyLookup").id.guid` without null-checking.
+            // For a property-set declared as Lookup.* in the manifest, return
+            // an empty-but-shape-correct lookup so the control can finish
+            // updateView. We log a one-line warning so the maker knows.
+            const colDef = ds.columns.find(c => c.name === field);
+            const ofType = (colDef?.ofType ?? binding?.columnBindings?.[field]?.ofType ?? '').toString();
+            if (ofType.toLowerCase().startsWith('lookup')) {
+              return {
+                id: { guid: '' },
+                name: '',
+                entityType: '',
+                etn: '',
+              };
+            }
+            return null;
+          }
           // If the raw value looks like a GUID, return as a lookup object
           // Check for annotation on both the original field and the resolved key
           if (typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
