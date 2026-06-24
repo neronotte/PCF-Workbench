@@ -19,6 +19,7 @@ import { rebaseDatesToToday } from '../../store/date-rebase';
 import { listProfiles, DvProxyError, getLiveLoadedEntities, getSessionSecret } from '../../api/dv-client';
 import { loadAllScenarios, applyScenarioAsActive, captureAndSaveAsNewScenario } from '../../lib/scenario-store';
 import { isLiveBlocked, liveBlockReason } from '../../lib/live-block';
+import { DatasetBindingsBlock } from './DatasetBindingsBlock';
 
 const useStyles = makeStyles({
   root: {
@@ -1136,6 +1137,8 @@ export function DataPanel() {
       </div>
 
       <PageContextBlock mockTableNames={tables.map(t => t.name)} />
+
+      <DatasetBindingsBlock />
 
       {dataSource === 'mock' && (
         <>
