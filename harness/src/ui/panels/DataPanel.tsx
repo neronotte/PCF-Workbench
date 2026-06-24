@@ -16,7 +16,8 @@ import {
   type EntityMetadata,
 } from '../../store/metadata-store';
 import { rebaseDatesToToday } from '../../store/date-rebase';
-import { listProfiles, DvProxyError, getLiveLoadedEntities, getSessionSecret } from '../../api/dv-client';
+import { listProfiles, DvProxyError, getLiveLoadedEntities, getSessionSecret, liveListEntities, liveSearchRecords, type LiveEntityDescriptor, type LiveRecordResult } from '../../api/dv-client';
+import { SearchPicker, type SearchPickerItem } from '../common/SearchPicker';
 import { loadAllScenarios, applyScenarioAsActive, captureAndSaveAsNewScenario } from '../../lib/scenario-store';
 import { isLiveBlocked, liveBlockReason } from '../../lib/live-block';
 import { DatasetBindingsBlock } from './DatasetBindingsBlock';
@@ -281,12 +282,25 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
   const [open, setOpen] = useState(false);
   const [recordSearch, setRecordSearch] = useState('');
   const dataSource = useHarnessStore(s => s.dataSource);
+  const liveProfile = useHarnessStore(s => s.liveProfile);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
   const pageEntityId = useHarnessStore(s => s.pageEntityId);
   const setPageEntityTypeName = useHarnessStore(s => s.setPageEntityTypeName);
   const setPageEntityId = useHarnessStore(s => s.setPageEntityId);
   const setPageEntityRecordName = useHarnessStore(s => s.setPageEntityRecordName);
   const livePageRecordError = useHarnessStore(s => s.livePageRecordError);
+  const addLogEntry = useHarnessStore(s => s.addLogEntry);
+
+  // Live entity catalogue — loaded once per org when entering live mode.
+  const [liveEntities, setLiveEntities] = useState<LiveEntityDescriptor[] | null>(null);
+  const [liveEntitiesLoading, setLiveEntitiesLoading] = useState(false);
+  const [liveEntitiesError, setLiveEntitiesError] = useState<string | null>(null);
+
+  // Live record search — debounced fetch keyed by (entity, query).
+  const [liveRecords, setLiveRecords] = useState<LiveRecordResult[]>([]);
+  const [liveRecordsLoading, setLiveRecordsLoading] = useState(false);
+  const [liveRecordsError, setLiveRecordsError] = useState<string | null>(null);
+  const [liveRecordSearchTerm, setLiveRecordSearchTerm] = useState('');
 
   // Tick on data-store mutations so the record picker repopulates when the
   // user loads / edits data on the Mock data sub-panel without leaving the tab.
@@ -363,6 +377,60 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
     setPageEntityRecordName(picked?.name ?? '');
   }, [records, setPageEntityId, setPageEntityRecordName]);
 
+  // Auto-load the live entity catalogue when the panel opens in live mode.
+  // Cached in dv-client across the session so this is a no-op after the
+  // first call per org.
+  useEffect(() => {
+    if (!isLive || !open || !liveProfile?.orgUrl) return;
+    if (liveEntities || liveEntitiesLoading) return;
+    setLiveEntitiesLoading(true);
+    setLiveEntitiesError(null);
+    void liveListEntities(liveProfile.orgUrl)
+      .then(list => {
+        setLiveEntities(list);
+        addLogEntry({
+          category: 'data', method: 'live.listEntities.ok',
+          args: { count: list.length },
+        });
+      })
+      .catch((e: any) => {
+        const msg = e instanceof DvProxyError ? `${e.body.error}: ${e.body.message}` : (e?.message ?? 'Failed');
+        setLiveEntitiesError(msg);
+        addLogEntry({ category: 'data', method: 'live.listEntities.error', args: { message: msg } });
+      })
+      .finally(() => setLiveEntitiesLoading(false));
+  }, [isLive, open, liveProfile?.orgUrl, liveEntities, liveEntitiesLoading, addLogEntry]);
+
+  // Reset live entity cache when switching orgs.
+  useEffect(() => {
+    setLiveEntities(null);
+    setLiveEntitiesError(null);
+    setLiveRecords([]);
+    setLiveRecordSearchTerm('');
+  }, [liveProfile?.orgUrl]);
+
+  // Debounced live record search keyed by (entity, query). Fires after 200ms
+  // of inactivity. Empty query = top-N records by name.
+  useEffect(() => {
+    if (!isLive || !pageEntityTypeName || !liveProfile?.orgUrl) {
+      setLiveRecords([]);
+      return;
+    }
+    setLiveRecordsLoading(true);
+    setLiveRecordsError(null);
+    const handle = setTimeout(() => {
+      void liveSearchRecords(liveProfile.orgUrl, pageEntityTypeName, liveRecordSearchTerm, 25)
+        .then(rows => setLiveRecords(rows))
+        .catch((e: any) => {
+          const msg = e instanceof DvProxyError ? `${e.body.error}: ${e.body.message}` : (e?.message ?? 'Failed');
+          setLiveRecordsError(msg);
+          setLiveRecords([]);
+        })
+        .finally(() => setLiveRecordsLoading(false));
+    }, 200);
+    return () => { clearTimeout(handle); setLiveRecordsLoading(false); };
+  }, [isLive, pageEntityTypeName, liveProfile?.orgUrl, liveRecordSearchTerm]);
+
   return (
     <div className={styles.pageCtxBlock} data-test-id="page-context-block">
       <div
@@ -401,10 +469,33 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
               <Option key={t} value={t} text={entityLabel(t)}>{entityLabel(t)}</Option>
             ))}
           </Dropdown>
+        ) : isLive ? (
+          <SearchPicker<LiveEntityDescriptor>
+            items={(liveEntities ?? []).map(e => ({
+              value: e.logicalName,
+              text: `${e.displayName} (${e.logicalName})`,
+              raw: e,
+            }))}
+            activeValue={pageEntityTypeName}
+            placeholder={liveEntitiesLoading ? 'Loading entities…' : 'Search org entities…'}
+            loading={liveEntitiesLoading}
+            error={liveEntitiesError}
+            emptyMessage="No matches"
+            unfetchedMessage={
+              !liveProfile?.orgUrl
+                ? 'Pick a live profile first.'
+                : liveEntities && liveEntities.length === 0
+                  ? 'No entities returned by the org.'
+                  : undefined
+            }
+            onSelect={(item) => onEntityChange(item.value)}
+            onRefresh={() => { setLiveEntities(null); }}
+            testIdPrefix="page-context-entity-type"
+          />
         ) : (
           <Input
             size="small"
-            placeholder={isLive ? 'e.g. contact' : 'e.g. msdyn_workorderservicetask'}
+            placeholder="e.g. msdyn_workorderservicetask"
             value={pageEntityTypeName}
             onChange={(_, d) => onEntityChange(d.value)}
             data-test-id="page-context-entity-type"
@@ -513,10 +604,39 @@ function PageContextBlock({ mockTableNames }: { mockTableNames: string[] }) {
               </a>
             </span>
           </>
+        ) : isLive && pageEntityTypeName ? (
+          <>
+            <SearchPicker<LiveRecordResult>
+              items={liveRecords.map(r => ({
+                value: r.id,
+                text: r.name || r.id,
+                badge: r.name ? undefined : 'No name',
+                raw: r,
+              }))}
+              activeValue={pageEntityId}
+              placeholder={liveRecordsLoading ? 'Searching…' : `Search ${pageEntityTypeName} records…`}
+              loading={liveRecordsLoading}
+              error={liveRecordsError}
+              emptyMessage={liveRecordSearchTerm
+                ? `No records match "${liveRecordSearchTerm}"`
+                : 'No records'}
+              onSelect={(item) => {
+                setPageEntityId(item.value);
+                setPageEntityRecordName(item.raw.name ?? '');
+              }}
+              onSearchChange={setLiveRecordSearchTerm}
+              testIdPrefix="page-context-entity-id"
+            />
+            {pageEntityId && (
+              <span className={styles.pageCtxHint} style={{ marginTop: 2, fontFamily: 'monospace' }}>
+                {pageEntityId}
+              </span>
+            )}
+          </>
         ) : (
           <Input
             size="small"
-            placeholder={isLive ? 'Record GUID' : 'Select an entity first'}
+            placeholder={isLive ? 'Pick an entity first' : 'Select an entity first'}
             value={pageEntityId}
             onChange={(_, d) => onRecordChange(d.value)}
             disabled={!isLive && !pageEntityTypeName}

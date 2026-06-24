@@ -260,6 +260,138 @@ export async function liveRetrieveSingle(
   return await dvGet<Record<string, unknown>>(orgUrl, path);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Entity catalogue + record search — Page Context live pickers                */
+/* -------------------------------------------------------------------------- */
+
+export interface LiveEntityDescriptor {
+  logicalName: string;
+  displayName: string;
+  entitySetName: string;
+  primaryNameAttribute: string;
+  primaryIdAttribute: string;
+}
+
+interface RawEntityDef {
+  LogicalName: string;
+  EntitySetName: string;
+  PrimaryNameAttribute: string;
+  PrimaryIdAttribute: string;
+  DisplayName?: {
+    UserLocalizedLabel?: { Label?: string };
+    LocalizedLabels?: Array<{ Label?: string; LanguageCode?: number }>;
+  };
+}
+
+const liveEntityListCache = new Map<string, LiveEntityDescriptor[]>();
+
+/**
+ * Fetch the full catalogue of entities in the org. Used by the Page Context
+ * entity picker so the maker can search instead of pasting logical names.
+ *
+ * Filters to `IsValidForAdvancedFind = true` to keep the list to user-
+ * relevant tables (cuts out 1500+ internal/system entities). Cached per
+ * orgUrl for the session; `force` re-fetches.
+ */
+export async function liveListEntities(
+  orgUrl: string,
+  force = false,
+): Promise<LiveEntityDescriptor[]> {
+  if (!force) {
+    const cached = liveEntityListCache.get(orgUrl);
+    if (cached) return cached;
+  }
+  const path =
+    '/api/data/v9.2/EntityDefinitions'
+    + '?$select=LogicalName,EntitySetName,PrimaryNameAttribute,PrimaryIdAttribute,DisplayName'
+    + '&$filter=IsValidForAdvancedFind/Value eq true';
+  const raw = await dvGet<{ value: RawEntityDef[] }>(orgUrl, path);
+  const list: LiveEntityDescriptor[] = (raw.value ?? [])
+    .map(e => ({
+      logicalName: e.LogicalName,
+      entitySetName: e.EntitySetName ?? `${e.LogicalName}s`,
+      primaryNameAttribute: e.PrimaryNameAttribute ?? 'name',
+      primaryIdAttribute: e.PrimaryIdAttribute ?? `${e.LogicalName}id`,
+      displayName:
+        e.DisplayName?.UserLocalizedLabel?.Label
+        ?? e.DisplayName?.LocalizedLabels?.[0]?.Label
+        ?? e.LogicalName,
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  // Hydrate the per-entity metadata cache so subsequent retrieve calls
+  // skip the EntityDefinitions round-trip.
+  const setEntitySetName = useHarnessStore.getState().setEntitySetName;
+  for (const e of list) {
+    setEntitySetName(
+      e.logicalName,
+      JSON.stringify({
+        entitySetName: e.entitySetName,
+        primaryNameAttribute: e.primaryNameAttribute,
+        primaryIdAttribute: e.primaryIdAttribute,
+      }),
+    );
+  }
+  liveEntityListCache.set(orgUrl, list);
+  return list;
+}
+
+export interface LiveRecordResult {
+  id: string;
+  name: string;
+}
+
+/**
+ * Search the top N records of a live entity by primary-name prefix. Used by
+ * the Page Context record picker so the maker can pick from a UCI-style
+ * dropdown instead of pasting a GUID.
+ *
+ * - When `query` is empty, returns the top `max` records ordered by name
+ *   (gives the maker something to scroll through immediately).
+ * - When `query` is non-empty, applies `startswith(primaryName, query)`.
+ * - When `query` looks like a GUID, retrieves that single record directly
+ *   so a paste-a-GUID workflow still works.
+ */
+export async function liveSearchRecords(
+  orgUrl: string,
+  logicalEntity: string,
+  query: string,
+  max = 25,
+): Promise<LiveRecordResult[]> {
+  const meta = await resolveEntityMetadata(orgUrl, logicalEntity);
+  const nameAttr = meta.primaryNameAttribute ?? 'name';
+  const idAttr = meta.primaryIdAttribute ?? `${logicalEntity}id`;
+  const trimmed = query.trim();
+
+  // GUID-paste fast path — return that single record if it exists.
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+    try {
+      const path = `/api/data/v9.2/${meta.entitySetName}(${trimmed})?$select=${nameAttr},${idAttr}`;
+      const rec = await dvGet<Record<string, unknown>>(orgUrl, path);
+      return [{ id: String(rec[idAttr] ?? trimmed), name: String(rec[nameAttr] ?? trimmed) }];
+    } catch { /* fall through */ }
+  }
+
+  const select = `$select=${idAttr},${nameAttr}`;
+  const filter = trimmed
+    ? `&$filter=${encodeURIComponent(`startswith(${nameAttr},'${trimmed.replace(/'/g, "''")}')`)}`
+    : '';
+  const order = `&$orderby=${nameAttr}`;
+  const top = `&$top=${max}`;
+  const path = `/api/data/v9.2/${meta.entitySetName}?${select}${filter}${order}${top}`;
+  const raw = await dvGet<{ value: Array<Record<string, unknown>> }>(orgUrl, path);
+  return (raw.value ?? []).map(r => ({
+    id: String(r[idAttr] ?? ''),
+    name: String(r[nameAttr] ?? r[idAttr] ?? ''),
+  }));
+}
+
+/** Test/dev hook — drop the entity list cache. */
+export function __clearLiveEntityListCache(orgUrl?: string): void {
+  if (orgUrl) liveEntityListCache.delete(orgUrl);
+  else liveEntityListCache.clear();
+}
+
 /**
  * Fetch the current page record from Dataverse with no $select / $expand —
  * driven by the harness page-record auto-fetch hook so bound properties

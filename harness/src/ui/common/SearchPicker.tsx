@@ -72,6 +72,10 @@ export interface SearchPickerProps<T = unknown> {
   maxVisible?: number;
   /** Disable the picker (e.g. when prerequisites aren't met). */
   disabled?: boolean;
+  /** Notify the parent of search-text changes so server-side filtering can
+   *  re-query (e.g. live record search). When provided, the local in-memory
+   *  `filtered` view is still applied as a client-side fallback. */
+  onSearchChange?: (search: string) => void;
 }
 
 const useStyles = makeStyles({
@@ -128,6 +132,7 @@ export function SearchPicker<T = unknown>({
   size = 'small',
   maxVisible = 50,
   disabled = false,
+  onSearchChange,
 }: SearchPickerProps<T>) {
   const styles = useStyles();
   const activeItem = useMemo(
@@ -200,7 +205,9 @@ export function SearchPicker<T = unknown>({
           disabled={disabled || loading}
           onInput={(e) => {
             dirtyRef.current = true;
-            setSearch((e.target as HTMLInputElement).value);
+            const next = (e.target as HTMLInputElement).value;
+            setSearch(next);
+            onSearchChange?.(next);
           }}
           onOptionSelect={(_, d) => {
             if (!d.optionValue) return;
