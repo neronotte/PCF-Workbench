@@ -520,6 +520,7 @@ export function mapSavedQueryToView(
     viewType: 'system',
     columns: fragment.columns,
     ...(record.fetchxml ? { fetchXml: record.fetchxml } : {}),
+    ...(record.isdefault ? { isDefault: true } : {}),
   };
 }
 

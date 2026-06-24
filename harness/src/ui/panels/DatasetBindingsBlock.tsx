@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   makeStyles, mergeClasses, tokens, Button, Badge,
-  Radio, RadioGroup, Dropdown, Option, Input, Label, Switch,
+  Radio, RadioGroup, Dropdown, Option, OptionGroup, Combobox, Input, Label, Switch,
   Tooltip, Spinner,
 } from '@fluentui/react-components';
 import {
@@ -13,6 +13,7 @@ import { useHarnessStore } from '../../store/harness-store';
 import { getEntityData, getEntityStoreKeys, subscribeData } from '../../store/data-store';
 import { getEntityMetadata } from '../../store/metadata-store';
 import { liveListViews, __clearLiveViewsCache } from '../../api/dv-client';
+import { SearchPicker, type SearchPickerItem } from '../common/SearchPicker';
 import type { ManifestDataSet, ManifestProperty } from '../../types/manifest';
 import type {
   DatasetBinding, DatasetHostType, ViewDefinition, ViewColumn,
@@ -807,15 +808,8 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
 
       <LiveViewsRow
         dsName={ds.name}
-        defaultEntityType={
-          // Prefer the page context entity over the view's own entityType:
-          // synthesised default views carry ds.name (the manifest dataset
-          // name like "ProductView") which isn't a real Dataverse entity
-          // and produces zero org-view matches. The page entity is what
-          // makers actually want views for in subgrid + homegrid hosts.
-          pageEntityTypeName || resolvedView.entityType || ds.name
-        }
-        viewLibrary={viewLibrary}
+        entityType={pageEntityTypeName}
+        activeViewId={resolvedView.viewId}
         onAdoptView={(view) => {
           // Merge into the binding's view library and activate. The library
           // entry is what makes the live view survive a scenario save/reload
@@ -983,61 +977,36 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
 /**
  * P5.3 — Live savedquery / userquery view loader.
  *
- * Renders inline under the View dropdown on each binding card. Visible only
- * when:
- *   - dataSource === 'live' (mock-only sessions don't need org views)
- *   - a liveProfile is selected (the orgUrl is required for the dv-client call)
- *   - the resolved view has a usable entityType (we filter org views by
- *     returnedtypecode)
+ * Renders inline under the View dropdown on each binding card when
+ * `dataSource === 'live'`. Auto-fetches once on mount (entity flips trigger
+ * a re-fetch) and presents results in a UCI-style searchable Combobox via
+ * the shared SearchPicker. Picking a view immediately adopts it into the
+ * binding's library and activates it (no two-step "Use" button).
  *
- * Behaviour:
- *   - First render shows a "Load org views" button — never auto-fetches, to
- *     stay zero-network-on-mount and predictable.
- *   - On click: `liveListViews` populates the dv-client cache and we render
- *     a grouped list (System / Personal) with one-click "Use" buttons that
- *     hand the ViewDefinition back to the parent via `onAdoptView`.
- *   - Refresh button clears the cache for this (orgUrl, entity) and re-fetches.
- *   - Errors surface inline; we keep the previous list visible so the maker
- *     can still pick from the last successful fetch while debugging.
+ * `entityType` is always the page context entity — no manual override.
+ * Subgrids + homegrids both surface views of the page entity in real UCI,
+ * so the picker mirrors that.
  *
- * Views already present in the binding's library get a "✓ in library" badge
- * so the maker sees what's been adopted vs what's only cached.
+ * `activeViewId` lets the picker show the currently-active view as the
+ * selected option (and as the display value) so the maker sees at a glance
+ * which org view the binding is currently using.
  */
 interface LiveViewsRowProps {
   dsName: string;
-  /** Best-guess entity to seed the editable input with. The maker can edit it
-   *  before fetching — synthesised default views often carry the manifest
-   *  dataset name (not a real entity) and produce zero matches, so we let the
-   *  user correct it inline rather than forcing a binding edit. */
-  defaultEntityType: string;
-  viewLibrary: ViewDefinition[];
+  /** Page context entity — what UCI would scope views to. Empty disables. */
+  entityType: string;
+  /** viewId of the currently-active view (selected in the binding). */
+  activeViewId?: string;
   onAdoptView: (view: ViewDefinition) => void;
 }
 
-function LiveViewsRow({ dsName, defaultEntityType, viewLibrary, onAdoptView }: LiveViewsRowProps) {
+function LiveViewsRow({ dsName, entityType, activeViewId, onAdoptView }: LiveViewsRowProps) {
   const dataSource = useHarnessStore(s => s.dataSource);
   const liveProfile = useHarnessStore(s => s.liveProfile);
   const styles = useStyles();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetched, setFetched] = useState<ViewDefinition[] | null>(null);
-  const [expanded, setExpanded] = useState(false);
-
-  // Editable entityType. Seeded from defaultEntityType, kept in sync only
-  // when the *default* changes (page entity flips) — otherwise the maker's
-  // manual override sticks across re-renders.
-  const [entityType, setEntityType] = useState(defaultEntityType);
-  useEffect(() => {
-    setEntityType(defaultEntityType);
-  }, [defaultEntityType]);
-
-  // Reset cached fetched-views when the entity or org changes — the previous
-  // list is no longer relevant.
-  useEffect(() => {
-    setFetched(null);
-    setError(null);
-    setExpanded(false);
-  }, [entityType, liveProfile?.orgUrl]);
 
   const isLive = dataSource === 'live';
   const canFetch = isLive && !!liveProfile?.orgUrl && !!entityType;
@@ -1050,13 +1019,21 @@ function LiveViewsRow({ dsName, defaultEntityType, viewLibrary, onAdoptView }: L
     try {
       const views = await liveListViews(liveProfile.orgUrl, entityType);
       setFetched(views);
-      setExpanded(true);
     } catch (e: any) {
       setError(e?.message || 'Failed to load views from org');
     } finally {
       setLoading(false);
     }
   }, [canFetch, liveProfile?.orgUrl, entityType]);
+
+  // Auto-fetch on mount + entity / org change. Mirrors UCI's view picker
+  // which always shows the org's view list without a click.
+  useEffect(() => {
+    setFetched(null);
+    setError(null);
+    if (canFetch) void fetchViews(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityType, liveProfile?.orgUrl, canFetch]);
 
   if (!isLive) return null;
 
@@ -1072,9 +1049,25 @@ function LiveViewsRow({ dsName, defaultEntityType, viewLibrary, onAdoptView }: L
     );
   }
 
-  const libraryIds = new Set(viewLibrary.map(v => v.viewId));
-  const sysViews = (fetched ?? []).filter(v => v.viewType === 'system');
-  const usrViews = (fetched ?? []).filter(v => v.viewType === 'personal');
+  if (!entityType) {
+    return (
+      <div className={styles.row}>
+        <Label size="small">
+          <Globe16Regular style={{ verticalAlign: 'middle', marginRight: 4 }} />
+          Org views
+        </Label>
+        <span className={styles.hint}>Set the Page Context entity to load org views.</span>
+      </div>
+    );
+  }
+
+  const items: SearchPickerItem<ViewDefinition>[] = (fetched ?? []).map(v => ({
+    value: v.viewId,
+    text: v.displayName,
+    group: v.viewType === 'system' ? 'System views' : 'Personal views',
+    badge: v.isDefault ? 'Default' : undefined,
+    raw: v,
+  }));
 
   return (
     <div className={styles.row} data-test-id={`dataset-binding-live-views-${dsName}`}>
@@ -1083,130 +1076,21 @@ function LiveViewsRow({ dsName, defaultEntityType, viewLibrary, onAdoptView }: L
           <Globe16Regular style={{ verticalAlign: 'middle', marginRight: 4 }} />
           Org views{fetched && ` — ${fetched.length}`}
         </Label>
-        {fetched && (
-          <Tooltip content="Refresh from org" relationship="label">
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={loading ? <Spinner size="tiny" /> : <ArrowClockwise16Regular />}
-              disabled={loading}
-              onClick={() => { void fetchViews(true); }}
-              data-test-id={`dataset-binding-refresh-views-${dsName}`}
-            />
-          </Tooltip>
-        )}
-        {fetched && (
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={expanded ? <ChevronDown16Regular /> : <ChevronRight16Regular />}
-            onClick={() => setExpanded(v => !v)}
-            data-test-id={`dataset-binding-toggle-views-${dsName}`}
-          />
-        )}
       </div>
-      <div className={styles.inlineRow} style={{ gap: 6 }}>
-        <Input
-          size="small"
-          value={entityType}
-          onChange={(_, d) => setEntityType(d.value)}
-          placeholder="entity logical name (e.g. msdyn_workorderproduct)"
-          style={{ flex: 1 }}
-          data-test-id={`dataset-binding-live-views-entity-${dsName}`}
-        />
-        <Button
-          appearance="primary"
-          size="small"
-          icon={loading ? <Spinner size="tiny" /> : <Globe16Regular />}
-          disabled={loading || !entityType}
-          onClick={() => { void fetchViews(false); }}
-          data-test-id={`dataset-binding-load-views-${dsName}`}
-        >
-          {fetched ? 'Reload' : 'Load views'}
-        </Button>
-      </div>
-      {error && (
-        <div
-          className={styles.hint}
-          style={{ color: tokens.colorPaletteRedForeground1 }}
-          data-test-id={`dataset-binding-views-error-${dsName}`}
-        >
-          {error}
-        </div>
-      )}
-      {fetched && fetched.length === 0 && (
-        <span className={styles.hint}>No org views found for <code>{entityType}</code>.</span>
-      )}
-      {fetched && fetched.length > 0 && expanded && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-          {sysViews.length > 0 && (
-            <div style={{ fontSize: tokens.fontSizeBase200, color: tokens.colorNeutralForeground3 }}>
-              System views
-            </div>
-          )}
-          {sysViews.map(v => (
-            <LiveViewRow
-              key={v.viewId}
-              view={v}
-              inLibrary={libraryIds.has(v.viewId)}
-              onAdopt={() => onAdoptView(v)}
-              dsName={dsName}
-            />
-          ))}
-          {usrViews.length > 0 && (
-            <div style={{
-              fontSize: tokens.fontSizeBase200,
-              color: tokens.colorNeutralForeground3,
-              marginTop: 4,
-            }}>
-              Personal views
-            </div>
-          )}
-          {usrViews.map(v => (
-            <LiveViewRow
-              key={v.viewId}
-              view={v}
-              inLibrary={libraryIds.has(v.viewId)}
-              onAdopt={() => onAdoptView(v)}
-              dsName={dsName}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LiveViewRow({
-  view, inLibrary, onAdopt, dsName,
-}: {
-  view: ViewDefinition;
-  inLibrary: boolean;
-  onAdopt: () => void;
-  dsName: string;
-}) {
-  const styles = useStyles();
-  return (
-    <div className={styles.inlineRow} style={{ gap: 6 }}>
-      <Globe16Regular style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {view.displayName}{' '}
-        <span style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 }}>
-          ({view.columns.length} cols)
-        </span>
-      </span>
-      {inLibrary ? (
-        <Badge appearance="tint" color="success">In library</Badge>
-      ) : (
-        <Button
-          appearance="subtle"
-          size="small"
-          onClick={onAdopt}
-          data-test-id={`dataset-binding-adopt-view-${dsName}-${view.viewId}`}
-        >
-          Use
-        </Button>
-      )}
+      <SearchPicker<ViewDefinition>
+        items={items}
+        activeValue={activeViewId}
+        placeholder={loading ? 'Loading views…' : `Search views for ${entityType}…`}
+        loading={loading}
+        error={error}
+        emptyMessage="No matches"
+        unfetchedMessage={fetched && fetched.length === 0
+          ? `No org views found for ${entityType}.`
+          : undefined}
+        onSelect={(item) => onAdoptView(item.raw)}
+        onRefresh={() => { void fetchViews(true); }}
+        testIdPrefix={`dataset-binding-live-views-${dsName}`}
+      />
     </div>
   );
 }

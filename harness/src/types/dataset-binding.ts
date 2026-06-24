@@ -56,6 +56,9 @@ export interface ViewDefinition {
   viewType: 'system' | 'personal';
   columns: ViewColumn[];
   fetchXml?: string;
+  /** True for the system default view of the entity (savedquery.isdefault).
+   *  Used by the view picker to render a "Default" badge UCI-style. */
+  isDefault?: boolean;
 }
 
 export interface ViewColumn {
