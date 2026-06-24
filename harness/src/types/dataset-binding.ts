@@ -1,0 +1,165 @@
+/**
+ * First-class dataset binding model — the harness equivalent of how a maker
+ * configures a PCF dataset control in the form designer.
+ *
+ * A dataset control declared in the manifest with `<data-set>` lives inside
+ * ONE of three host contexts at runtime; the binding here pins which one,
+ * plus the view that drives column/sort/filter and (subgrid only) the parent
+ * record that adds the FK filter.
+ *
+ * Per-scenario persistence: each scenario can pin a different binding for
+ * the same dataset, so one scenario tests "subgrid on a Work Order with 20
+ * products" and another tests "homepage Active Work Order Products view".
+ */
+
+/**
+ * The three real-world host contexts a PCF dataset control can live in.
+ * - subgrid    — child grid on a form (filtered by parent FK + view)
+ * - homegrid   — main entity view (view only, no parent)
+ * - associated — N:N grid on a form (parent + relationship + view)
+ *
+ * Out of scope for now (acknowledged but not modelled): quick-find views,
+ * advanced-find result grids, lookup picker views.
+ */
+export type DatasetHostType = 'subgrid' | 'homegrid' | 'associated';
+
+/**
+ * A view selection — either by id (resolved against the harness's view
+ * registry, mock or live) or by inline FetchXML (when the maker / test
+ * author wants to pin an exact query without registering a view first).
+ *
+ * Exactly one of `viewId` / `viewFetchXml` should be set. The runtime
+ * normalises to `ViewDefinition` before use.
+ */
+export interface ViewSelector {
+  viewId?: string;
+  viewFetchXml?: string;
+}
+
+/**
+ * A normalised view definition the runtime consumes.
+ * - `columns`     — column name + width (px or fr) + optional sort. Order
+ *                   in the array IS the display order. Subset of manifest
+ *                   property-set bindings; columns not in the array hide.
+ * - `fetchXml`    — the FetchXML used in live mode. Ignored in mock; mock
+ *                   uses `columns` + scenario filter for selection.
+ * - `entityType`  — logical name of the records this view returns. Used
+ *                   for live `returnedtypecode` filter and mock table lookup.
+ * - `displayName` — friendly label for the view pill / picker dropdown.
+ * - `viewType`    — 'system' | 'personal' (savedquery vs userquery). Mock
+ *                   views are always 'system' for simplicity.
+ */
+export interface ViewDefinition {
+  viewId: string;
+  displayName: string;
+  entityType: string;
+  viewType: 'system' | 'personal';
+  columns: ViewColumn[];
+  fetchXml?: string;
+}
+
+export interface ViewColumn {
+  name: string;
+  /** Column width as px ('120') or fraction ('1fr'); plain number = px. */
+  width?: number | string;
+  /** Sort direction (asc/desc). null/undefined = unsorted. */
+  sortDirection?: 'asc' | 'desc' | null;
+  /** Optional display-name override; falls back to manifest property-set's displayNameKey. */
+  displayName?: string;
+}
+
+/**
+ * Per-dataset binding. Keyed by manifest dataSet name in the scenario.
+ *
+ * Subgrid case:
+ *   - host = 'subgrid'
+ *   - lookupColumn is the FK column on the child entity pointing at the parent
+ *   - parentRecordRef is OPTIONAL — when omitted, the runtime derives the
+ *     parent from the scenario's pageContext (the form record the control
+ *     would be hosted on in real UCI).
+ *
+ * Associated case:
+ *   - host = 'associated'
+ *   - relationshipName is the N:N intersect table name
+ *   - parentRecordRef same derivation rules as subgrid
+ *
+ * Homegrid case:
+ *   - host = 'homegrid'
+ *   - lookupColumn / parentRecordRef / relationshipName all unused
+ *
+ * `view` is REQUIRED — the harness always needs to know what view drives
+ * the columns. Migration default for legacy scenarios is `host: 'homegrid'`
+ * + a synthesised view from manifest columns (every column visible, no sort).
+ */
+export interface DatasetBinding {
+  host: DatasetHostType;
+
+  /** Subgrid only: FK column name on the child entity pointing at the parent. */
+  lookupColumn?: string;
+
+  /** Associated only: N:N intersect / relationship schema name. */
+  relationshipName?: string;
+
+  /** Subgrid + associated: pin a specific parent. Omit to derive from pageContext. */
+  parentRecordRef?: {
+    entityType: string;
+    entityId: string;
+    /** Optional friendly name for display. */
+    recordName?: string;
+  };
+
+  /** The view that drives columns / sort / live fetch. */
+  view: ViewSelector | ViewDefinition;
+}
+
+/**
+ * Per-scenario map: dataset name (from manifest) → binding.
+ * Stored on TestScenario.datasetBindings.
+ */
+export type DatasetBindingMap = Record<string, DatasetBinding>;
+
+/**
+ * Type guard — has the binding been resolved to a concrete view definition,
+ * or is it still a selector pointer (viewId / viewFetchXml) that needs to be
+ * looked up against the view registry?
+ */
+export function isResolvedView(v: ViewSelector | ViewDefinition): v is ViewDefinition {
+  return typeof (v as ViewDefinition).columns !== 'undefined'
+    && typeof (v as ViewDefinition).entityType === 'string';
+}
+
+/**
+ * Synthesise a default view from manifest property-set columns. Used as the
+ * migration fallback for scenarios authored before bindings existed AND as
+ * the bootstrap view when a control loads with no scenario applied.
+ *
+ * Every declared column is visible, in manifest order, unsorted, default width.
+ */
+export function synthesizeDefaultView(
+  datasetName: string,
+  entityType: string,
+  columnNames: string[],
+): ViewDefinition {
+  return {
+    viewId: `synthesized-${datasetName}`,
+    displayName: 'All columns (default)',
+    entityType,
+    viewType: 'system',
+    columns: columnNames.map(name => ({ name })),
+  };
+}
+
+/**
+ * Synthesise a default binding for a dataset. Migration helper for legacy
+ * scenarios — homegrid host (no parent filter), all columns visible.
+ */
+export function synthesizeDefaultBinding(
+  datasetName: string,
+  entityType: string,
+  columnNames: string[],
+): DatasetBinding {
+  return {
+    host: 'homegrid',
+    view: synthesizeDefaultView(datasetName, entityType, columnNames),
+  };
+}

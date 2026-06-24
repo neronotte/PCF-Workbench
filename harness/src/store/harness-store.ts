@@ -4,6 +4,7 @@ import { replaceMockEntityData, mergeKeyedMockEntityData } from './data-store';
 import { getEntityMetadata } from './metadata-store';
 import { isLiveBlocked } from '../lib/live-block';
 import { __clearLiveAttributeMetadataCache } from '../api/dv-client';
+import type { DatasetBinding, DatasetBindingMap } from '../types/dataset-binding';
 
 export type CoverageStatus = 'implemented' | 'stub' | 'unimplemented';
 
@@ -290,6 +291,14 @@ export interface HarnessStore {
   setDatasetFiltering: (name: string, filtering: any) => void;
   setDatasetSelectedIds: (name: string, ids: string[]) => void;
   bumpDataVersion: () => void;
+
+  /** Per-dataset binding (host type + view + parent ref). Keyed by manifest dataset name.
+   *  See `types/dataset-binding.ts` for the model. Empty until P0 ships UI + scenario
+   *  capture/apply; controls without an entry fall back to a synthesised default binding. */
+  datasetBindings: DatasetBindingMap;
+  setDatasetBinding: (name: string, binding: DatasetBinding) => void;
+  replaceDatasetBindings: (bindings: DatasetBindingMap) => void;
+  clearDatasetBindings: () => void;
 
   // User settings (drives context.userSettings)
   userLanguageId: number;
@@ -662,6 +671,22 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     },
   })),
   bumpDataVersion: () => set(s => ({ dataVersion: s.dataVersion + 1 })),
+
+  // Per-dataset bindings (host + view + parent). Bumps dataVersion on change
+  // so ControlViewport re-runs updateView with the new dataset shape.
+  datasetBindings: {},
+  setDatasetBinding: (name, binding) => set(s => ({
+    datasetBindings: { ...s.datasetBindings, [name]: binding },
+    dataVersion: s.dataVersion + 1,
+  })),
+  replaceDatasetBindings: (bindings) => set(s => ({
+    datasetBindings: { ...bindings },
+    dataVersion: s.dataVersion + 1,
+  })),
+  clearDatasetBindings: () => set(s => ({
+    datasetBindings: {},
+    dataVersion: s.dataVersion + 1,
+  })),
 
   // User settings (driven by Intl APIs at runtime via the userSettings shim)
   userLanguageId: 1033,

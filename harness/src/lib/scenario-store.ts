@@ -20,6 +20,8 @@
  */
 
 import type { ManifestProperty, ManifestDataSet, ManifestConfig } from '../types/manifest';
+import type { DatasetBindingMap } from '../types/dataset-binding';
+import { synthesizeDefaultBinding } from '../types/dataset-binding';
 import { useHarnessStore, type NetworkMode } from '../store/harness-store';
 import {
   getEntityData,
@@ -118,6 +120,12 @@ export interface TestScenario {
   };
 
   isControlDisabled?: boolean;
+
+  /** Per-dataset binding map: host type + parent ref + view. Keyed by manifest
+   *  dataSet name. Omitted on legacy scenarios — `applyScenarioToStore` will
+   *  synthesise a homegrid + all-columns default for any declared dataset that
+   *  doesn't have an entry, preserving pre-P0 behaviour. */
+  datasetBindings?: DatasetBindingMap;
 }
 
 /** Legacy v1 shape — kept for migration only. Do not import outside this file. */
@@ -572,6 +580,9 @@ export function captureScenarioFromStore(name: string, savedAt = new Date().toIS
       const m = getAllMetadata();
       return Object.keys(m).length > 0 ? m : undefined;
     })(),
+    datasetBindings: Object.keys(s.datasetBindings).length > 0
+      ? JSON.parse(JSON.stringify(s.datasetBindings))
+      : undefined,
   };
 }
 
@@ -739,7 +750,46 @@ export function applyScenarioToStore(scenario: TestScenario): void {
     reseedForPageEntity(pc.typeName, pc.entityId ?? '', pc.recordName ?? '');
   }
 
+  // Dataset bindings (P0). Always reapply — even when absent on the scenario
+  // we want to clear stale bindings from the previous scenario and synthesise
+  // homegrid + all-columns defaults for each declared dataset so the control
+  // sees a consistent shape. Migration: legacy scenarios (no `datasetBindings`)
+  // get the default; new scenarios overlay on top of the default for any
+  // dataset they didn't explicitly bind.
+  applyDatasetBindings(scenario.datasetBindings);
+
   s.addLogEntry({ category: 'scenario', method: 'load', args: { name: scenario.name } });
+}
+
+/**
+ * Resolve the binding map to apply for a scenario:
+ *  - Start with a synthesised default per manifest dataset (homegrid, all columns visible).
+ *  - Overlay the scenario's explicit bindings (if any).
+ *  - Replace the store map in one shot.
+ *
+ * Exported for unit tests. The synthesised default keeps pre-P0 behaviour
+ * (no parent filter, all columns) so legacy scenarios keep working unchanged.
+ */
+export function applyDatasetBindings(explicit: DatasetBindingMap | undefined): void {
+  const s = useHarnessStore.getState();
+  const manifest = s.manifest;
+  const merged: DatasetBindingMap = {};
+  if (manifest?.dataSets?.length) {
+    for (const ds of manifest.dataSets) {
+      const entityType = manifest.constructor; // best-effort; refined in P1
+      merged[ds.name] = synthesizeDefaultBinding(
+        ds.name,
+        entityType,
+        ds.columns.map(c => c.name),
+      );
+    }
+  }
+  if (explicit) {
+    for (const [name, binding] of Object.entries(explicit)) {
+      merged[name] = binding;
+    }
+  }
+  s.replaceDatasetBindings(merged);
 }
 
 /* -------------------------------------------------------------------------- */
