@@ -590,15 +590,15 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
               testIdPrefix={`dataset-binding-lookup-${ds.name}`}
             />
             <span className={styles.hint}>
-              FK column on the child entity pointing at the parent record.
+              Which lookup on <code>{ds.name}</code> rows points back at the form record.
             </span>
           </div>
 
           <div className={styles.row}>
             <span className={styles.hint} data-test-id={`dataset-binding-parent-effective-${ds.name}`}>
               {pageEntityId
-                ? <>Parent: <code>{pageEntityTypeName}</code> / <code>{pageEntityId}</code> (from Page Context — subgrids always inherit the form record)</>
-                : <>No Page Context record set. Pick one in the Page Context panel — subgrids always inherit the form record.</>}
+                ? <>Anchored to the current form record — change it in the Page Context panel.</>
+                : <>No form record set. Pick one in the Page Context panel — subgrids always inherit the form record.</>}
             </span>
           </div>
         </>
@@ -645,9 +645,13 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
             );
           })()}
           <span className={styles.hint}>
-            Filters the child dataset to records whose lookup points at the
-            Page Context record. Pick from the 1:N relationships between
-            <code> {pageEntityTypeName || '<parent>'} </code> and the dataset entity.
+            Pick a 1:N (or N:N once supported) relationship between
+            <code> {pageEntityTypeName || '<form entity>'} </code> and the dataset entity. Dataverse will filter the grid to children of the form record.
+          </span>
+          <span className={styles.hint} data-test-id={`dataset-binding-assoc-parent-${ds.name}`}>
+            {pageEntityId
+              ? <>Anchored to the current form record — change it in the Page Context panel.</>
+              : <>No form record set. Pick one in the Page Context panel — associated grids always inherit the form record.</>}
           </span>
         </div>
       )}
