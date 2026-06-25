@@ -213,12 +213,19 @@ export function useLiveDatasetRecords() {
     if (binding && !view.fetchXml && typeof binding.view === 'object' && 'viewId' in binding.view && binding.view.viewId) {
       getCachedLiveView(binding.view.viewId);
     }
-    // Include host + relationship + parent id in the digest so an Associated
-    // grid re-fetches when the parent record changes.
-    const assocKey = binding?.host === 'associated'
-      ? `assoc:${binding.relationshipReferencingAttribute ?? ''}:${pageEntityId}`
+    // Include host + parent-id digest so a subgrid/associated grid re-fetches
+    // when the parent record changes. Subgrid uses the binding's lookupColumn
+    // as the FK; associated uses the relationship's referencing attribute.
+    const parentFkForDigest = binding?.host === 'associated'
+      ? binding.relationshipReferencingAttribute
+      : binding?.host === 'subgrid'
+        ? binding.lookupColumn
+        : undefined;
+    const parentIdForDigest = binding?.parentRecordRef?.entityId ?? pageEntityId;
+    const hostKey = parentFkForDigest
+      ? `${binding?.host}:${parentFkForDigest}:${parentIdForDigest}`
       : binding?.host ?? '';
-    return `${ds.name}|${view.entityType}|${view.viewId}|${(view.fetchXml ?? '').length}|${assocKey}`;
+    return `${ds.name}|${view.entityType}|${view.viewId}|${(view.fetchXml ?? '').length}|${hostKey}`;
   });
   const digestKey = viewDigests.join('||');
 
@@ -240,25 +247,32 @@ export function useLiveDatasetRecords() {
         args: { dataset: ds.name, entityType, viewId, reloadEpoch,
           host: binding?.host,
           relationship: binding?.relationshipName,
-          parentId: binding?.host === 'associated' ? pageEntityId : undefined,
+          parentId: (binding?.host === 'associated' || binding?.host === 'subgrid')
+            ? (binding?.parentRecordRef?.entityId ?? pageEntityId)
+            : undefined,
         },
       });
 
       // Compose the FetchXML: all-attributes for full column coverage, plus
-      // an Associated-host parent filter when applicable. The filter is
-      // skipped (with a logged warning) when the relationship FK or parent
-      // id is missing — the maker sees an unfiltered fetch instead of a
-      // silent empty result.
+      // a parent-FK filter for subgrid (binding.lookupColumn) or associated
+      // (binding.relationshipReferencingAttribute). The filter is skipped
+      // (with a logged warning) when the FK or parent id is missing — the
+      // maker sees an unfiltered fetch instead of a silent empty result.
       let outgoingFetchXml = injectAllAttributes(view.fetchXml);
-      if (binding?.host === 'associated') {
-        const fk = binding.relationshipReferencingAttribute;
-        if (fk && pageEntityId) {
-          outgoingFetchXml = injectParentFilter(outgoingFetchXml, fk, pageEntityId);
+      if (binding?.host === 'subgrid' || binding?.host === 'associated') {
+        const fk = binding.host === 'associated'
+          ? binding.relationshipReferencingAttribute
+          : binding.lookupColumn;
+        const parentId = binding.parentRecordRef?.entityId ?? pageEntityId;
+        if (fk && parentId) {
+          outgoingFetchXml = injectParentFilter(outgoingFetchXml, fk, parentId);
         } else {
           addLogEntry({
-            category: 'data', method: 'live.datasetRecords.associatedSkipped',
+            category: 'data', method: `live.datasetRecords.${binding.host}Skipped`,
             args: { dataset: ds.name,
-              reason: !fk ? 'no relationship picked' : 'no page record',
+              reason: !fk
+                ? (binding.host === 'subgrid' ? 'no lookup column set' : 'no relationship picked')
+                : 'no parent record',
             },
           });
         }
