@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   makeStyles, mergeClasses, tokens, Button, Badge,
-  Radio, RadioGroup, Dropdown, Option, OptionGroup, Combobox, Input, Label, Switch,
+  Radio, RadioGroup, Dropdown, Option, OptionGroup, Combobox, Input, Label,
   Tooltip, Spinner,
 } from '@fluentui/react-components';
 import {
@@ -425,13 +425,12 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
       next.relationshipReferencingAttribute = undefined;
       next.relationshipReferencingEntity = undefined;
     }
-    if (host === 'homegrid') { next.parentRecordRef = undefined; }
+    // Clear stale parentRecordRef on any host change — page-context derivation
+    // is now the only path; saved scenarios that hand-rolled an override are
+    // harmless but get normalized out on the next edit.
+    next.parentRecordRef = undefined;
     setDatasetBinding(ds.name, next);
   }, [effective, setDatasetBinding, ds.name]);
-
-  // Effective parent for subgrid display.
-  const usingPageRecord = !effective.parentRecordRef;
-  const effectiveParentId = effective.parentRecordRef?.entityId ?? pageEntityId;
 
   // Visible column set + ordering. The view's columns array IS the
   // ordering — hidden columns are stripped (they'd just be re-added on
@@ -577,76 +576,30 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
         <>
           <div className={styles.row}>
             <Label size="small">Lookup column</Label>
-            {candidateLookups.length > 0 ? (
-              <Dropdown
-                value={effective.lookupColumn ?? ''}
-                selectedOptions={effective.lookupColumn ? [effective.lookupColumn] : []}
-                onOptionSelect={(_, d) => update({ lookupColumn: d.optionValue || undefined })}
-                data-test-id={`dataset-binding-lookup-${ds.name}`}
-              >
-                {candidateLookups.map(name => (
-                  <Option key={name} value={name}>{name}</Option>
-                ))}
-              </Dropdown>
-            ) : (
-              <Input
-                value={effective.lookupColumn ?? ''}
-                onChange={(_, d) => update({ lookupColumn: d.value || undefined })}
-                placeholder="e.g. msdyn_workorder"
-                data-test-id={`dataset-binding-lookup-${ds.name}`}
-              />
-            )}
+            <SearchPicker<string>
+              items={candidateLookups.map(name => ({ value: name, text: name, raw: name }))}
+              activeValue={effective.lookupColumn}
+              placeholder={candidateLookups.length === 0
+                ? 'No lookup candidates'
+                : `Search lookups on ${ds.name}…`}
+              emptyMessage="No matches"
+              unfetchedMessage={candidateLookups.length === 0
+                ? 'No lookup-typed columns declared on the dataset. Add Lookup.* columns to the manifest or to this entity in the Metadata tab.'
+                : undefined}
+              onSelect={(item) => update({ lookupColumn: item.raw })}
+              testIdPrefix={`dataset-binding-lookup-${ds.name}`}
+            />
             <span className={styles.hint}>
               FK column on the child entity pointing at the parent record.
             </span>
           </div>
 
           <div className={styles.row}>
-            <div className={styles.inlineRow}>
-              <Switch
-                checked={usingPageRecord}
-                onChange={(_, d) => {
-                  if (d.checked) {
-                    update({ parentRecordRef: undefined });
-                  } else {
-                    update({
-                      parentRecordRef: {
-                        entityType: pageEntityTypeName || '',
-                        entityId: pageEntityId || '',
-                      },
-                    });
-                  }
-                }}
-                label="Use page record as parent"
-                data-test-id={`dataset-binding-useparent-${ds.name}`}
-              />
-            </div>
-            {usingPageRecord ? (
-              <span className={styles.hint} data-test-id={`dataset-binding-parent-effective-${ds.name}`}>
-                Effective parent: <code>{pageEntityTypeName || '?'}</code> / <code>{effectiveParentId || '(none)'}</code>
-              </span>
-            ) : (
-              <div style={{ display: 'flex', gap: 4 }}>
-                <Input
-                  value={effective.parentRecordRef?.entityType ?? ''}
-                  onChange={(_, d) => update({
-                    parentRecordRef: { ...(effective.parentRecordRef ?? { entityId: '' }), entityType: d.value },
-                  })}
-                  placeholder="entityType"
-                  style={{ flex: 1 }}
-                  data-test-id={`dataset-binding-parent-entitytype-${ds.name}`}
-                />
-                <Input
-                  value={effective.parentRecordRef?.entityId ?? ''}
-                  onChange={(_, d) => update({
-                    parentRecordRef: { ...(effective.parentRecordRef ?? { entityType: '' }), entityId: d.value },
-                  })}
-                  placeholder="entityId (GUID)"
-                  style={{ flex: 2 }}
-                  data-test-id={`dataset-binding-parent-entityid-${ds.name}`}
-                />
-              </div>
-            )}
+            <span className={styles.hint} data-test-id={`dataset-binding-parent-effective-${ds.name}`}>
+              {pageEntityId
+                ? <>Parent: <code>{pageEntityTypeName}</code> / <code>{pageEntityId}</code> (from Page Context — subgrids always inherit the form record)</>
+                : <>No Page Context record set. Pick one in the Page Context panel — subgrids always inherit the form record.</>}
+            </span>
           </div>
         </>
       )}
