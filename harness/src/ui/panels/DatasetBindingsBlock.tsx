@@ -654,40 +654,43 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
       {effective.host === 'associated' && (
         <div className={styles.row}>
           <Label size="small">Relationship</Label>
-          {dataSource === 'live' ? (
-            <LiveRelationshipPicker
-              dsName={ds.name}
-              parentEntity={pageEntityTypeName}
-              activeSchemaName={effective.relationshipName}
-              onPick={(rel) => update({
+          {(() => {
+            // Shared onPick logic for both live and mock pickers. View +
+            // library only get cleared when the NEW relationship points at a
+            // different child entity than the current view's entityType —
+            // re-picking the same relationship, or one that resolves to the
+            // same child, keeps the active view + library intact (otherwise
+            // the chrome pill goes empty while the dataset card still shows
+            // the cached label, causing visible desync).
+            const handlePick = (rel: { schemaName: string; referencingAttribute: string; referencingEntity: string } | null) => {
+              const currentChild = isResolvedView(effective.view) ? effective.view.entityType : undefined;
+              const newChild = rel?.referencingEntity;
+              const childChanged = !rel || (currentChild && newChild && currentChild !== newChild);
+              update({
                 relationshipName: rel?.schemaName,
                 relationshipReferencingAttribute: rel?.referencingAttribute,
                 relationshipReferencingEntity: rel?.referencingEntity,
-                // Picking a different relationship invalidates the active view
-                // (it was pinned to a different child entity). Reset to a
-                // selector so LiveViewsRow re-fetches for the new entity.
-                view: { viewId: '' } as ViewSelector,
-                views: undefined,
-              })}
-            />
-          ) : (
-            <MockRelationshipPicker
-              dsName={ds.name}
-              parentEntity={pageEntityTypeName}
-              activeSchemaName={effective.relationshipName}
-              onPick={(rel) => update({
-                relationshipName: rel?.schemaName,
-                relationshipReferencingAttribute: rel?.referencingAttribute,
-                relationshipReferencingEntity: rel?.referencingEntity,
-                // Same view-invalidation rule as the live picker — switching
-                // relationship changes the child entity, so the active view
-                // is stale. Reset to a selector + clear the local views
-                // library so LiveViewsRow / mock pick a fresh one.
-                view: { viewId: '' } as ViewSelector,
-                views: undefined,
-              })}
-            />
-          )}
+                ...(childChanged
+                  ? { view: { viewId: '' } as ViewSelector, views: undefined }
+                  : {}),
+              });
+            };
+            return dataSource === 'live' ? (
+              <LiveRelationshipPicker
+                dsName={ds.name}
+                parentEntity={pageEntityTypeName}
+                activeSchemaName={effective.relationshipName}
+                onPick={handlePick}
+              />
+            ) : (
+              <MockRelationshipPicker
+                dsName={ds.name}
+                parentEntity={pageEntityTypeName}
+                activeSchemaName={effective.relationshipName}
+                onPick={handlePick}
+              />
+            );
+          })()}
           <span className={styles.hint}>
             Filters the child dataset to records whose lookup points at the
             Page Context record. Pick from the 1:N relationships between
