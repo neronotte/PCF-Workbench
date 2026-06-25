@@ -11,7 +11,7 @@ import {
 } from '@fluentui/react-icons';
 import { useHarnessStore } from '../../store/harness-store';
 import { getEntityData, getEntityStoreKeys, subscribeData } from '../../store/data-store';
-import { getEntityMetadata } from '../../store/metadata-store';
+import { getEntityMetadata, getOneToManyRelationships, subscribeMetadata, getMetadataVersion, type RelationshipMetadata } from '../../store/metadata-store';
 import { liveListViews, liveListRelationships, type LiveRelationship, DvProxyError, __clearLiveViewsCache, getCachedLiveViewsForEntity } from '../../api/dv-client';
 import { SearchPicker, type SearchPickerItem } from '../common/SearchPicker';
 import type { ManifestDataSet, ManifestProperty } from '../../types/manifest';
@@ -671,11 +671,21 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
               })}
             />
           ) : (
-            <Input
-              value={effective.relationshipName ?? ''}
-              onChange={(_, d) => update({ relationshipName: d.value || undefined })}
-              placeholder="e.g. msdyn_msdyn_workorder_msdyn_workorderproduct_WorkOrder"
-              data-test-id={`dataset-binding-relationship-${ds.name}`}
+            <MockRelationshipPicker
+              dsName={ds.name}
+              parentEntity={pageEntityTypeName}
+              activeSchemaName={effective.relationshipName}
+              onPick={(rel) => update({
+                relationshipName: rel?.schemaName,
+                relationshipReferencingAttribute: rel?.referencingAttribute,
+                relationshipReferencingEntity: rel?.referencingEntity,
+                // Same view-invalidation rule as the live picker — switching
+                // relationship changes the child entity, so the active view
+                // is stale. Reset to a selector + clear the local views
+                // library so LiveViewsRow / mock pick a fresh one.
+                view: { viewId: '' } as ViewSelector,
+                views: undefined,
+              })}
             />
           )}
           <span className={styles.hint}>
@@ -1154,6 +1164,71 @@ function LiveViewsRow({ dsName, entityType, hostMode, activeViewId, onAdoptView 
         testIdPrefix={`dataset-binding-live-views-${dsName}`}
       />
     </div>
+  );
+}
+
+/**
+ * Mock-mode counterpart of LiveRelationshipPicker. Reads 1:N relationships
+ * from `EntityMetadata.oneToManyRelationships` for the parent entity in the
+ * mock metadata store. Same SearchPicker UX as live so the maker doesn't
+ * have to context-switch between data sources. Subscribes to metadata-store
+ * mutations via useSyncExternalStore so authoring new relationships in the
+ * Data panel's Metadata tab refreshes the picker live.
+ *
+ * Shape parity with LiveRelationshipPicker: emits a `RelationshipMetadata`
+ * (same shape as `LiveRelationship`) so the caller's onPick handler is
+ * agnostic between sources.
+ */
+interface MockRelationshipPickerProps {
+  dsName: string;
+  parentEntity: string;
+  activeSchemaName?: string;
+  onPick: (rel: RelationshipMetadata | null) => void;
+}
+
+function MockRelationshipPicker({
+  dsName, parentEntity, activeSchemaName, onPick,
+}: MockRelationshipPickerProps) {
+  // Re-derive on metadata mutations. Snapshot is keyed on metadata version
+  // so React re-renders when the Metadata tab adds/edits relationships.
+  const rels = useSyncExternalStore(
+    subscribeMetadata,
+    useCallback(() => {
+      // Version-keyed snapshot to keep referential equality stable between
+      // unrelated mutations — same pattern as form-store.ts.
+      void getMetadataVersion();
+      return getOneToManyRelationships(parentEntity);
+    }, [parentEntity]),
+  );
+
+  const items: Array<SearchPickerItem<RelationshipMetadata>> = useMemo(
+    () => rels.map(r => ({
+      value: r.schemaName,
+      text: `${r.referencingEntity}  ·  ${r.referencingAttribute}  ·  ${r.schemaName}`,
+      raw: r,
+    })),
+    [rels],
+  );
+
+  return (
+    <SearchPicker<RelationshipMetadata>
+      items={items}
+      activeValue={activeSchemaName}
+      wrapOptionText
+      placeholder={
+        !parentEntity ? 'Set Page Context entity first' :
+        `Search 1:N from ${parentEntity}…`
+      }
+      emptyMessage="No matches"
+      unfetchedMessage={
+        !parentEntity ? 'Pick a Page Context entity to load relationships.' :
+        rels.length === 0
+          ? `No 1:N relationships authored for ${parentEntity}. Add them under Data panel → Metadata.`
+          : undefined
+      }
+      onSelect={(item) => onPick(item.raw)}
+      testIdPrefix={`dataset-binding-relationship-${dsName}`}
+    />
   );
 }
 

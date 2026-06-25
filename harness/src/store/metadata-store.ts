@@ -23,6 +23,48 @@ export interface ColumnMetadata {
   defaultValue?: any;
 }
 
+/**
+ * 1:N / N:1 relationship between a parent (ReferencedEntity) and a child
+ * (ReferencingEntity). On the parent's `oneToManyRelationships`, the parent
+ * is `referencedEntity`; on the child's `manyToOneRelationships`, the same
+ * relationship appears in the same shape (the harness deliberately mirrors
+ * the Dataverse OneToManyRelationship payload — no inversion).
+ *
+ * Shape matches the live `LiveRelationship` from `api/dv-client.ts` so that
+ * a future "copy live metadata to mock" action can drop the array in
+ * verbatim.
+ */
+export interface RelationshipMetadata {
+  /** e.g. `msdyn_msdyn_workorder_msdyn_workorderproduct_WorkOrder`. */
+  schemaName: string;
+  /** Child entity (where the lookup attribute lives). */
+  referencingEntity: string;
+  /** Lookup attribute on the child pointing at the parent (e.g. `msdyn_workorder`). */
+  referencingAttribute: string;
+  /** Parent entity (where the relationship "starts"). */
+  referencedEntity: string;
+  /** Primary id attribute on the parent (e.g. `msdyn_workorderid`). */
+  referencedAttribute: string;
+}
+
+/**
+ * N:N relationship via an intersect entity. Shape mirrors the Dataverse
+ * ManyToManyRelationship payload so copy-from-live is a structural drop.
+ * Not yet consumed by the Associated-host picker (1:N only today).
+ */
+export interface ManyToManyMetadata {
+  /** Relationship schema name. */
+  schemaName: string;
+  /** Intersect entity logical name. */
+  intersectEntity: string;
+  /** Side 1 entity + its intersect attribute. */
+  entity1LogicalName: string;
+  entity1IntersectAttribute: string;
+  /** Side 2 entity + its intersect attribute. */
+  entity2LogicalName: string;
+  entity2IntersectAttribute: string;
+}
+
 export interface EntityMetadata {
   displayName: string;
   columns: Record<string, ColumnMetadata>;
@@ -33,6 +75,22 @@ export interface EntityMetadata {
   primaryIdAttribute?: string;
   /** Primary name column (e.g. `name` / `fullname`). Same source/fallback. */
   primaryNameAttribute?: string;
+  /** 1:N relationships where THIS entity is the parent (referencedEntity).
+   *  Used by the Associated-host relationship picker in mock mode. */
+  oneToManyRelationships?: RelationshipMetadata[];
+  /** 1:N relationships where THIS entity is the child (referencingEntity).
+   *  i.e. the lookup attributes on this entity. Mirrored from the parent's
+   *  oneToManyRelationships for query convenience. Not yet consumed in mock. */
+  manyToOneRelationships?: RelationshipMetadata[];
+  /** N:N relationships this entity participates in. Not yet consumed in mock. */
+  manyToManyRelationships?: ManyToManyMetadata[];
+}
+
+/** Convenience: return the 1:N relationships from `parentEntity` declared in
+ *  mock metadata. Returns an empty array when the entity has no metadata or
+ *  no relationships authored. */
+export function getOneToManyRelationships(parentEntity: string): RelationshipMetadata[] {
+  return metadataStore[parentEntity]?.oneToManyRelationships ?? [];
 }
 
 let metadataStore: Record<string, EntityMetadata> = {};
