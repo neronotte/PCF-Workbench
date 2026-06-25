@@ -277,12 +277,44 @@ function manifestColumnLabel(col: ManifestProperty, lcid: number): string {
 }
 
 /**
- * Lookup-type column names from a dataset's manifest property-set. Used to
- * populate the subgrid lookupColumn dropdown — the typical case is the FK
- * pointing back at the parent record (e.g. `msdyn_workorder` on a
- * Work Order Product subgrid).
+ * Lookup-typed columns offered to the subgrid FK picker. Source order:
+ *   1. Child-entity Dataverse metadata — only lookups whose `targets` include
+ *      the form/page entity. This is what real UCI does and gives the maker
+ *      the same picker they'd see in maker.powerapps.com.
+ *   2. PCF manifest dataset columns (Lookup.* / Lookup.LookupType groups) as
+ *      a fallback when no metadata is loaded for the child entity (gallery
+ *      mode, fresh scaffold, or hand-rolled scenario without a metadata
+ *      block).
  */
-function lookupCandidates(ds: ManifestDataSet, typeGroups: Record<string, string[]>): string[] {
+type LookupCandidate = {
+  name: string;
+  displayName?: string;
+  targets?: string[];
+  source: 'metadata' | 'manifest';
+};
+
+function lookupCandidates(
+  ds: ManifestDataSet,
+  typeGroups: Record<string, string[]>,
+  childEntity: string | undefined,
+  pageEntityTypeName: string | undefined,
+): LookupCandidate[] {
+  const childMeta = childEntity ? getEntityMetadata(childEntity) : null;
+  if (childMeta?.columns) {
+    const items: LookupCandidate[] = [];
+    for (const [name, col] of Object.entries(childMeta.columns)) {
+      const type = col.type?.toLowerCase() ?? '';
+      if (!type.startsWith('lookup')) continue;
+      // Filter by target when both sides are known. Authored metadata that
+      // omits `targets` is permitted (skill-mode), so we keep those too.
+      if (pageEntityTypeName && col.targets && col.targets.length > 0
+          && !col.targets.includes(pageEntityTypeName)) {
+        continue;
+      }
+      items.push({ name, displayName: col.displayName, targets: col.targets, source: 'metadata' });
+    }
+    if (items.length > 0) return items;
+  }
   return ds.columns
     .filter(c => {
       if (c.ofType?.startsWith('Lookup.')) return true;
@@ -292,7 +324,7 @@ function lookupCandidates(ds: ManifestDataSet, typeGroups: Record<string, string
       }
       return false;
     })
-    .map(c => c.name);
+    .map(c => ({ name: c.name, source: 'manifest' as const }));
 }
 
 /**
@@ -351,7 +383,18 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
     ? effective.views
     : [resolvedView];
 
-  const candidateLookups = useMemo(() => lookupCandidates(ds, typeGroups), [ds, typeGroups]);
+  const metadataVersion = useSyncExternalStore(
+    subscribeMetadata,
+    () => { void getMetadataVersion(); return getMetadataVersion(); },
+  );
+  const childEntity = effectiveDatasetEntity(effective, pageEntityTypeName);
+  const candidateLookups = useMemo(
+    () => lookupCandidates(ds, typeGroups, childEntity, pageEntityTypeName),
+    // metadataVersion participates so the picker re-derives when metadata
+    // loads/changes after first paint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ds, typeGroups, childEntity, pageEntityTypeName, metadataVersion],
+  );
 
   const update = useCallback((next: Partial<DatasetBinding>) => {
     setDatasetBinding(ds.name, { ...effective, ...next });
@@ -577,20 +620,29 @@ function DatasetBindingCard({ ds }: { ds: ManifestDataSet }) {
           <div className={styles.row}>
             <Label size="small">Lookup column</Label>
             <SearchPicker<string>
-              items={candidateLookups.map(name => ({ value: name, text: name, raw: name }))}
+              items={candidateLookups.map(c => ({
+                value: c.name,
+                text: c.displayName ? `${c.displayName} (${c.name})` : c.name,
+                raw: c.name,
+              }))}
               activeValue={effective.lookupColumn}
               placeholder={candidateLookups.length === 0
                 ? 'No lookup candidates'
-                : `Search lookups on ${ds.name}…`}
+                : `Search lookups on ${childEntity || ds.name}…`}
               emptyMessage="No matches"
               unfetchedMessage={candidateLookups.length === 0
-                ? 'No lookup-typed columns declared on the dataset. Add Lookup.* columns to the manifest or to this entity in the Metadata tab.'
+                ? (pageEntityTypeName
+                    ? `No lookups on ${childEntity || ds.name} target ${pageEntityTypeName}. Add the parent lookup to this entity in the Data tab (Metadata) with targets: ["${pageEntityTypeName}"].`
+                    : `No lookups on ${childEntity || ds.name}. Add lookup columns to this entity in the Data tab (Metadata), or set a Page Context entity so we can filter by target.`)
                 : undefined}
               onSelect={(item) => update({ lookupColumn: item.raw })}
               testIdPrefix={`dataset-binding-lookup-${ds.name}`}
             />
             <span className={styles.hint}>
-              Which lookup on <code>{ds.name}</code> rows points back at the form record.
+              Which lookup on <code>{childEntity || ds.name}</code> rows points back at the form record.
+              {candidateLookups.length > 0 && candidateLookups[0]?.source === 'manifest' && (
+                <> <em>(Showing manifest lookups — load entity metadata in the Data tab for a maker-accurate list.)</em></>
+              )}
             </span>
           </div>
 
