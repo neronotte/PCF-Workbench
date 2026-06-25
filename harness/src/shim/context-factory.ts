@@ -436,14 +436,48 @@ function buildDataSet(
       }
       if (rawData.length === 0) {
         // data.json compat: maker may have keyed by logical name while
-        // ds.name is an alias. Pick the first store key with rows. Page
-        // entity is NOT a valid fallback — that's the form record, not a
-        // dataset row source.
+        // ds.name is an alias (e.g. dataset binding "productDataSet" vs
+        // entity "msdyn_workorderproduct"). Two heuristics, in order:
+        //
+        //  1. If the binding has columnBindings, prefer the entity whose row
+        //     schema actually contains those bound field names. This handles
+        //     the common case where data.json holds multiple entities (the
+        //     dataset entity AND its lookup targets like `product`, `uom`)
+        //     and the naive "first non-empty" picked the wrong one.
+        //  2. Otherwise fall back to the first non-empty key (excluding the
+        //     page entity — that's the form record, not a dataset row).
         const pageEntity = getState().pageEntityTypeName;
-        for (const key of getEntityStoreKeys()) {
-          if (key === pageEntity) continue;
-          const data = getEntityData(key);
-          if (data.length > 0) { rawData = data; resolvedEntity = key; break; }
+        const boundFields = binding?.columnBindings
+          ? Object.values(binding.columnBindings).map(b => b.field).filter(Boolean)
+          : [];
+        if (boundFields.length > 0) {
+          let bestKey = '';
+          let bestScore = 0;
+          for (const key of getEntityStoreKeys()) {
+            if (key === pageEntity) continue;
+            const rows = getEntityData(key);
+            if (rows.length === 0) continue;
+            const sample = rows[0];
+            let score = 0;
+            for (const f of boundFields) {
+              // Match direct field, OData lookup form, or formatted-value
+              if (sample[f] !== undefined
+                || sample[`_${f}_value`] !== undefined
+                || sample[`_${f}`] !== undefined) score += 1;
+            }
+            if (score > bestScore) { bestScore = score; bestKey = key; }
+          }
+          if (bestKey) {
+            rawData = getEntityData(bestKey);
+            resolvedEntity = bestKey;
+          }
+        }
+        if (rawData.length === 0) {
+          for (const key of getEntityStoreKeys()) {
+            if (key === pageEntity) continue;
+            const data = getEntityData(key);
+            if (data.length > 0) { rawData = data; resolvedEntity = key; break; }
+          }
         }
       }
     }
