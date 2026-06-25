@@ -1279,6 +1279,34 @@ export function emitFocusDatasetBinding(datasetName: string, opts?: { autoEdit?:
  * level) mirrors how UCI's subgrid command bar separates the view selector
  * dropdown from the "Edit columns" menu item.
  */
+/**
+ * Resolve the dataset's effective LOGICAL entity (what records the dataset
+ * is showing), independent of the page record. Used by the view pill + the
+ * live-views hydration so we fetch views for the correct entity in multi-
+ * dataset controls and for subgrids where dataset entity ≠ page entity.
+ *
+ * Order:
+ *   1. Active view's entityType — the maker has picked, this is authoritative.
+ *   2. Associated host → relationshipReferencingEntity (the picked child).
+ *   3. parentRecordRef.entityType — wrong for subgrid child, but useful as
+ *      a UI seed before any view is picked (no other signal exists). Skip
+ *      for subgrid since the child entity is the dataset entity, not parent.
+ *   4. pageEntityTypeName — last-resort guess; correct only for homegrid
+ *      hosted on the same entity as the page.
+ */
+function effectiveDatasetEntity(
+  binding: DatasetBinding | undefined,
+  pageEntityTypeName: string,
+): string {
+  if (binding && isResolvedView(binding.view) && binding.view.entityType) {
+    return binding.view.entityType;
+  }
+  if (binding?.host === 'associated' && binding.relationshipReferencingEntity) {
+    return binding.relationshipReferencingEntity;
+  }
+  return pageEntityTypeName;
+}
+
 export function DatasetViewPills() {
   const datasets = useHarnessStore(s => s.manifest?.dataSets ?? []);
   const bindings = useHarnessStore(s => s.datasetBindings);
@@ -1300,10 +1328,7 @@ export function DatasetViewPills() {
     if (!isLive || !orgUrl) return;
     for (const ds of datasets) {
       const binding = bindings[ds.name];
-      const host = binding?.host ?? 'homegrid';
-      const entity = host === 'associated'
-        ? (binding?.relationshipReferencingEntity ?? '')
-        : pageEntityTypeName;
+      const entity = effectiveDatasetEntity(binding, pageEntityTypeName);
       if (!entity) continue;
       const key = `${orgUrl}|${entity}`;
       if (hydratedRef.current.has(key)) continue;
@@ -1329,13 +1354,10 @@ export function DatasetViewPills() {
         const host = binding?.host ?? 'homegrid';
 
         // In live+connected mode the pill mirrors the org views list for the
-        // effective entity (Associated → relationship child; otherwise page
-        // entity), so the maker doesn't have to round-trip through the Data
-        // panel to switch views. Falls back to the binding's local library
-        // when offline / not connected / cache cold.
-        const effectiveEntity = host === 'associated'
-          ? (binding?.relationshipReferencingEntity ?? '')
-          : pageEntityTypeName;
+        // dataset's effective entity (subgrid → child entity from view; assoc
+        // → relationship child; homegrid → view.entityType). Falls back to
+        // the binding's local library when offline / cache cold.
+        const effectiveEntity = effectiveDatasetEntity(binding, pageEntityTypeName);
         // eslint-disable-next-line @typescript-eslint/no-unused-expressions
         liveEpoch; // keep liveEpoch in the dep chain
         const liveLibrary = isLive && effectiveEntity
